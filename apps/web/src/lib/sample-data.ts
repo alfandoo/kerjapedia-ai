@@ -1,0 +1,223 @@
+import type {
+  AdminDocument,
+  Citation,
+  DocumentSummary,
+  FeedbackItem,
+  IngestionJob,
+  RetrievalPlaygroundResult,
+} from "./types";
+
+export const fallbackDocuments: DocumentSummary[] = [
+  {
+    document_id: "UU-13-2003",
+    title: "Undang-Undang Nomor 13 Tahun 2003 tentang Ketenagakerjaan",
+    short_title: "UU 13/2003",
+    regulation_type: "UU",
+    number: 13,
+    year: 2003,
+    legal_status: "needs_verification",
+    topics: ["cuti", "upah", "phk", "hubungan_kerja"],
+    source_url: "https://peraturan.bpk.go.id/",
+  },
+  {
+    document_id: "PP-35-2021",
+    title: "Peraturan Pemerintah Nomor 35 Tahun 2021",
+    short_title: "PP 35/2021",
+    regulation_type: "PP",
+    number: 35,
+    year: 2021,
+    legal_status: "needs_verification",
+    topics: ["pkwt", "phk", "alih_daya", "waktu_kerja"],
+    source_url: "https://peraturan.bpk.go.id/",
+  },
+  {
+    document_id: "UU-21-2000",
+    title: "Undang-Undang Nomor 21 Tahun 2000 tentang Serikat Pekerja",
+    short_title: "UU 21/2000",
+    regulation_type: "UU",
+    number: 21,
+    year: 2000,
+    legal_status: "needs_verification",
+    topics: ["serikat_pekerja", "hubungan_industrial"],
+    source_url: "https://peraturan.bpk.go.id/",
+  },
+];
+
+export const fallbackCitation: Citation = {
+  citation_id: "cit_001",
+  chunk_id: "sample-cuti-001",
+  document_id: "UU-13-2003",
+  document_title: "Undang-Undang Nomor 13 Tahun 2003 tentang Ketenagakerjaan",
+  short_title: "UU 13/2003",
+  legal_status: "needs_verification",
+  chapter: "BAB X",
+  section: "Waktu Istirahat dan Cuti",
+  article: "Pasal 79",
+  paragraph: "Ayat (2)",
+  page_start: 31,
+  page_end: 31,
+  quote:
+    "Pekerja/buruh yang telah bekerja selama 12 bulan secara terus-menerus berhak atas cuti tahunan sekurang-kurangnya 12 hari kerja.",
+  source_url: "https://peraturan.bpk.go.id/",
+  local_file: "dataset/UU Nomor 13 Tahun 2003.pdf",
+  retrieval_score: 0.82,
+  rerank_score: 0.88,
+};
+
+export const sampleHistory = [
+  { title: "Hak cuti tahunan berapa hari?", time: "10:24", active: true },
+  { title: "PHK karena efisiensi perusahaan", time: "09:15", active: false },
+  { title: "Uang lembur dan perhitungannya", time: "Kemarin", active: false },
+  { title: "Perjanjian kerja waktu tertentu", time: "Kemarin", active: false },
+  { title: "THR karyawan swasta", time: "2 hari lalu", active: false },
+  { title: "Hak ibu hamil di tempat kerja", time: "7 hari lalu", active: false },
+];
+
+const sampleDate = "2026-07-15T08:30:00Z";
+
+export const fallbackAdminDocuments: AdminDocument[] = [
+  {
+    ...fallbackDocuments[1],
+    issuer: "Pemerintah Republik Indonesia",
+    verification_status: "verified",
+    ingestion_status: "completed",
+    chunk_count: 186,
+    publication_status: "published",
+    version: 3,
+    updated_at: sampleDate,
+    updated_by: "Admin",
+    last_error: null,
+    relationships: [
+      {
+        from_document_id: "PP-35-2021",
+        to_document_id: "UU-6-2023",
+        relationship_type: "amended_by",
+        confidence: "high",
+        notes: "Perubahan ketentuan Cipta Kerja.",
+      },
+    ],
+    versions: [
+      { version: 3, status: "published", created_at: sampleDate, created_by: "Admin" },
+      { version: 2, status: "published", created_at: "2026-07-10T10:00:00Z", created_by: "Admin" },
+      { version: 1, status: "draft", created_at: "2026-07-01T09:00:00Z", created_by: "System" },
+    ],
+  },
+  {
+    ...fallbackDocuments[0],
+    issuer: "Pemerintah Republik Indonesia",
+    verification_status: "pending_detail_url",
+    ingestion_status: "needs_review",
+    chunk_count: 112,
+    publication_status: "draft",
+    version: 2,
+    updated_at: "2026-07-14T07:20:00Z",
+    updated_by: "Admin",
+    last_error: "Dua heading tidak terdeteksi sebagai struktur pasal.",
+    relationships: [],
+    versions: [
+      { version: 2, status: "draft", created_at: sampleDate, created_by: "Admin" },
+      { version: 1, status: "draft", created_at: "2026-07-01T09:00:00Z", created_by: "System" },
+    ],
+  },
+  {
+    document_id: "PP-36-2021",
+    title: "Peraturan Pemerintah Nomor 36 Tahun 2021 tentang Pengupahan",
+    short_title: "PP 36/2021",
+    regulation_type: "PP",
+    number: 36,
+    year: 2021,
+    legal_status: "needs_verification",
+    topics: ["pengupahan", "upah_minimum"],
+    source_url: "https://peraturan.bpk.go.id/",
+    issuer: "Pemerintah Republik Indonesia",
+    verification_status: "pending_detail_url",
+    ingestion_status: "failed",
+    chunk_count: 0,
+    publication_status: "draft",
+    version: 1,
+    updated_at: "2026-07-13T05:15:00Z",
+    updated_by: "System",
+    last_error: "Ekstraksi PDF gagal pada halaman 44.",
+    relationships: [],
+    versions: [{ version: 1, status: "draft", created_at: sampleDate, created_by: "System" }],
+  },
+];
+
+export const fallbackIngestionJobs: IngestionJob[] = [
+  {
+    job_id: "ing_001",
+    document_id: "PP-35-2021",
+    status: "completed",
+    created_at: sampleDate,
+    updated_at: sampleDate,
+    result: { chunk_count: 186, warnings: [] },
+  },
+  {
+    job_id: "ing_002",
+    document_id: "UU-13-2003",
+    status: "needs_review",
+    created_at: "2026-07-14T07:00:00Z",
+    updated_at: "2026-07-14T07:20:00Z",
+    error: "Dua heading tidak terdeteksi sebagai struktur pasal.",
+  },
+  {
+    job_id: "ing_003",
+    document_id: "PP-36-2021",
+    status: "failed",
+    created_at: "2026-07-13T05:00:00Z",
+    updated_at: "2026-07-13T05:15:00Z",
+    error: "Ekstraksi PDF gagal pada halaman 44.",
+  },
+];
+
+export const fallbackFeedback: FeedbackItem[] = [
+  {
+    feedback_id: "fb_001",
+    user_id: "user@example.com",
+    question: "Apakah pekerja PKWT mendapat kompensasi?",
+    rating: "helpful",
+    comment: "Kutipan pasalnya jelas.",
+    created_at: sampleDate,
+  },
+  {
+    feedback_id: "fb_002",
+    user_id: "anonymous",
+    question: "Bagaimana hitungan pesangon karena efisiensi?",
+    rating: "not_helpful",
+    issue_category: "citation",
+    comment: "Sumber yang tampil belum membahas kondisi perusahaan saya.",
+    created_at: "2026-07-14T06:10:00Z",
+  },
+];
+
+export const fallbackRetrievalResults: RetrievalPlaygroundResult[] = [
+  {
+    chunk_id: "pp35-2021-p15-c1",
+    document_id: "PP-35-2021",
+    short_title: "PP 35/2021",
+    article: "Pasal 15",
+    page_start: 13,
+    page_end: 13,
+    quote:
+      "Pengusaha wajib memberikan uang kompensasi kepada pekerja/buruh yang hubungan kerjanya berdasarkan PKWT.",
+    lexical_score: 0.61,
+    semantic_score: 0.88,
+    rerank_score: 0.92,
+    final_score: 0.92,
+    match_reasons: ["topic:pkwt", "article_match"],
+  },
+  {
+    chunk_id: "pp35-2021-p16-c1",
+    document_id: "PP-35-2021",
+    short_title: "PP 35/2021",
+    article: "Pasal 16",
+    page_start: 14,
+    page_end: 14,
+    quote: "Besaran uang kompensasi diberikan sesuai masa kerja pekerja/buruh.",
+    lexical_score: 0.54,
+    semantic_score: 0.82,
+    rerank_score: 0.87,
+    final_score: 0.87,
+    match_reasons: ["context_expansion"],
+  },
+];

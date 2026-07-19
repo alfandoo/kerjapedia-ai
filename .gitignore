@@ -1,0 +1,40 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Build outputs
+.next/
+.next-*/
+task8-next-build/
+dist/
+build/
+out/
+
+# Logs and caches
+*.log
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+test-results/
+playwright-report/
+
+# Local generated data
+storage/
+tmp/
+*.sqlite
+*.db
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

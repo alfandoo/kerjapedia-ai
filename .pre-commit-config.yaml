@@ -1,0 +1,30 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: web-lint
+        name: web lint
+        entry: powershell
+        language: system
+        pass_filenames: false
+        args: ["-NoProfile", "-Command", "Set-Location apps/web; npm.cmd run lint"]
+        files: ^apps/web/
+
+      - id: api-ruff
+        name: api ruff
+        entry: powershell
+        language: system
+        pass_filenames: false
+        args:
+          [
+            "-NoProfile",
+            "-Command",
+            "Set-Location apps/api; .venv\\Scripts\\python.exe -m ruff check app tests",
+          ]
+        files: ^apps/api/
