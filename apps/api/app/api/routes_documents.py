@@ -3,10 +3,11 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import FileResponse
 
 from app.api.dependencies import AdminUser
 from app.api.schemas import DocumentSummary, DocumentUpdateRequest
-from app.api.utils import find_dataset_document, load_dataset_documents, storage_root
+from app.api.utils import find_dataset_document, load_dataset_documents, project_root, storage_root
 from app.services.retrieval.store import load_artifact_documents
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -23,6 +24,7 @@ def to_document_summary(document) -> DocumentSummary:
         legal_status=document.legal_status,
         topics=document.topics,
         source_url=document.source_url,
+        pdf_url=f"/documents/{document.document_id}/pdf",
     )
 
 
@@ -55,6 +57,29 @@ def get_document(document_id: str) -> dict:
         for chunk in chunks[:50]
     ]
     return payload
+
+
+@router.get("/{document_id}/pdf", response_class=FileResponse)
+def get_document_pdf(document_id: str) -> FileResponse:
+    document = find_dataset_document(document_id)
+    dataset_root = (project_root() / "dataset").resolve()
+    pdf_path = (project_root() / document.local_file).resolve()
+    if dataset_root not in pdf_path.parents or pdf_path.suffix.lower() != ".pdf":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dataset PDF was not found.",
+        )
+    if not pdf_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dataset PDF was not found.",
+        )
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=document.file_name,
+        content_disposition_type="inline",
+    )
 
 
 @router.get("/{document_id}/citations/{chunk_id}")

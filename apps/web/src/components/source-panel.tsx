@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { ExternalIcon, FileIcon, ThumbsDownIcon, ThumbsUpIcon } from "./icons";
-import { submitFeedback } from "@/lib/api";
+import { documentPdfUrl, submitFeedback } from "@/lib/api";
 import type { Citation } from "@/lib/types";
 
 type SourcePanelProps = {
@@ -75,6 +75,12 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
                     {citation.page_start}-{citation.page_end}
                   </dd>
                 </div>
+                {activeTab === "pasal" && citation.section ? (
+                  <div>
+                    <dt>Bagian</dt>
+                    <dd>{citation.section}</dd>
+                  </div>
+                ) : null}
                 {activeTab === "sumber" ? (
                   <div>
                     <dt>Status</dt>
@@ -97,14 +103,21 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
                 ) : null}
               </dl>
             ) : null}
-            {activeTab !== "pasal" ? (
+            {activeTab === "kutipan" ? (
               <div className="quote-box">
                 <FileIcon className="icon" />
                 <p>{citation.quote}</p>
               </div>
             ) : null}
-            <a href={citation.source_url} target="_blank" rel="noreferrer" className="source-link">
-              Buka sumber resmi
+            <a
+              href={`${documentPdfUrl(citation.document_id)}${
+                activeTab === "sumber" ? "" : `#page=${citation.page_start}`
+              }`}
+              target="_blank"
+              rel="noreferrer"
+              className="source-link"
+            >
+              Buka PDF dokumen
               <ExternalIcon className="icon" />
             </a>
             <div className="source-feedback">

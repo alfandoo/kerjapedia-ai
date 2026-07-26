@@ -22,7 +22,7 @@ export function ChatComposer({
   onCancel,
 }: ChatComposerProps) {
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       onSubmit();
     }
@@ -48,8 +48,11 @@ export function ChatComposer({
         rows={2}
         disabled={loading}
       />
-      <span className="editorial-composer-hint">
+      <span className="editorial-composer-hint legacy-composer-hint">
         Ctrl + Enter untuk kirim · {question.length}/2000
+      </span>
+      <span className="editorial-composer-hint">
+        Enter untuk kirim · Shift + Enter untuk baris baru · {question.length}/2000
       </span>
       {loading ? (
         <button className="editorial-cancel-button" type="button" onClick={onCancel}>

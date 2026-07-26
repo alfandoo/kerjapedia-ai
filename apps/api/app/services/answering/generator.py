@@ -19,6 +19,13 @@ REFUSAL_TEXT = (
     "dengan pihak yang berwenang."
 )
 
+OUT_OF_SCOPE_TEXT = (
+    "Maaf, saya tidak tahu untuk pertanyaan tersebut. KerjaPedia AI difokuskan "
+    "khusus pada regulasi dan persoalan ketenagakerjaan Indonesia. Silakan ajukan "
+    "pertanyaan tentang hubungan kerja, PKWT, PHK, pengupahan, THR, BPJS "
+    "ketenagakerjaan, K3, atau topik ketenagakerjaan lainnya."
+)
+
 _TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 _HIGH_RISK_TERMS = {
     "pecat",
@@ -38,7 +45,15 @@ class AnswerGenerator:
         self.prompt_template = default_prompt_template()
 
     def generate(self, query: str, retrieval: RetrievalResponse) -> AnswerResponse:
-        if self._needs_clarification(query, retrieval):
+        needs_clarification = self._needs_clarification(query, retrieval)
+        if retrieval.refusal_reason == "out_of_scope_query" and not needs_clarification:
+            return self._refusal_response(
+                query=query,
+                retrieval=retrieval,
+                refusal_reason="out_of_scope_query",
+            )
+
+        if needs_clarification:
             return self._clarification_response(query, retrieval)
 
         if retrieval.should_refuse:
@@ -110,7 +125,11 @@ class AnswerGenerator:
         tokens = _TOKEN_RE.findall(query.lower())
         has_topic = bool(retrieval.query.detected_topics)
         has_intent = bool(retrieval.query.detected_intents)
-        if len(tokens) <= 3 and not has_topic:
+        if (
+            len(tokens) <= 3
+            and not has_topic
+            and set(tokens) & {"hak", "saya", "aturan", "gimana", "bagaimana"}
+        ):
             return True
         if any(term in tokens for term in {"hak", "aturan", "gimana", "bagaimana"}) and not (
             has_topic or has_intent
@@ -153,9 +172,10 @@ class AnswerGenerator:
         retrieval: RetrievalResponse,
         refusal_reason: str,
     ) -> AnswerResponse:
+        refusal_text = OUT_OF_SCOPE_TEXT if refusal_reason == "out_of_scope_query" else REFUSAL_TEXT
         return AnswerResponse(
             query=query,
-            answer=REFUSAL_TEXT,
+            answer=refusal_text,
             citations=[],
             confidence=0.0,
             related_documents=[],

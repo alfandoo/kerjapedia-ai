@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { ExternalIcon, FileIcon } from "@/components/icons";
+import { documentPdfUrl } from "@/lib/api";
 import { fallbackCitation, fallbackDocuments } from "@/lib/sample-data";
 
 type DocumentDetailPageProps = {
@@ -43,8 +44,8 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
               <div>
                 <dt>Sumber</dt>
                 <dd>
-                  <a href={document.source_url} target="_blank" rel="noreferrer">
-                    Buka sumber
+                  <a href={documentPdfUrl(document.document_id)} target="_blank" rel="noreferrer">
+                    Buka PDF dataset
                     <ExternalIcon className="icon inline-icon" />
                   </a>
                 </dd>

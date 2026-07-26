@@ -86,6 +86,26 @@ def test_answer_generation_refuses_when_retrieval_is_weak() -> None:
     assert response.confidence == 0.0
 
 
+def test_answer_generation_explains_out_of_scope_boundary() -> None:
+    engine = RetrievalEngine(
+        documents=[
+            make_document(
+                "chunk-1",
+                "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
+                ["pkwt"],
+            )
+        ]
+    )
+    retrieval = engine.search("Siapa presiden Prancis?")
+
+    response = AnswerGenerator().generate("Siapa presiden Prancis?", retrieval)
+
+    assert response.refusal_reason == "out_of_scope_query"
+    assert response.citations == []
+    assert "saya tidak tahu" in response.answer.lower()
+    assert "ketenagakerjaan Indonesia" in response.answer
+
+
 def test_answer_generation_asks_clarification_for_ambiguous_question() -> None:
     engine = RetrievalEngine(
         documents=[

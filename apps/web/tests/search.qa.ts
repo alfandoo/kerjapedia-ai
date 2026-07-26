@@ -13,6 +13,7 @@ const documents = [
     legal_status: "needs_verification",
     topics: ["hubungan_kerja", "phk"],
     source_url: "https://peraturan.bpk.go.id/",
+    pdf_url: "/documents/PP-35-2021/pdf",
   },
   {
     document_id: "PP-35-2021",
@@ -24,6 +25,7 @@ const documents = [
     legal_status: "active",
     topics: ["pkwt", "phk"],
     source_url: "https://peraturan.bpk.go.id/",
+    pdf_url: "/documents/UU-13-2003/pdf",
   },
 ];
 

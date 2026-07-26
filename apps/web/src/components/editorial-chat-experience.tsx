@@ -59,6 +59,7 @@ export function EditorialChatExperience() {
   }, []);
 
   useEffect(() => {
+    if (!session) return;
     const controller = new AbortController();
     async function loadHistory() {
       try {
@@ -72,7 +73,7 @@ export function EditorialChatExperience() {
     }
     void loadHistory();
     return () => controller.abort();
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -295,7 +296,6 @@ export function EditorialChatExperience() {
         <div className="editorial-conversation-scroll">
           {messages.length === 0 ? (
             <div className="editorial-empty-state">
-              {session ? <span className="chatgpt-empty-mark">KP</span> : null}
               <h1>Apa yang ingin Anda pahami?</h1>
               <p>Tanyakan regulasi ketenagakerjaan dan periksa dasar hukumnya.</p>
               <div className="editorial-suggestions">
@@ -313,6 +313,10 @@ export function EditorialChatExperience() {
               feedback={feedback}
               onShowSources={showSources}
               onFeedback={(message, rating) => void handleFeedback(message, rating)}
+              onEditMessage={(message) => {
+                setQuestion(message.content);
+                window.setTimeout(() => inputRef.current?.focus(), 0);
+              }}
             />
           )}
           {isLoading && !messages.some((message) => message.streaming) ? (
@@ -340,7 +344,7 @@ export function EditorialChatExperience() {
           onSubmit={() => void handleSubmit()}
           onCancel={stopRequest}
         />
-        {!session && messages.length === 0 ? (
+        {messages.length === 0 ? (
           <p className="guest-legal-note">
             KerjaPedia dapat membuat kekeliruan. Periksa selalu sumber resmi. Dengan menggunakan
             layanan ini, Anda menyetujui <Link href="/legal/terms">Ketentuan</Link>,{" "}

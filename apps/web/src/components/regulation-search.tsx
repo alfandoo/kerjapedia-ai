@@ -100,6 +100,7 @@ export function RegulationSearch() {
         </div>
       ) : null}
       <div className="search-summary" aria-live="polite">
+        <h2>Daftar regulasi</h2>
         <span>{loading ? "Memuat regulasi…" : `${filtered.length} regulasi ditemukan`}</span>
         {hasFilters ? (
           <button type="button" onClick={resetSearch}>
@@ -108,6 +109,15 @@ export function RegulationSearch() {
         ) : null}
       </div>
       <div className="regulation-list" aria-label="Daftar regulasi" aria-busy={loading}>
+        {!loading && filtered.length > 0 ? (
+          <div className="regulation-list-header" aria-hidden="true">
+            <span>Jenis regulasi</span>
+            <span>Dokumen</span>
+            <span>Tahun</span>
+            <span>Status</span>
+            <span>Akses</span>
+          </div>
+        ) : null}
         {!loading && filtered.length === 0 ? (
           <div className="search-empty">
             <h2>Regulasi tidak ditemukan</h2>
@@ -137,10 +147,11 @@ export function RegulationSearch() {
             <div className="regulation-actions">
               <Link href={`/documents/${document.document_id}`}>Lihat detail</Link>
               <a
-                href={document.source_url}
+                href={document.pdf_url}
                 target="_blank"
                 rel="noreferrer"
-                aria-label="Buka sumber resmi"
+                aria-label={`Buka PDF ${document.short_title}`}
+                title="Buka PDF dari dataset"
               >
                 <ExternalIcon className="icon" />
               </a>

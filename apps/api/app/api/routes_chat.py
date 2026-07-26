@@ -22,6 +22,8 @@ from app.api.schemas import (
 from app.api.state import ConversationRecord, UserRecord, now_utc, state
 from app.api.utils import storage_root
 from app.core.config import settings
+from app.services.answering.guardrails import build_guardrail_refusal, evaluate_input_guardrail
+from app.services.answering.memory import build_memory_context
 from app.services.providers import answer_generator_from_settings, pinecone_store_from_settings
 from app.services.retrieval.engine import RetrievalEngine
 from app.services.retrieval.store import load_artifact_documents
@@ -120,6 +122,7 @@ def _store_answer(
     payload: AskRequest,
     answer,
     best_score,
+    rag_trace: dict | None = None,
 ) -> None:
     now = now_utc()
     with state.lock:
@@ -128,7 +131,7 @@ def _store_answer(
                 "role": "user",
                 "content": payload.question,
                 "created_at": now,
-                "metadata": {},
+                "metadata": {"rag_trace": rag_trace or {}},
             }
         )
         conversation.messages.append(
@@ -140,6 +143,7 @@ def _store_answer(
                     "answer": asdict(answer),
                     "retrieval_score": best_score,
                     "token_usage": {"prompt_tokens": 0, "completion_tokens": 0},
+                    "rag_trace": rag_trace or {},
                 },
             }
         )
@@ -166,16 +170,34 @@ def ask_question(
     conversation = _get_or_create_conversation(payload, active_user)
 
     try:
-        retrieval = _retrieve(payload.question, payload.top_k)
-        answer = answer_generator_from_settings(settings).generate(payload.question, retrieval)
+        guardrail = evaluate_input_guardrail(payload.question)
+        memory = build_memory_context(payload.question, conversation.messages)
+        if not guardrail.allowed:
+            answer = build_guardrail_refusal(
+                payload.question,
+                guardrail.reason or "input_guardrail_blocked",
+            )
+            retrieval = None
+        else:
+            retrieval = _retrieve(memory.retrieval_query, payload.top_k)
+            answer = answer_generator_from_settings(settings).generate(payload.question, retrieval)
     except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
-    best_score = retrieval.results[0].final_score if retrieval.results else None
+    best_score = retrieval.results[0].final_score if retrieval and retrieval.results else None
+    rag_trace = {
+        "guardrail": {"allowed": guardrail.allowed, "reason": guardrail.reason},
+        "memory": {
+            "used": memory.used,
+            "source_turns": memory.source_turns,
+            "retrieval_query": memory.retrieval_query,
+        },
+    }
+    answer.debug.update(rag_trace)
 
-    _store_answer(conversation, payload, answer, best_score)
+    _store_answer(conversation, payload, answer, best_score, rag_trace)
 
     latency_ms = int((time.perf_counter() - started_at) * 1000)
     return AskResponse(
@@ -205,17 +227,40 @@ def ask_question_stream(
             status="Menganalisis pertanyaan",
         )
         try:
-            yield _stream_event("thinking", status="Menelusuri regulasi resmi")
-            retrieval = await asyncio.to_thread(_retrieve, payload.question, payload.top_k)
-            yield _stream_event("thinking", status="Menyusun jawaban berdasarkan sumber")
-            generator = answer_generator_from_settings(settings)
-            answer = await asyncio.to_thread(generator.generate, payload.question, retrieval)
+            guardrail = evaluate_input_guardrail(payload.question)
+            memory = build_memory_context(payload.question, conversation.messages)
+            if not guardrail.allowed:
+                yield _stream_event("thinking", status="Memeriksa keamanan permintaan")
+                answer = build_guardrail_refusal(
+                    payload.question,
+                    guardrail.reason or "input_guardrail_blocked",
+                )
+                retrieval = None
+            else:
+                yield _stream_event("thinking", status="Menelusuri regulasi resmi")
+                retrieval = await asyncio.to_thread(
+                    _retrieve,
+                    memory.retrieval_query,
+                    payload.top_k,
+                )
+                yield _stream_event("thinking", status="Menyusun jawaban berdasarkan sumber")
+                generator = answer_generator_from_settings(settings)
+                answer = await asyncio.to_thread(generator.generate, payload.question, retrieval)
         except RuntimeError as exc:
             yield _stream_event("error", detail=str(exc))
             return
 
-        best_score = retrieval.results[0].final_score if retrieval.results else None
-        _store_answer(conversation, payload, answer, best_score)
+        best_score = retrieval.results[0].final_score if retrieval and retrieval.results else None
+        rag_trace = {
+            "guardrail": {"allowed": guardrail.allowed, "reason": guardrail.reason},
+            "memory": {
+                "used": memory.used,
+                "source_turns": memory.source_turns,
+                "retrieval_query": memory.retrieval_query,
+            },
+        }
+        answer.debug.update(rag_trace)
+        _store_answer(conversation, payload, answer, best_score, rag_trace)
         for token in _STREAM_TOKEN_RE.findall(answer.answer):
             if await request.is_disconnected():
                 return

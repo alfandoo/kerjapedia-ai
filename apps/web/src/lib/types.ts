@@ -91,6 +91,7 @@ export type DocumentSummary = {
   legal_status: string;
   topics: string[];
   source_url: string;
+  pdf_url: string;
 };
 
 export type UserSession = {

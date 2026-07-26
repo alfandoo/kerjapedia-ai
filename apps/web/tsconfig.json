@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -13,9 +17,15 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [{ "name": "next" }],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
   "include": [
@@ -36,7 +46,23 @@
     ".next-public-pages/types/**/*.ts",
     ".next-public-pages/dev/types/**/*.ts",
     ".next-tidy-chat/types/**/*.ts",
-    ".next-tidy-chat/dev/types/**/*.ts"
+    ".next-tidy-chat/dev/types/**/*.ts",
+    ".next-actions/types/**/*.ts",
+    ".next-actions/dev/types/**/*.ts",
+    ".next-spacing-qa/types/**/*.ts",
+    ".next-spacing-qa/dev/types/**/*.ts",
+    ".next-source-qa/types/**/*.ts",
+    ".next-source-qa/dev/types/**/*.ts",
+    ".next-tabs-hover-qa/types/**/*.ts",
+    ".next-tabs-hover-qa/dev/types/**/*.ts",
+    ".next-search-qa/types/**/*.ts",
+    ".next-search-qa/dev/types/**/*.ts",
+    ".next-pdf-source-qa/types/**/*.ts",
+    ".next-pdf-source-qa/dev/types/**/*.ts",
+    ".next-pdf-page-qa/types/**/*.ts",
+    ".next-pdf-page-qa/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { ChatIcon, MoreIcon } from "./icons";
+import { ChatIcon, EditIcon, MoreIcon, TrashIcon } from "./icons";
 import type { ConversationSummary } from "@/lib/types";
 
 type ConversationHistoryProps = {
@@ -15,6 +15,8 @@ type ConversationHistoryProps = {
   onConversationRename?: (conversationId: string, title: string) => Promise<void>;
   onConversationDelete?: (conversationId: string) => Promise<void>;
   historyEnabled?: boolean;
+  showNewConversation?: boolean;
+  emptyMessage?: string;
 };
 
 function formatHistoryTime(value: string) {
@@ -35,6 +37,8 @@ export function ConversationHistory({
   onConversationRename,
   onConversationDelete,
   historyEnabled = true,
+  showNewConversation = true,
+  emptyMessage = "Belum ada percakapan. Ajukan pertanyaan pertama Anda.",
 }: ConversationHistoryProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -94,11 +98,13 @@ export function ConversationHistory({
 
   return (
     <aside className="editorial-history" aria-label="Riwayat percakapan">
-      <h2>Riwayat</h2>
-      <button className="editorial-new-chat" type="button" onClick={onNewConversation}>
-        <span aria-hidden="true">+</span>
-        Percakapan baru
-      </button>
+      <h2>Percakapan</h2>
+      {showNewConversation ? (
+        <button className="editorial-new-chat" type="button" onClick={onNewConversation}>
+          <span aria-hidden="true">+</span>
+          Percakapan baru
+        </button>
+      ) : null}
       <div
         className={`editorial-history-list${historyEnabled ? "" : " guest-mode"}`}
         aria-busy={historyEnabled && loading}
@@ -112,9 +118,7 @@ export function ConversationHistory({
         ) : null}
         {loading ? <p className="editorial-history-empty">Memuat riwayat…</p> : null}
         {!loading && conversations.length === 0 ? (
-          <p className="editorial-history-empty">
-            Belum ada percakapan. Ajukan pertanyaan pertama Anda.
-          </p>
+          <p className="editorial-history-empty">{emptyMessage}</p>
         ) : null}
         {conversations.map((item) => (
           <div
@@ -195,7 +199,8 @@ export function ConversationHistory({
                           setEditingId(item.conversation_id);
                         }}
                       >
-                        Ubah judul
+                        <EditIcon className="icon" />
+                        <span>Ubah judul</span>
                       </button>
                       <button
                         type="button"
@@ -204,7 +209,8 @@ export function ConversationHistory({
                         disabled={pendingId === item.conversation_id}
                         onClick={() => void removeConversation(item)}
                       >
-                        Hapus chat
+                        <TrashIcon className="icon" />
+                        <span>Hapus chat</span>
                       </button>
                     </div>
                   ) : null}

@@ -18,6 +18,7 @@ export const fallbackDocuments: DocumentSummary[] = [
     legal_status: "needs_verification",
     topics: ["cuti", "upah", "phk", "hubungan_kerja"],
     source_url: "https://peraturan.bpk.go.id/",
+    pdf_url: "/documents/UU-13-2003/pdf",
   },
   {
     document_id: "PP-35-2021",
@@ -29,6 +30,7 @@ export const fallbackDocuments: DocumentSummary[] = [
     legal_status: "needs_verification",
     topics: ["pkwt", "phk", "alih_daya", "waktu_kerja"],
     source_url: "https://peraturan.bpk.go.id/",
+    pdf_url: "/documents/PP-35-2021/pdf",
   },
   {
     document_id: "UU-21-2000",
@@ -40,6 +42,7 @@ export const fallbackDocuments: DocumentSummary[] = [
     legal_status: "needs_verification",
     topics: ["serikat_pekerja", "hubungan_industrial"],
     source_url: "https://peraturan.bpk.go.id/",
+    pdf_url: "/documents/UU-21-2000/pdf",
   },
 ];
 
@@ -120,6 +123,7 @@ export const fallbackAdminDocuments: AdminDocument[] = [
     legal_status: "needs_verification",
     topics: ["pengupahan", "upah_minimum"],
     source_url: "https://peraturan.bpk.go.id/",
+    pdf_url: "/documents/PP-36-2021/pdf",
     issuer: "Pemerintah Republik Indonesia",
     verification_status: "pending_detail_url",
     ingestion_status: "failed",

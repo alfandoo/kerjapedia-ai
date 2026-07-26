@@ -182,7 +182,15 @@ export async function deleteConversation(conversationId: string): Promise<void> 
 
 export async function fetchDocuments(signal?: AbortSignal): Promise<DocumentSummary[]> {
   const response = await fetch(`${API_URL}/documents`, { signal });
-  return parseJsonResponse<DocumentSummary[]>(response);
+  const documents = await parseJsonResponse<DocumentSummary[]>(response);
+  return documents.map((document) => ({
+    ...document,
+    pdf_url: new URL(document.pdf_url, `${API_URL}/`).toString(),
+  }));
+}
+
+export function documentPdfUrl(documentId: string): string {
+  return `${API_URL}/documents/${encodeURIComponent(documentId)}/pdf`;
 }
 
 export async function submitFeedback(payload: {

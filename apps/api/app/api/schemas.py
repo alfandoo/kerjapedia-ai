@@ -86,6 +86,7 @@ class DocumentSummary(ApiModel):
     legal_status: str
     topics: list[str]
     source_url: str
+    pdf_url: str
 
 
 class DocumentUpdateRequest(ApiModel):

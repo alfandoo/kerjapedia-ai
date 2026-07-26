@@ -33,6 +33,14 @@ test("stored session hydrates the chat shell without mismatch", async ({ page })
 
   await expect(page.locator(".chatgpt-account-avatar").first()).toHaveText("AD");
   await expect(page.locator(".chatgpt-account strong").first()).toHaveText("Admin Demo");
+  await expect(
+    page.locator(".desktop-sidebar").getByRole("link", { name: "KerjaPedia AI beranda" })
+  ).toContainText("KerjaPedia AI");
+  const sidebarBrand = page.locator(".desktop-sidebar .chatgpt-sidebar-brand-full strong");
+  await expect(sidebarBrand).toBeVisible();
+  await expect
+    .poll(() => sidebarBrand.evaluate((element) => element.scrollWidth <= element.clientWidth))
+    .toBe(true);
   expect(runtimeErrors.filter((error) => /hydration|server rendered text/i.test(error))).toEqual(
     []
   );
