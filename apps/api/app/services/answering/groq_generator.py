@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from app.services.answering.citations import build_citations, build_related_documents
@@ -51,7 +52,10 @@ class GroqAnswerGenerator(AnswerGenerator):
         retrieved_chunk_ids = [item.document.chunk_id for item in selected]
         try:
             payload = self._call_groq(query, retrieval, retrieved_chunk_ids)
-            answer = str(payload.get("answer", "")).strip()
+            answer = _clean_answer_text(
+                str(payload.get("answer", "")).strip(),
+                retrieved_chunk_ids,
+            )
             cited_chunk_ids = payload.get("cited_chunk_ids")
             if not answer:
                 raise ValueError("Groq returned an empty answer.")
@@ -124,6 +128,13 @@ class GroqAnswerGenerator(AnswerGenerator):
                 '{"answer":"...","confidence":0.0,"cited_chunk_ids":["..."]}',
                 "cited_chunk_ids hanya boleh memakai chunk berikut: "
                 + ", ".join(retrieved_chunk_ids),
+                (
+                    "Tulis answer dalam bahasa Indonesia yang mudah dipindai: awali dengan "
+                    "kesimpulan singkat, gunakan paragraf pendek atau daftar bernomor bila "
+                    "ada beberapa poin. Jangan tulis chunk ID, citation ID, tanda rujukan "
+                    "seperti [chunk-id], atau daftar sumber di dalam answer; sumber akan "
+                    "ditampilkan terpisah oleh aplikasi."
+                ),
             ]
         )
         completion = self._groq_client().chat.completions.create(
@@ -162,3 +173,15 @@ def _coerce_confidence(value: Any, fallback: float) -> float:
     except (TypeError, ValueError):
         return fallback
     return round(max(0.0, min(confidence, 0.95)), 3)
+
+
+def _clean_answer_text(answer: str, retrieved_chunk_ids: list[str]) -> str:
+    cleaned = answer
+    for chunk_id in sorted(retrieved_chunk_ids, key=len, reverse=True):
+        escaped_id = re.escape(chunk_id)
+        cleaned = re.sub(rf"\[\[\s*{escaped_id}\s*\]\]", "", cleaned)
+        cleaned = re.sub(rf"\[\s*{escaped_id}\s*\]", "", cleaned)
+    cleaned = re.sub(r"[ \t]+([.,;:!?])", r"\1", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r" *\n *", "\n", cleaned)
+    return cleaned.strip()

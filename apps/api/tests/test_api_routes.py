@@ -14,6 +14,7 @@ from app.services.retrieval.schemas import RetrievalDocument
 @pytest.fixture(autouse=True)
 def reset_api_state() -> Iterator[None]:
     with state.lock:
+        state.users.clear()
         state.sessions.clear()
         state.conversations.clear()
         state.feedback.clear()
@@ -92,14 +93,45 @@ def test_auth_rejects_wrong_admin_password(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_auth_does_not_promote_admin_prefix(client: TestClient) -> None:
+def test_auth_requires_registration_for_regular_users(client: TestClient) -> None:
     response = client.post(
         "/auth/login",
         json={"email": "admin@attacker.example", "password": "secret"},
     )
 
-    assert response.status_code == 200
-    assert response.json()["user"]["roles"] == ["user"]
+    assert response.status_code == 401
+
+
+def test_auth_registers_and_logs_in_regular_user(client: TestClient) -> None:
+    registered = client.post(
+        "/auth/register",
+        json={
+            "name": "Budi Pekerja",
+            "email": "budi@example.com",
+            "password": "rahasia-kuat",
+        },
+    )
+
+    assert registered.status_code == 201
+    assert registered.json()["user"]["name"] == "Budi Pekerja"
+    assert registered.json()["user"]["roles"] == ["user"]
+
+    login = client.post(
+        "/auth/login",
+        json={"email": "budi@example.com", "password": "rahasia-kuat"},
+    )
+    assert login.status_code == 200
+
+
+def test_auth_rejects_duplicate_registration(client: TestClient) -> None:
+    payload = {
+        "name": "Budi Pekerja",
+        "email": "budi@example.com",
+        "password": "rahasia-kuat",
+    }
+    assert client.post("/auth/register", json=payload).status_code == 201
+    duplicate = client.post("/auth/register", json=payload)
+    assert duplicate.status_code == 409
 
 
 def test_security_and_trace_headers_are_added(client: TestClient) -> None:
@@ -172,8 +204,12 @@ def test_authenticated_user_conversation_is_saved_to_history(
         lambda _: [make_document()],
     )
     login = client.post(
-        "/auth/login",
-        json={"email": "pekerja@example.com", "password": "secret"},
+        "/auth/register",
+        json={
+            "name": "Pekerja",
+            "email": "pekerja@example.com",
+            "password": "secret-aman",
+        },
     )
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 

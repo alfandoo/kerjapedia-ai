@@ -102,6 +102,7 @@ export function ChatWorkspaceShell({
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const chatSearchInputRef = useRef<HTMLInputElement>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
@@ -124,8 +125,9 @@ export function ChatWorkspaceShell({
     window.setTimeout(() => chatSearchInputRef.current?.focus(), 0);
   }
 
-  function openAuthModal(trigger: HTMLElement) {
+  function openAuthModal(trigger: HTMLElement, mode: "login" | "signup" = "login") {
     authTriggerRef.current = trigger;
+    setAuthMode(mode);
     onMobileSidebarOpenChange(false);
     setAuthModalOpen(true);
   }
@@ -507,14 +509,14 @@ export function ChatWorkspaceShell({
               <button
                 type="button"
                 className="guest-login-button"
-                onClick={(event) => openAuthModal(event.currentTarget)}
+                onClick={(event) => openAuthModal(event.currentTarget, "login")}
               >
                 Masuk
               </button>
               <button
                 type="button"
                 className="guest-signup-button"
-                onClick={(event) => openAuthModal(event.currentTarget)}
+                onClick={(event) => openAuthModal(event.currentTarget, "signup")}
               >
                 Daftar gratis
               </button>
@@ -623,6 +625,7 @@ export function ChatWorkspaceShell({
       ) : null}
       <AuthModal
         open={authModalOpen}
+        mode={authMode}
         onClose={closeAuthModal}
         onSuccess={() => {
           setAuthModalOpen(false);

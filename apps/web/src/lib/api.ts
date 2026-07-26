@@ -214,6 +214,19 @@ export async function login(email: string, password: string): Promise<UserSessio
   return parseJsonResponse<UserSession>(response);
 }
 
+export async function register(
+  name: string,
+  email: string,
+  password: string
+): Promise<UserSession> {
+  const response = await fetch(`${API_URL}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email, password }),
+  });
+  return parseJsonResponse<UserSession>(response);
+}
+
 export async function fetchAdminOverview(signal?: AbortSignal): Promise<AdminOverview> {
   const response = await fetch(`${API_URL}/admin/documents`, {
     headers: adminHeaders(),

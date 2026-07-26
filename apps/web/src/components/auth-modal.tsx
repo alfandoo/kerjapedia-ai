@@ -9,11 +9,12 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 
-import { login, SESSION_STORAGE_KEY } from "@/lib/api";
+import { login, register, SESSION_STORAGE_KEY } from "@/lib/api";
 import type { UserSession } from "@/lib/types";
 
 type AuthModalProps = {
   open: boolean;
+  mode: "login" | "signup";
   onClose: () => void;
   onSuccess: (session: UserSession) => void;
 };
@@ -81,14 +82,16 @@ const providers = [
   { label: "telepon", icon: <PhoneIcon /> },
 ];
 
-export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
+export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<"email" | "password">("email");
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,11 +101,11 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    window.setTimeout(() => emailRef.current?.focus(), 0);
+    window.setTimeout(() => (mode === "signup" ? nameRef.current : emailRef.current)?.focus(), 0);
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [open]);
+  }, [mode, open]);
 
   useEffect(() => {
     if (open && step === "password") {
@@ -114,6 +117,7 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
     if (submitting) return;
     setStep("email");
     setEmail("");
+    setName("");
     setPassword("");
     setPasswordVisible(false);
     setError(null);
@@ -142,8 +146,8 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
     setError(null);
 
     if (step === "email") {
-      if (!emailRef.current?.checkValidity()) {
-        emailRef.current?.reportValidity();
+      if (!event.currentTarget.checkValidity()) {
+        event.currentTarget.reportValidity();
         return;
       }
       setStep("password");
@@ -157,12 +161,16 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
 
     setSubmitting(true);
     try {
-      const session = await login(email.trim(), password);
+      const session =
+        mode === "signup"
+          ? await register(name.trim(), email.trim(), password)
+          : await login(email.trim(), password);
       window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
       window.dispatchEvent(new Event("kerjapedia-session-change"));
       onSuccess(session);
       setStep("email");
       setEmail("");
+      setName("");
       setPassword("");
       setPasswordVisible(false);
     } catch (reason) {
@@ -211,7 +219,9 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
         </button>
         <div className="auth-modal-scroll">
           <header className="auth-modal-heading">
-            <h2 id={titleId}>Masuk atau daftar</h2>
+            <h2 id={titleId}>
+              {mode === "signup" ? "Buat akun KerjaPedia" : "Masuk ke KerjaPedia"}
+            </h2>
             <p id={descriptionId}>
               Dapatkan jawaban yang lebih personal dan simpan riwayat percakapan Anda.
             </p>
@@ -234,6 +244,23 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
           <form className="auth-modal-form" onSubmit={handleSubmit} noValidate>
             {step === "email" ? (
               <>
+                {mode === "signup" ? (
+                  <>
+                    <label htmlFor="auth-modal-name">Nama lengkap</label>
+                    <input
+                      ref={nameRef}
+                      id="auth-modal-name"
+                      name="name"
+                      type="text"
+                      autoComplete="name"
+                      placeholder="Nama lengkap"
+                      value={name}
+                      minLength={2}
+                      required
+                      onChange={(event) => setName(event.target.value)}
+                    />
+                  </>
+                ) : null}
                 <label htmlFor="auth-modal-email">Alamat email</label>
                 <input
                   ref={emailRef}
@@ -273,9 +300,10 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
                     id="auth-modal-password"
                     name="password"
                     type={passwordVisible ? "text" : "password"}
-                    autoComplete="current-password"
+                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
                     placeholder="Password"
                     value={password}
+                    minLength={mode === "signup" ? 8 : 1}
                     required
                     onChange={(event) => setPassword(event.target.value)}
                   />
@@ -289,12 +317,24 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
                   </button>
                 </div>
                 <button className="auth-modal-submit" type="submit" disabled={submitting}>
-                  {submitting ? "Memeriksa..." : "Masuk atau daftar"}
+                  {submitting
+                    ? mode === "signup"
+                      ? "Membuat akun..."
+                      : "Memeriksa..."
+                    : mode === "signup"
+                      ? "Buat akun"
+                      : "Masuk"}
                 </button>
               </>
             )}
             <p className="auth-modal-status" role="status" aria-live="polite">
-              {error ? `Login gagal: ${error}` : submitting ? "Memeriksa akun Anda..." : ""}
+              {error
+                ? `${mode === "signup" ? "Pendaftaran" : "Login"} gagal: ${error}`
+                : submitting
+                  ? mode === "signup"
+                    ? "Membuat akun Anda..."
+                    : "Memeriksa akun Anda..."
+                  : ""}
             </p>
           </form>
         </div>

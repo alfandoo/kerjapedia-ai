@@ -5,7 +5,7 @@ from hmac import compare_digest
 from fastapi import APIRouter, Header, HTTPException, status
 
 from app.api.dependencies import CurrentUser, _extract_bearer_token
-from app.api.schemas import LoginRequest, LoginResponse, UserResponse
+from app.api.schemas import LoginRequest, LoginResponse, RegisterRequest, UserResponse
 from app.api.state import UserRecord, state
 from app.core.config import settings
 
@@ -37,14 +37,44 @@ def login(payload: LoginRequest) -> LoginResponse:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials.",
         )
-    roles = ["user", "admin"] if is_admin_email and is_admin_password else ["user"]
+    if is_admin_email and is_admin_password:
+        user = UserRecord(
+            user_id=email,
+            email=email,
+            name=payload.email.split("@")[0],
+            roles=["user", "admin"],
+        )
+    else:
+        user = state.authenticate_user(email, payload.password)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Email atau password salah.",
+            )
+    token = state.create_token(user, ttl_minutes=settings.session_ttl_minutes)
+    return LoginResponse(access_token=token, user=to_user_response(user))
 
-    user = UserRecord(
-        user_id=email,
-        email=email,
-        name=payload.email.split("@")[0],
-        roles=roles,
-    )
+
+@router.post("/register", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
+def register(payload: RegisterRequest) -> LoginResponse:
+    email = payload.email.strip().lower()
+    name = payload.name.strip()
+    if "@" not in email or email.startswith("@") or email.endswith("@"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Alamat email tidak valid.",
+        )
+    if email == settings.admin_email.lower():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email sudah terdaftar.",
+        )
+    user = state.register_user(email, name, payload.password)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email sudah terdaftar.",
+        )
     token = state.create_token(user, ttl_minutes=settings.session_ttl_minutes)
     return LoginResponse(access_token=token, user=to_user_response(user))
 

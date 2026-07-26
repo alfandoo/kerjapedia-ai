@@ -48,7 +48,9 @@ async function mockChat(
   let hasConversation = false;
   const answer = {
     query: "Apakah pekerja PKWT memperoleh kompensasi?",
-    answer: refusal ? refusalAnswer : "Pekerja PKWT berhak memperoleh uang kompensasi.",
+    answer: refusal
+      ? refusalAnswer
+      : "Pekerja PKWT berhak memperoleh uang kompensasi. Hak tersebut berlaku ketika hubungan kerja berakhir sesuai ketentuan yang berlaku. Besaran kompensasi dihitung berdasarkan masa kerja pekerja. Dasar dan rincian hukumnya dapat diperiksa melalui sumber resmi yang disertakan pada jawaban ini.",
     citations: refusal ? [] : [citation],
     confidence: refusal ? 0 : 0.95,
     related_documents: [],
@@ -170,6 +172,7 @@ test("user receives a sourced answer", async ({ page }, testInfo) => {
   await expect(
     page.getByRole("main").getByText("Pekerja PKWT berhak memperoleh uang kompensasi.")
   ).toBeVisible();
+  await expect(page.locator(".editorial-answer-content > p")).toHaveCount(2);
   await expect(page.getByRole("button", { name: "Edit pesan" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Salin pesan" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Salin jawaban" })).toBeVisible();
@@ -359,7 +362,9 @@ test("guest conversation history is not shown or persisted in the sidebar", asyn
 });
 
 test("guest authenticates through the two-step modal", async ({ page }, testInfo) => {
-  await page.route("**/auth/login", async (route) => {
+  let registrationPayload: Record<string, string> | null = null;
+  await page.route("**/auth/register", async (route) => {
+    registrationPayload = route.request().postDataJSON() as Record<string, string>;
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -379,9 +384,9 @@ test("guest authenticates through the two-step modal", async ({ page }, testInfo
 
   const trigger = page.getByRole("button", { name: "Daftar gratis" });
   await trigger.click();
-  const dialog = page.getByRole("dialog", { name: "Masuk atau daftar" });
+  const dialog = page.getByRole("dialog", { name: "Buat akun KerjaPedia" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Alamat email")).toBeFocused();
+  await expect(dialog.getByLabel("Nama lengkap")).toBeVisible();
   await expect(dialog.getByRole("button", { name: /Lanjutkan dengan Google/ })).toBeDisabled();
   const desktopModalScreenshot = join(tmpdir(), "kerjapedia-auth-modal-desktop.png");
   await page.screenshot({ path: desktopModalScreenshot });
@@ -390,11 +395,12 @@ test("guest authenticates through the two-step modal", async ({ page }, testInfo
     contentType: "image/png",
   });
 
+  await dialog.getByLabel("Nama lengkap").fill("Pengguna Modal");
   await dialog.getByLabel("Alamat email").fill("user@example.com");
   await dialog.getByRole("button", { name: "Lanjutkan", exact: true }).click();
   const passwordInput = dialog.getByRole("textbox", { name: "Password" });
   await expect(passwordInput).toBeFocused();
-  await passwordInput.fill("secret");
+  await passwordInput.fill("secret-aman");
   await expect(passwordInput).toHaveAttribute("type", "password");
   await dialog.getByRole("button", { name: "Tampilkan password" }).click();
   await expect(passwordInput).toHaveAttribute("type", "text");
@@ -406,9 +412,14 @@ test("guest authenticates through the two-step modal", async ({ page }, testInfo
   });
   await dialog.getByRole("button", { name: "Sembunyikan password" }).click();
   await expect(passwordInput).toHaveAttribute("type", "password");
-  await dialog.getByRole("button", { name: "Masuk atau daftar" }).click();
+  await dialog.getByRole("button", { name: "Buat akun" }).click();
 
   await expect(dialog).toBeHidden();
+  expect(registrationPayload).toEqual({
+    name: "Pengguna Modal",
+    email: "user@example.com",
+    password: "secret-aman",
+  });
   await expect(page.getByRole("button", { name: "Buka menu profil Pengguna Modal" })).toBeVisible();
   await expect(page.getByText("Pengguna Modal")).toHaveCount(1);
   await expect
@@ -421,7 +432,7 @@ test("auth modal fits a mobile viewport", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Masuk" }).last().click();
 
-  const dialog = page.getByRole("dialog", { name: "Masuk atau daftar" });
+  const dialog = page.getByRole("dialog", { name: "Masuk ke KerjaPedia" });
   await expect(dialog).toBeVisible();
   await expect(dialog).toBeInViewport();
   await expect(dialog.getByRole("button", { name: "Lanjutkan", exact: true })).toBeInViewport();
@@ -437,9 +448,9 @@ test("auth modal closes with Escape and restores trigger focus", async ({ page }
   await page.goto("/");
   const trigger = page.getByRole("button", { name: "Masuk" }).last();
   await trigger.click();
-  await expect(page.getByRole("dialog", { name: "Masuk atau daftar" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Masuk ke KerjaPedia" })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: "Masuk atau daftar" })).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "Masuk ke KerjaPedia" })).toBeHidden();
   await expect(trigger).toBeFocused();
 
   await page.goto("/login?mode=signup");

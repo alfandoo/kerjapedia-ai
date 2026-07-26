@@ -22,6 +22,12 @@ class LoginRequest(ApiModel):
     password: str = Field(min_length=1, max_length=256)
 
 
+class RegisterRequest(ApiModel):
+    name: str = Field(min_length=2, max_length=80)
+    email: str = Field(min_length=3, max_length=160)
+    password: str = Field(min_length=8, max_length=256)
+
+
 class UserResponse(ApiModel):
     user_id: str
     email: str

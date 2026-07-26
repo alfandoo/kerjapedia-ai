@@ -29,6 +29,45 @@ function formatMessageTime(value: string) {
   }).format(new Date(value));
 }
 
+function answerBlocks(content: string) {
+  const explicitBlocks = content
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (explicitBlocks.length !== 1 || content.length <= 260) return explicitBlocks;
+
+  const sentences = content.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((item) => item.trim()) ?? [
+    content,
+  ];
+  const blocks: string[] = [];
+  for (let index = 0; index < sentences.length; index += 2) {
+    blocks.push(sentences.slice(index, index + 2).join(" "));
+  }
+  return blocks;
+}
+
+function AnswerContent({ content, streaming }: { content: string; streaming: boolean }) {
+  const blocks = answerBlocks(content);
+  return (
+    <div
+      className={streaming ? "editorial-answer-content is-streaming" : "editorial-answer-content"}
+    >
+      {blocks.map((block, index) => {
+        const listMatch = block.match(/^(?:[-•]|\d+[.)])\s+(.+)$/);
+        return listMatch ? (
+          <div className="editorial-answer-point" key={`${index}-${block}`}>
+            <span aria-hidden="true">{index + 1}</span>
+            <p>{listMatch[1]}</p>
+          </div>
+        ) : (
+          <p key={`${index}-${block}`}>{block}</p>
+        );
+      })}
+      {streaming ? <span className="streaming-cursor" aria-hidden="true" /> : null}
+    </div>
+  );
+}
+
 export function ConversationThread({
   messages,
   feedback,
@@ -124,16 +163,7 @@ export function ConversationThread({
                 <span>{message.status}</span>
               </div>
             ) : (
-              <p
-                className={
-                  message.streaming ? "editorial-answer-text is-streaming" : "editorial-answer-text"
-                }
-              >
-                {message.content}
-                {message.streaming ? (
-                  <span className="streaming-cursor" aria-hidden="true" />
-                ) : null}
-              </p>
+              <AnswerContent content={message.content} streaming={Boolean(message.streaming)} />
             )}
             {message.answer?.citations.length ? (
               <button

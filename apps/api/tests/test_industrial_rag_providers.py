@@ -257,6 +257,29 @@ def test_groq_generator_accepts_structured_json() -> None:
     assert "Pekerja PKWT" in answer.answer
 
 
+def test_groq_generator_removes_internal_chunk_ids_from_answer() -> None:
+    generator = GroqAnswerGenerator(api_key="test-key")
+    generator._client = FakeGroqClient(
+        {
+            "answer": (
+                "Pekerja PKWT memperoleh kompensasi [[chunk-1]]. "
+                "Ketentuannya tercantum dalam Pasal 15 [chunk-1]."
+            ),
+            "confidence": 0.82,
+            "cited_chunk_ids": ["chunk-1"],
+        }
+    )
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert "chunk-1" not in answer.answer
+    assert "[[" not in answer.answer
+    assert "Pasal 15." in answer.answer
+
+
 def test_groq_generator_returns_only_model_selected_citations() -> None:
     retrieval = retrieval_response()
     first = retrieval.results[0]
