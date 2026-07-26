@@ -303,32 +303,39 @@ dikerjakan pada tahap hardening.
 
 ## 12. Security, Privacy, dan Reliability
 
-- [ ] Simpan API key hanya di environment variable.
-- [ ] Jangan commit file `.env`, log sensitif, atau vector index lokal.
-- [ ] Tambahkan secure password hashing atau session/token strategy.
-- [ ] Tambahkan validasi upload PDF dan batas ukuran file.
-- [ ] Tambahkan mitigasi prompt injection dari isi dokumen.
-- [ ] Tambahkan timeout untuk request LLM dan database.
-- [ ] Tambahkan retry untuk job ingestion yang gagal.
-- [ ] Tambahkan backup metadata database.
-- [ ] Tambahkan error handling jika retrieval kosong atau LLM gagal.
-- [ ] Tambahkan monitoring dasar untuk error rate dan latency.
-- [ ] Tambahkan tracing untuk prompt version, model version, retrieved chunks, dan token usage.
-- [ ] Tentukan retention policy untuk riwayat chat dan feedback.
-- [ ] Pastikan jawaban hukum selalu menyertakan sumber atau refusal.
+**Status:** Selesai untuk implementasi. Verifikasi restore backup pada service PostgreSQL
+lokal tetap perlu dijalankan ketika Docker CLI tersedia.
+
+- [x] Simpan API key hanya di environment variable.
+- [x] Jangan commit file `.env`, log sensitif, atau vector index lokal.
+- [x] Tambahkan secure password hashing atau session/token strategy.
+- [x] Tambahkan validasi upload PDF dan batas ukuran file.
+- [x] Tambahkan mitigasi prompt injection dari isi dokumen.
+- [x] Tambahkan timeout untuk request LLM dan database.
+- [x] Tambahkan retry untuk job ingestion yang gagal.
+- [x] Tambahkan backup metadata database.
+- [x] Tambahkan error handling jika retrieval kosong atau LLM gagal.
+- [x] Tambahkan monitoring dasar untuk error rate dan latency.
+- [x] Tambahkan tracing untuk prompt version, model version, retrieved chunks, dan token usage.
+- [x] Tentukan retention policy untuk riwayat chat dan feedback.
+- [x] Pastikan jawaban hukum selalu menyertakan sumber atau refusal.
 
 ## 13. Deployment MVP
+
+**Status:** Siap deploy. Container, migration gate, CI image publishing, konfigurasi
+production, dan smoke test sudah tersedia. Deployment cloud aktual menunggu pemilihan
+provider, domain, dan akses akun.
 
 - [ ] Pilih target deployment:
   - Frontend: Vercel, Netlify, atau server sendiri.
   - Backend: Railway, Render, Fly.io, VPS, atau cloud provider.
   - Database/vector store: managed PostgreSQL, Supabase, Qdrant Cloud, atau alternatif lain.
-- [ ] Siapkan environment production.
-- [ ] Siapkan Dockerfile frontend dan backend.
-- [ ] Siapkan Docker Compose production atau deployment manifest.
-- [ ] Siapkan CI/CD pipeline.
+- [x] Siapkan environment production.
+- [x] Siapkan Dockerfile frontend dan backend.
+- [x] Siapkan Docker Compose production atau deployment manifest.
+- [x] Siapkan CI/CD pipeline.
 - [ ] Jalankan migration database.
-- [ ] Jalankan ingestion dataset awal.
+- [x] Jalankan ingestion dataset awal.
 - [ ] Deploy frontend dan backend.
 - [ ] Uji smoke test production:
   - Chat berhasil.

@@ -25,6 +25,7 @@ def ingest_document(
     output_dir: Path,
     embedding_provider: EmbeddingProvider | None = None,
     database_session_factory=None,
+    vector_store=None,
 ) -> IngestionResult:
     started_at = time.time()
     manifest = load_manifest(metadata_path)
@@ -100,6 +101,10 @@ def ingest_document(
         requires_review=requires_review,
         warnings=warnings,
     )
+
+    if vector_store is not None:
+        upserted = vector_store.upsert_document(document, version, embedded_chunks)
+        result.warnings.append(f"pinecone_upserted_chunks={upserted}")
 
     log_payload = {
         "result": result,

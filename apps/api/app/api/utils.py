@@ -6,11 +6,12 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
+from app.core.config import settings
 from app.services.ingestion.metadata import find_document, load_manifest
 
 
 def project_root() -> Path:
-    return Path(__file__).resolve().parents[4]
+    return settings.project_root or Path(__file__).resolve().parents[4]
 
 
 def dataset_metadata_path() -> Path:

@@ -5,12 +5,14 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+from app.core.config import settings
+from app.services.providers import pinecone_store_from_settings
 from app.services.retrieval.engine import RetrievalEngine
 from app.services.retrieval.store import load_artifact_documents
 
 
 def project_root_from_api_dir() -> Path:
-    return Path(__file__).resolve().parents[5]
+    return settings.project_root or Path(__file__).resolve().parents[5]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,6 +25,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Path to storage/ingestion.",
     )
+    parser.add_argument(
+        "--vector-store",
+        choices=["artifact", "pinecone"],
+        default=None,
+        help="Retrieval backend. Defaults to VECTOR_STORE.",
+    )
     return parser
 
 
@@ -30,9 +38,13 @@ def main() -> None:
     args = build_parser().parse_args()
     project_root = project_root_from_api_dir()
     storage_root = args.storage_root or project_root / "storage" / "ingestion"
-    documents = load_artifact_documents(storage_root)
-    engine = RetrievalEngine(documents=documents, top_k=args.top_k)
-    response = engine.search(args.query, top_k=args.top_k)
+    vector_store = args.vector_store or settings.vector_store
+    if vector_store == "pinecone":
+        response = pinecone_store_from_settings(settings).search(args.query, top_k=args.top_k)
+    else:
+        documents = load_artifact_documents(storage_root)
+        engine = RetrievalEngine(documents=documents, top_k=args.top_k)
+        response = engine.search(args.query, top_k=args.top_k)
     print(json.dumps(asdict(response), ensure_ascii=False, indent=2))
 
 

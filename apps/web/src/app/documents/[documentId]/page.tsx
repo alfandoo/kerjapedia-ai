@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
-import { SourcePanel } from "@/components/source-panel";
 import { ExternalIcon, FileIcon } from "@/components/icons";
 import { fallbackCitation, fallbackDocuments } from "@/lib/sample-data";
 
@@ -18,7 +17,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
   }
 
   return (
-    <AppShell rightPanel={<SourcePanel citations={[fallbackCitation]} />}>
+    <AppShell>
       <section className="document-detail">
         <Link href="/search" className="back-link">
           Kembali ke pencarian

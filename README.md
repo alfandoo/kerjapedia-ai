@@ -4,15 +4,21 @@ KerjaPedia AI adalah asisten regulasi ketenagakerjaan Indonesia berbasis Retriev
 
 ## Status Project
 
-Project berada pada tahap persiapan awal. Dokumen produk utama tersedia di `docs/PRD_KerjaPedia_AI.md`, dan roadmap pengerjaan tersedia di `task.md`.
+Project sudah memiliki MVP RAG lokal dan jalur RAG industri berbasis provider:
+
+- Mode lokal/offline: artifact ingestion + hash embedding + answer composer deterministik.
+- Mode industri: Pinecone vector database + local BGE-M3 embedding + Groq chat completions.
+
+Dokumen produk utama tersedia di `docs/PRD_KerjaPedia_AI.md`, roadmap pengerjaan tersedia di `task.md`, dan arsitektur RAG provider tersedia di `docs/RAG_PIPELINE.md`.
 
 ## Stack Awal
 
 - Frontend: Next.js
 - Backend API: Python FastAPI
 - Database: PostgreSQL
-- Vector store: pgvector
-- LLM provider: OpenAI
+- Vector store: Pinecone untuk mode industri, artifact lokal untuk development/test
+- Embedding: BGE-M3 lokal untuk mode industri, hash embedding untuk development/test
+- LLM provider: Groq untuk mode industri, local answer composer untuk development/test
 
 ## Struktur Folder
 
@@ -40,6 +46,21 @@ Service lokal:
 - Redis: `localhost:6379`
 - MinIO API: `http://localhost:9000`
 - MinIO Console: `http://localhost:9001`
+
+Untuk mode industri, isi minimal variabel berikut di `.env`:
+
+```bash
+VECTOR_STORE=pinecone
+PINECONE_API_KEY=...
+PINECONE_INDEX_NAME=kerjapedia-regulations
+PINECONE_NAMESPACE=production
+EMBEDDING_PROVIDER=bge_m3
+EMBEDDING_MODEL=BAAI/bge-m3
+EMBEDDING_DIMENSION=1024
+LLM_PROVIDER=groq
+GROQ_API_KEY=...
+GROQ_MODEL=openai/gpt-oss-120b
+```
 
 Matikan service lokal:
 
@@ -106,7 +127,14 @@ cd apps/api
 .venv\Scripts\python -m app.services.ingestion.cli --document-id PP-35-2021
 ```
 
-Artifact ingestion disimpan di `storage/ingestion/`. Lihat `docs/INGESTION_PIPELINE.md` untuk detail pipeline dan opsi `--persist-db`.
+Ingest seluruh dataset ke Pinecone dengan BGE-M3:
+
+```bash
+cd apps/api
+.venv\Scripts\python -m app.services.ingestion.cli --all --vector-store pinecone --embedding-provider bge_m3
+```
+
+Artifact ingestion tetap disimpan di `storage/ingestion/`. Lihat `docs/INGESTION_PIPELINE.md` untuk detail pipeline dan opsi `--persist-db`.
 
 ### Retrieval Lokal
 
@@ -117,6 +145,13 @@ cd apps/api
 
 Retrieval lokal membaca artifact di `storage/ingestion/`. Lihat `docs/RETRIEVAL.md` untuk detail scoring dan ranking.
 
+Retrieval Pinecone:
+
+```bash
+cd apps/api
+.venv\Scripts\python -m app.services.retrieval.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store pinecone
+```
+
 ### Answer Generation Lokal
 
 ```bash
@@ -125,6 +160,13 @@ cd apps/api
 ```
 
 Answer generation lokal membuat response terstruktur berisi `answer`, `citations`, `confidence`, `related_documents`, `refusal_reason`, dan disclaimer. Lihat `docs/ANSWER_GENERATION.md` untuk detail prompt, citation, dan guardrail.
+
+Answer generation Groq:
+
+```bash
+cd apps/api
+.venv\Scripts\python -m app.services.answering.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store pinecone --llm-provider groq
+```
 
 ### Evaluasi RAG
 
@@ -141,6 +183,31 @@ Evaluasi membandingkan mode baseline, dense, hybrid, dan rerank pada 150 pertany
 apps\api\.venv\Scripts\python -m pre_commit install
 apps\api\.venv\Scripts\python -m pre_commit run --all-files
 ```
+
+### Backup Metadata PostgreSQL
+
+Setelah service PostgreSQL Docker aktif, buat backup sekaligus uji restore ke database
+sementara:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\backup_postgres.ps1 -VerifyRestore
+```
+
+Lihat `docs/SECURITY.md` untuk konfigurasi production, retry ingestion, retention, dan
+prosedur backup.
+
+### Deployment Production
+
+Salin `.env.production.example` menjadi `.env.production`, isi seluruh credential dan
+URL HTTPS, lalu jalankan:
+
+```powershell
+docker compose -f compose.production.yaml --env-file .env.production up -d --build
+python scripts/smoke_deployment.py --api-url https://api.example.com --web-url https://app.example.com
+```
+
+Panduan container, migration, GHCR, smoke test, dan rollback tersedia di
+`docs/DEPLOYMENT.md`.
 
 ## Catatan Hukum
 

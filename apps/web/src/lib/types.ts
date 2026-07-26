@@ -51,6 +51,36 @@ export type AskResponse = {
   };
 };
 
+export type ConversationSummary = {
+  conversation_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+};
+
+export type ConversationMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+  created_at: string;
+  metadata: {
+    answer?: AnswerPayload;
+    retrieval_score?: number | null;
+    token_usage?: {
+      prompt_tokens: number;
+      completion_tokens: number;
+    };
+  };
+};
+
+export type ConversationDetail = {
+  conversation_id: string;
+  title: string;
+  messages: ConversationMessage[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type DocumentSummary = {
   document_id: string;
   title: string;

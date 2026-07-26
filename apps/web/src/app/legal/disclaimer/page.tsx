@@ -1,11 +1,10 @@
 import Link from "next/link";
 
 import { AppShell } from "@/components/app-shell";
-import { SourcePanel } from "@/components/source-panel";
 
 export default function DisclaimerPage() {
   return (
-    <AppShell rightPanel={<SourcePanel />}>
+    <AppShell>
       <section className="legal-page">
         <h1>Disclaimer</h1>
         <p>

@@ -40,6 +40,23 @@ def test_query_understanding_expands_abbreviations() -> None:
     assert any("perjanjian kerja waktu tertentu" in item for item in query.rewritten_queries)
 
 
+def test_query_understanding_expands_legal_timing_terms() -> None:
+    query = understand_query("Kapan batas waktu pembayaran THR?")
+
+    assert any("paling lambat" in item for item in query.rewritten_queries)
+    assert any("wajib dibayarkan" in item for item in query.rewritten_queries)
+
+
+def test_retrieval_refuses_query_outside_employment_scope() -> None:
+    engine = RetrievalEngine(documents=[])
+
+    response = engine.search("Berapa tarif pajak kendaraan?")
+
+    assert response.should_refuse
+    assert response.refusal_reason == "out_of_scope_query"
+    assert response.results == []
+
+
 def test_retrieval_prefers_relevant_legal_chunk() -> None:
     engine = RetrievalEngine(
         documents=[

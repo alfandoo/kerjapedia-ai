@@ -2,22 +2,28 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from app.core.config import settings
 from app.db.session import create_session
-from app.services.ingestion.embeddings import HashEmbeddingProvider, OpenAIEmbeddingProvider
 from app.services.ingestion.metadata import load_manifest
 from app.services.ingestion.pipeline import ingest_document
+from app.services.ingestion.retry import RetryPolicy, run_with_retry
+from app.services.providers import embedding_provider_from_settings, pinecone_store_from_settings
 
 
 def project_root_from_api_dir() -> Path:
-    return Path(__file__).resolve().parents[5]
+    return settings.project_root or Path(__file__).resolve().parents[5]
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run KerjaPedia document ingestion.")
-    parser.add_argument("--document-id", help="Document ID from dataset/metadata.json.")
+    parser.add_argument(
+        "--document-id",
+        action="append",
+        help="Document ID from dataset/metadata.json. Repeat to ingest multiple documents.",
+    )
     parser.add_argument(
         "--all",
         action="store_true",
@@ -37,14 +43,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--embedding-provider",
-        choices=["hash", "openai"],
-        default="hash",
-        help="Embedding provider. Use hash for offline/local development.",
+        choices=["hash", "bge_m3", "openai"],
+        default=None,
+        help="Embedding provider. Defaults to EMBEDDING_PROVIDER.",
+    )
+    parser.add_argument(
+        "--vector-store",
+        choices=["artifact", "pinecone"],
+        default=None,
+        help="Optional vector store target. Defaults to VECTOR_STORE.",
     )
     parser.add_argument(
         "--persist-db",
         action="store_true",
         help="Persist document, chunk, embedding, and job metadata to PostgreSQL.",
+    )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=2,
+        help="Retry transient failures this many times. Defaults to 2.",
+    )
+    parser.add_argument(
+        "--retry-delay",
+        type=float,
+        default=1.0,
+        help="Initial exponential-backoff delay in seconds.",
     )
     return parser
 
@@ -59,35 +83,49 @@ def main() -> None:
     if not args.all and not args.document_id:
         parser.error("Provide --document-id or --all.")
 
-    if args.embedding_provider == "openai":
-        if not settings.openai_api_key:
-            raise RuntimeError("OPENAI_API_KEY is required for --embedding-provider openai.")
-        provider = OpenAIEmbeddingProvider(
-            api_key=settings.openai_api_key,
-            model_name="text-embedding-3-small",
-        )
-    else:
-        provider = HashEmbeddingProvider()
+    provider = embedding_provider_from_settings(settings, args.embedding_provider)
+    vector_store_name = args.vector_store or settings.vector_store
+    vector_store = (
+        pinecone_store_from_settings(settings, provider)
+        if vector_store_name == "pinecone"
+        else None
+    )
 
     manifest = load_manifest(metadata_path)
     document_ids = (
         [document.document_id for document in manifest["documents"]]
         if args.all
-        else [args.document_id]
+        else args.document_id
     )
 
-    results = [
-        ingest_document(
-            project_root=project_root,
-            metadata_path=metadata_path,
-            document_id=document_id,
-            output_dir=output_dir,
-            embedding_provider=provider,
-            database_session_factory=create_session if args.persist_db else None,
+    if args.max_retries < 0 or args.retry_delay < 0:
+        parser.error("--max-retries and --retry-delay must not be negative.")
+
+    def ingest(document_id: str):
+        return run_with_retry(
+            lambda: ingest_document(
+                project_root=project_root,
+                metadata_path=metadata_path,
+                document_id=document_id,
+                output_dir=output_dir,
+                embedding_provider=provider,
+                database_session_factory=create_session if args.persist_db else None,
+                vector_store=vector_store,
+            ),
+            policy=RetryPolicy(
+                max_retries=args.max_retries,
+                initial_delay_seconds=args.retry_delay,
+            ),
+            on_retry=lambda attempt, delay, exc: print(
+                (
+                    f"ingestion_retry document_id={document_id} attempt={attempt} "
+                    f"delay_seconds={delay:g} error={type(exc).__name__}"
+                ),
+                file=sys.stderr,
+            ),
         )
-        for document_id in document_ids
-        if document_id is not None
-    ]
+
+    results = [ingest(document_id) for document_id in document_ids]
 
     print(json.dumps([result.__dict__ for result in results], ensure_ascii=False, indent=2))
 

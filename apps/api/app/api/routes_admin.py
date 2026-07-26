@@ -24,6 +24,8 @@ from app.api.utils import (
     storage_root,
 )
 from app.api.utils import project_root as get_project_root
+from app.core.config import settings
+from app.services.providers import pinecone_store_from_settings
 from app.services.retrieval.engine import RetrievalEngine
 from app.services.retrieval.store import load_artifact_documents
 
@@ -227,11 +229,23 @@ def retrieval_playground(
     _: AdminUser,
 ) -> dict:
     started_at = time.perf_counter()
-    engine = RetrievalEngine(
-        documents=load_artifact_documents(storage_root()),
-        top_k=payload.top_k,
-    )
-    response = engine.search(payload.question, top_k=payload.top_k)
+    try:
+        if settings.vector_store == "pinecone":
+            response = pinecone_store_from_settings(settings).search(
+                payload.question,
+                top_k=payload.top_k,
+            )
+        else:
+            engine = RetrievalEngine(
+                documents=load_artifact_documents(storage_root()),
+                top_k=payload.top_k,
+            )
+            response = engine.search(payload.question, top_k=payload.top_k)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     results = []
     for item in response.results:
         document = item.document

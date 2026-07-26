@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from app.services.ingestion.embeddings import HashEmbeddingProvider
 from app.services.retrieval.filtering import matches_filters
-from app.services.retrieval.query import understand_query
+from app.services.retrieval.query import is_employment_query, understand_query
 from app.services.retrieval.reranker import rerank_score
 from app.services.retrieval.schemas import RankedChunk, RetrievalDocument, RetrievalResponse
 from app.services.retrieval.scoring import cosine_similarity, lexical_score, reciprocal_rank_fusion
@@ -25,6 +25,14 @@ class RetrievalEngine:
     def search(self, query: str, top_k: int | None = None) -> RetrievalResponse:
         limit = top_k or self.top_k
         understanding = understand_query(query)
+        if not is_employment_query(understanding):
+            return RetrievalResponse(
+                query=understanding,
+                results=[],
+                warnings=["query_outside_employment_scope"],
+                should_refuse=True,
+                refusal_reason="out_of_scope_query",
+            )
         candidates = [
             document
             for document in self.documents

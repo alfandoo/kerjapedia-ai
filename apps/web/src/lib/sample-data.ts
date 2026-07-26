@@ -64,15 +64,6 @@ export const fallbackCitation: Citation = {
   rerank_score: 0.88,
 };
 
-export const sampleHistory = [
-  { title: "Hak cuti tahunan berapa hari?", time: "10:24", active: true },
-  { title: "PHK karena efisiensi perusahaan", time: "09:15", active: false },
-  { title: "Uang lembur dan perhitungannya", time: "Kemarin", active: false },
-  { title: "Perjanjian kerja waktu tertentu", time: "Kemarin", active: false },
-  { title: "THR karyawan swasta", time: "2 hari lalu", active: false },
-  { title: "Hak ibu hamil di tempat kerja", time: "7 hari lalu", active: false },
-];
-
 const sampleDate = "2026-07-15T08:30:00Z";
 
 export const fallbackAdminDocuments: AdminDocument[] = [

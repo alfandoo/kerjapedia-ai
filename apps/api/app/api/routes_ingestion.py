@@ -9,8 +9,10 @@ from app.api.dependencies import AdminUser
 from app.api.schemas import IngestionJobRequest
 from app.api.state import now_utc, state
 from app.api.utils import dataset_metadata_path, project_root, storage_root
-from app.services.ingestion.embeddings import HashEmbeddingProvider
+from app.core.config import settings
+from app.db.session import create_session
 from app.services.ingestion.pipeline import ingest_document
+from app.services.providers import embedding_provider_from_settings, pinecone_store_from_settings
 
 router = APIRouter(prefix="/ingestion/jobs", tags=["ingestion"])
 
@@ -35,8 +37,13 @@ def create_ingestion_job(
             metadata_path=dataset_metadata_path(),
             document_id=payload.document_id,
             output_dir=storage_root(),
-            embedding_provider=HashEmbeddingProvider(),
-            database_session_factory=None,
+            embedding_provider=embedding_provider_from_settings(settings),
+            database_session_factory=create_session if payload.persist_db else None,
+            vector_store=(
+                pinecone_store_from_settings(settings)
+                if settings.vector_store == "pinecone"
+                else None
+            ),
         )
         state.ingestion_jobs[job_id]["status"] = result.status
         state.ingestion_jobs[job_id]["result"] = asdict(result)

@@ -21,7 +21,7 @@ function monitorRuntimeErrors(page: Page): string[] {
 
 async function preloadAdminSession(page: Page) {
   await page.addInitScript((session) => {
-    window.localStorage.setItem("kerjapedia-session", JSON.stringify(session));
+    window.localStorage.setItem("kerjapedia-session-v1", JSON.stringify(session));
   }, adminSession);
 }
 
@@ -31,8 +31,8 @@ test("stored session hydrates the chat shell without mismatch", async ({ page })
 
   await page.goto("/");
 
-  await expect(page.locator(".session-chip .avatar")).toHaveText("AD");
-  await expect(page.locator(".session-chip strong")).toHaveText("Admin Demo");
+  await expect(page.locator(".chatgpt-account-avatar").first()).toHaveText("AD");
+  await expect(page.locator(".chatgpt-account strong").first()).toHaveText("Admin Demo");
   expect(runtimeErrors.filter((error) => /hydration|server rendered text/i.test(error))).toEqual(
     []
   );

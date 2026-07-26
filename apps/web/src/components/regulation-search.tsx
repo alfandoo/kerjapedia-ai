@@ -9,16 +9,27 @@ import { fallbackDocuments } from "@/lib/sample-data";
 import type { DocumentSummary } from "@/lib/types";
 
 export function RegulationSearch() {
-  const [documents, setDocuments] = useState<DocumentSummary[]>(fallbackDocuments);
+  const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [query, setQuery] = useState("");
   const [topic, setTopic] = useState("all");
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchDocuments(controller.signal)
-      .then(setDocuments)
-      .catch((err: Error) => setError(err.message));
+    async function loadDocuments() {
+      try {
+        const nextDocuments = await fetchDocuments(controller.signal);
+        if (!controller.signal.aborted) setDocuments(nextDocuments);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setDocuments(fallbackDocuments);
+        setError((err as Error).message);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+    void loadDocuments();
     return () => controller.abort();
   }, []);
 
@@ -37,17 +48,31 @@ export function RegulationSearch() {
     });
   }, [documents, query, topic]);
 
+  const hasFilters = query.trim().length > 0 || topic !== "all";
+
+  function resetSearch() {
+    setQuery("");
+    setTopic("all");
+  }
+
+  function formatStatus(status: string) {
+    if (status === "active") return "Berlaku";
+    if (status === "needs_verification") return "Perlu verifikasi";
+    return status.replaceAll("_", " ");
+  }
+
   return (
     <section className="search-page">
-      <div className="page-heading">
-        <h1>Cari regulasi</h1>
-        <p>Telusuri sumber hukum yang akan dipakai KerjaPedia AI saat menjawab.</p>
-      </div>
-      <div className="search-toolbar">
+      <header className="search-hero">
+        <h1>Temukan dasar hukum yang tepat</h1>
+        <p>Telusuri regulasi ketenagakerjaan dari sumber resmi pemerintah.</p>
+      </header>
+      <div className="search-controls">
         <label className="search-field" htmlFor="regulation-search">
           <SearchIcon className="icon" />
           <input
             id="regulation-search"
+            aria-label="Cari judul, nomor, atau topik regulasi"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Cari judul, nomor, atau topik regulasi"
@@ -69,28 +94,48 @@ export function RegulationSearch() {
         </label>
       </div>
       {error ? (
-        <div className="state-strip muted">
+        <div className="search-fallback-note" role="status">
           <AlertIcon className="icon" />
-          API belum aktif, memakai daftar contoh lokal.
+          Katalog API belum tersedia. Menampilkan daftar referensi lokal sementara.
         </div>
       ) : null}
-      <div className="document-table" role="table" aria-label="Daftar regulasi">
-        <div className="table-row table-head" role="row">
-          <span>Regulasi</span>
-          <span>Tahun</span>
-          <span>Status</span>
-          <span>Aksi</span>
-        </div>
+      <div className="search-summary" aria-live="polite">
+        <span>{loading ? "Memuat regulasi…" : `${filtered.length} regulasi ditemukan`}</span>
+        {hasFilters ? (
+          <button type="button" onClick={resetSearch}>
+            Reset pencarian
+          </button>
+        ) : null}
+      </div>
+      <div className="regulation-list" aria-label="Daftar regulasi" aria-busy={loading}>
+        {!loading && filtered.length === 0 ? (
+          <div className="search-empty">
+            <h2>Regulasi tidak ditemukan</h2>
+            <p>Coba gunakan judul, nomor, atau topik yang lebih umum.</p>
+            <button type="button" onClick={resetSearch}>
+              Hapus filter
+            </button>
+          </div>
+        ) : null}
         {filtered.map((document) => (
-          <div className="table-row" role="row" key={document.document_id}>
-            <div>
-              <strong>{document.title}</strong>
-              <small>{document.topics.map((item) => item.replaceAll("_", " ")).join(", ")}</small>
+          <article className="regulation-row" key={document.document_id}>
+            <div className="regulation-kind">
+              <span>{document.regulation_type}</span>
+              <small>
+                Nomor {document.number} Tahun {document.year}
+              </small>
             </div>
-            <span>{document.year}</span>
-            <span className="status-badge">{document.legal_status}</span>
-            <div className="row-actions">
-              <Link href={`/documents/${document.document_id}`}>Detail</Link>
+            <div className="regulation-copy">
+              <h2>{document.title}</h2>
+              <p>{document.topics.map((item) => item.replaceAll("_", " ")).join(", ")}</p>
+            </div>
+            <span className="regulation-year">{document.year}</span>
+            <span className={`regulation-status ${document.legal_status}`}>
+              <i aria-hidden="true" />
+              {formatStatus(document.legal_status)}
+            </span>
+            <div className="regulation-actions">
+              <Link href={`/documents/${document.document_id}`}>Lihat detail</Link>
               <a
                 href={document.source_url}
                 target="_blank"
@@ -100,7 +145,7 @@ export function RegulationSearch() {
                 <ExternalIcon className="icon" />
               </a>
             </div>
-          </div>
+          </article>
         ))}
       </div>
     </section>

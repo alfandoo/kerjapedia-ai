@@ -24,7 +24,19 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    ".next-e2e/types/**/*.ts",
+    ".next-e2e/dev/types/**/*.ts",
+    ".next-live/types/**/*.ts",
+    ".next-live/dev/types/**/*.ts",
+    ".next-editorial/types/**/*.ts",
+    ".next-editorial/dev/types/**/*.ts",
+    ".next-chatgpt/types/**/*.ts",
+    ".next-chatgpt/dev/types/**/*.ts",
+    ".next-public-pages/types/**/*.ts",
+    ".next-public-pages/dev/types/**/*.ts",
+    ".next-tidy-chat/types/**/*.ts",
+    ".next-tidy-chat/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

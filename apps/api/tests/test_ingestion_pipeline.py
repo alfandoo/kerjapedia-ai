@@ -2,7 +2,7 @@ import pytest
 
 from app.services.ingestion.chunker import build_chunks
 from app.services.ingestion.embeddings import HashEmbeddingProvider
-from app.services.ingestion.legal_parser import parse_legal_segments
+from app.services.ingestion.legal_parser import normalize_legal_line, parse_legal_segments
 from app.services.ingestion.pipeline import document_version_from_checksum
 from app.services.ingestion.schemas import DocumentMetadata, ExtractedPage
 
@@ -43,6 +43,49 @@ def test_parse_legal_segments_tracks_article_and_paragraph() -> None:
     assert any(segment.chapter == "BAB II" for segment in segments)
     assert any(segment.article == "Pasal 15" for segment in segments)
     assert any(segment.paragraph == "Ayat (1)" for segment in segments)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Pasal5", "Pasal 5"),
+        ("Pasa14", "Pasal 4"),
+        ("Pasall0", "Pasal 10"),
+        ("BABI", "BAB I"),
+        ("THRKeagamaan wajib dibayar", "THR Keagamaan wajib dibayar"),
+    ],
+)
+def test_normalize_legal_line_repairs_common_pdf_artifacts(
+    raw: str,
+    expected: str,
+) -> None:
+    assert normalize_legal_line(raw) == expected
+
+
+def test_parse_compact_article_keeps_paragraph_on_correct_article() -> None:
+    pages = [
+        ExtractedPage(
+            page_number=5,
+            text=(
+                "Pasal5\n"
+                "(1) THR sebagaimana dimaksud dalam Pasal2 diberikan satu kali.\n"
+                "(4) THRKeagamaan wajib dibayarkan paling lambat 7 hari sebelum hari raya.\n"
+                "Pasa14\n"
+                "Ketentuan lain berlaku."
+            ),
+            text_length=140,
+            requires_ocr=False,
+        )
+    ]
+
+    segments = parse_legal_segments("PERMENAKER-6-2016", pages)
+    deadline = next(segment for segment in segments if "7 hari" in segment.text)
+
+    assert deadline.article == "Pasal 5"
+    assert deadline.paragraph == "Ayat (4)"
+    assert "THR Keagamaan" in deadline.text
+    assert any(segment.article == "Pasal 4" for segment in segments)
+    assert not any(segment.article == "Pasal 2" for segment in segments)
 
 
 def test_build_chunks_preserves_legal_metadata() -> None:

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from secrets import token_urlsafe
 from threading import Lock
 from typing import Any
-from uuid import uuid4
 
 
 def now_utc() -> datetime:
@@ -30,8 +30,14 @@ class ConversationRecord:
 
 
 @dataclass
+class SessionRecord:
+    user: UserRecord
+    expires_at: datetime
+
+
+@dataclass
 class ApiState:
-    sessions: dict[str, UserRecord] = field(default_factory=dict)
+    sessions: dict[str, SessionRecord] = field(default_factory=dict)
     conversations: dict[str, ConversationRecord] = field(default_factory=dict)
     feedback: list[dict[str, Any]] = field(default_factory=list)
     ingestion_jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -42,10 +48,13 @@ class ApiState:
     request_counts: dict[str, tuple[int, float]] = field(default_factory=dict)
     lock: Lock = field(default_factory=Lock)
 
-    def create_token(self, user: UserRecord) -> str:
-        token = f"dev_{uuid4().hex}"
+    def create_token(self, user: UserRecord, ttl_minutes: int = 480) -> str:
+        token = token_urlsafe(32)
         with self.lock:
-            self.sessions[token] = user
+            self.sessions[token] = SessionRecord(
+                user=user,
+                expires_at=now_utc() + timedelta(minutes=ttl_minutes),
+            )
         return token
 
     def revoke_token(self, token: str) -> None:
@@ -53,7 +62,14 @@ class ApiState:
             self.sessions.pop(token, None)
 
     def get_user_by_token(self, token: str) -> UserRecord | None:
-        return self.sessions.get(token)
+        with self.lock:
+            session = self.sessions.get(token)
+            if session is None:
+                return None
+            if session.expires_at <= now_utc():
+                self.sessions.pop(token, None)
+                return None
+            return session.user
 
 
 state = ApiState()

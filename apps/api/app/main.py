@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from uuid import uuid4
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,12 +32,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-    ],
+    allow_origins=settings.allowed_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,6 +42,7 @@ app.add_middleware(
 @app.middleware("http")
 async def rate_limit_and_log(request: Request, call_next):
     started_at = time.perf_counter()
+    request_id = request.headers.get("X-Request-ID") or uuid4().hex
     client_host = request.client.host if request.client else "unknown"
     window_seconds = 60
     limit = settings.rate_limit_per_minute
@@ -63,13 +60,15 @@ async def rate_limit_and_log(request: Request, call_next):
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={"detail": "Rate limit exceeded."},
+            headers={"X-Request-ID": request_id, "Retry-After": "60"},
         )
 
     try:
         response = await call_next(request)
     except Exception:
         logger.exception(
-            "request_failed path=%s method=%s client=%s",
+            "request_failed request_id=%s path=%s method=%s client=%s",
+            request_id,
             request.url.path,
             request.method,
             client_host,
@@ -78,8 +77,14 @@ async def rate_limit_and_log(request: Request, call_next):
 
     latency_ms = int((time.perf_counter() - started_at) * 1000)
     response.headers["X-Request-Latency-Ms"] = str(latency_ms)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     logger.info(
-        "request path=%s method=%s status=%s latency_ms=%s client=%s",
+        "request request_id=%s path=%s method=%s status=%s latency_ms=%s client=%s",
+        request_id,
         request.url.path,
         request.method,
         response.status_code,

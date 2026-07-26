@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from hmac import compare_digest
+
 from fastapi import APIRouter, Header, HTTPException, status
 
 from app.api.dependencies import CurrentUser, _extract_bearer_token
 from app.api.schemas import LoginRequest, LoginResponse, UserResponse
 from app.api.state import UserRecord, state
+from app.core.config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -26,17 +29,23 @@ def login(payload: LoginRequest) -> LoginResponse:
             detail="Password is required.",
         )
 
-    roles = ["user"]
-    if payload.email.lower().startswith("admin@"):
-        roles.append("admin")
+    email = payload.email.lower()
+    is_admin_email = compare_digest(email, settings.admin_email.lower())
+    is_admin_password = compare_digest(payload.password, settings.admin_password)
+    if is_admin_email and not is_admin_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials.",
+        )
+    roles = ["user", "admin"] if is_admin_email and is_admin_password else ["user"]
 
     user = UserRecord(
-        user_id=payload.email.lower(),
-        email=payload.email.lower(),
+        user_id=email,
+        email=email,
         name=payload.email.split("@")[0],
         roles=roles,
     )
-    token = state.create_token(user)
+    token = state.create_token(user, ttl_minutes=settings.session_ttl_minutes)
     return LoginResponse(access_token=token, user=to_user_response(user))
 
 

@@ -2,9 +2,8 @@
 
 import { useMemo, useSyncExternalStore } from "react";
 
+import { SESSION_STORAGE_KEY } from "@/lib/api";
 import type { UserSession } from "@/lib/types";
-
-const SESSION_STORAGE_KEY = "kerjapedia-session";
 
 function subscribe(callback: () => void) {
   window.addEventListener("kerjapedia-session-change", callback);

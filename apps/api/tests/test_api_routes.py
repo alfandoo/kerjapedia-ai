@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterator
 from statistics import median
 
@@ -82,6 +83,34 @@ def test_auth_login_and_current_user(client: TestClient) -> None:
     assert current.json()["roles"] == ["user", "admin"]
 
 
+def test_auth_rejects_wrong_admin_password(client: TestClient) -> None:
+    response = client.post(
+        "/auth/login",
+        json={"email": "admin@example.com", "password": "wrong"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_auth_does_not_promote_admin_prefix(client: TestClient) -> None:
+    response = client.post(
+        "/auth/login",
+        json={"email": "admin@attacker.example", "password": "secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["roles"] == ["user"]
+
+
+def test_security_and_trace_headers_are_added(client: TestClient) -> None:
+    response = client.get("/health", headers={"X-Request-ID": "test-request-id"})
+
+    assert response.headers["X-Request-ID"] == "test-request-id"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+
+
 def test_chat_ask_returns_structured_answer(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -101,6 +130,148 @@ def test_chat_ask_returns_structured_answer(
     assert payload["conversation_id"].startswith("conv_")
     assert payload["answer"]["citations"][0]["article"] == "Pasal 15"
     assert payload["retrieval_score"] is not None
+
+
+def test_guest_conversations_are_isolated_by_guest_id(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes_chat.load_artifact_documents",
+        lambda _: [make_document()],
+    )
+    first_guest = {"X-KerjaPedia-Guest-ID": "11111111-1111-4111-8111-111111111111"}
+    second_guest = {"X-KerjaPedia-Guest-ID": "22222222-2222-4222-8222-222222222222"}
+
+    created = client.post(
+        "/chat/ask",
+        headers=first_guest,
+        json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
+    )
+    conversation_id = created.json()["conversation_id"]
+
+    own_history = client.get("/chat/conversations", headers=first_guest)
+    other_history = client.get("/chat/conversations", headers=second_guest)
+    forbidden = client.get(
+        f"/chat/conversations/{conversation_id}",
+        headers=second_guest,
+    )
+
+    assert own_history.status_code == 200
+    assert own_history.json() == []
+    assert other_history.json() == []
+    assert forbidden.status_code == 403
+
+
+def test_authenticated_user_conversation_is_saved_to_history(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes_chat.load_artifact_documents",
+        lambda _: [make_document()],
+    )
+    login = client.post(
+        "/auth/login",
+        json={"email": "pekerja@example.com", "password": "secret"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    created = client.post(
+        "/chat/ask",
+        headers=headers,
+        json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
+    )
+    history = client.get("/chat/conversations", headers=headers)
+
+    assert created.status_code == 200
+    assert history.status_code == 200
+    assert len(history.json()) == 1
+    assert history.json()[0]["conversation_id"] == created.json()["conversation_id"]
+
+
+def test_guest_id_must_be_uuid(client: TestClient) -> None:
+    response = client.get(
+        "/chat/conversations",
+        headers={"X-KerjaPedia-Guest-ID": "not-a-uuid"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_guest_can_rename_and_delete_own_conversation(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes_chat.load_artifact_documents",
+        lambda _: [make_document()],
+    )
+    owner = {"X-KerjaPedia-Guest-ID": "11111111-1111-4111-8111-111111111111"}
+    other_guest = {"X-KerjaPedia-Guest-ID": "22222222-2222-4222-8222-222222222222"}
+    created = client.post(
+        "/chat/ask",
+        headers=owner,
+        json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
+    )
+    conversation_id = created.json()["conversation_id"]
+
+    forbidden_rename = client.patch(
+        f"/chat/conversations/{conversation_id}",
+        headers=other_guest,
+        json={"title": "Percakapan orang lain"},
+    )
+    renamed = client.patch(
+        f"/chat/conversations/{conversation_id}",
+        headers=owner,
+        json={"title": "  Hak kompensasi PKWT  "},
+    )
+    forbidden_delete = client.delete(
+        f"/chat/conversations/{conversation_id}",
+        headers=other_guest,
+    )
+    deleted = client.delete(
+        f"/chat/conversations/{conversation_id}",
+        headers=owner,
+    )
+    missing = client.get(f"/chat/conversations/{conversation_id}", headers=owner)
+
+    assert forbidden_rename.status_code == 403
+    assert renamed.status_code == 200
+    assert renamed.json()["title"] == "Hak kompensasi PKWT"
+    assert forbidden_delete.status_code == 403
+    assert deleted.status_code == 204
+    assert missing.status_code == 404
+
+
+def test_chat_stream_emits_thinking_deltas_and_final_response(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes_chat.load_artifact_documents",
+        lambda _: [make_document()],
+    )
+
+    with client.stream(
+        "POST",
+        "/chat/ask/stream",
+        json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
+    ) as response:
+        events = [json.loads(line) for line in response.iter_lines() if line]
+
+    assert response.status_code == 200
+    assert events[0]["event"] == "start"
+    assert [event["status"] for event in events if event["event"] == "thinking"] == [
+        "Menelusuri regulasi resmi",
+        "Menyusun jawaban berdasarkan sumber",
+    ]
+    streamed_answer = "".join(
+        event["content"] for event in events if event["event"] == "delta"
+    )
+    completed = next(event["response"] for event in events if event["event"] == "done")
+    assert streamed_answer == completed["answer"]["answer"]
+    assert completed["conversation_id"].startswith("conv_")
 
 
 def test_chat_refuses_when_no_document_supports_the_question(

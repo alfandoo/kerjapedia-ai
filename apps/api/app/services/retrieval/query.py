@@ -41,6 +41,19 @@ ABBREVIATIONS = {
     "smk3": "sistem manajemen keselamatan dan kesehatan kerja",
 }
 
+DOMAIN_KEYWORDS = {
+    "pekerja",
+    "buruh",
+    "pengusaha",
+    "ketenagakerjaan",
+    "hubungan kerja",
+    "perusahaan",
+    "kontrak kerja",
+    "cuti",
+    "lembur",
+    "jam kerja",
+}
+
 
 def normalize_query(query: str) -> str:
     normalized = unicodedata.normalize("NFKC", query).lower()
@@ -72,6 +85,14 @@ def rewrite_query(query: str) -> list[str]:
         expanded = re.sub(rf"\b{re.escape(short)}\b", long_form, expanded)
     if expanded != query:
         rewritten.append(expanded)
+
+    timing_terms = {"kapan", "batas waktu", "tenggat"}
+    if any(term in query for term in timing_terms):
+        timing_query = (
+            f"{expanded} paling lambat wajib dibayarkan sebelum batas waktu pembayaran"
+        )
+        if timing_query not in rewritten:
+            rewritten.append(timing_query)
     return rewritten
 
 
@@ -107,3 +128,9 @@ def understand_query(query: str) -> QueryUnderstanding:
         detected_intents=intents,
         filters=filters,
     )
+
+
+def is_employment_query(query: QueryUnderstanding) -> bool:
+    if query.detected_topics:
+        return True
+    return any(keyword in query.normalized_query for keyword in DOMAIN_KEYWORDS)

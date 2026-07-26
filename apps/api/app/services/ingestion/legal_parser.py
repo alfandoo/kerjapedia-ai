@@ -6,8 +6,34 @@ from app.services.ingestion.schemas import ExtractedPage, LegalSegment
 
 CHAPTER_RE = re.compile(r"^BAB\s+([IVXLCDM]+)\b", re.IGNORECASE)
 SECTION_RE = re.compile(r"^Bagian\s+([A-Za-z]+)\b", re.IGNORECASE)
-ARTICLE_RE = re.compile(r"^Pasal\s+([0-9]+[A-Z]?)\b", re.IGNORECASE)
+ARTICLE_RE = re.compile(r"^Pasal\s+([0-9]+[A-Z]?)\s*$", re.IGNORECASE)
 PARAGRAPH_RE = re.compile(r"^\(?([0-9]+)\)\s+")
+COMPACT_CHAPTER_RE = re.compile(r"^BAB([IVXLCDM]+)\b", re.IGNORECASE)
+OCR_ARTICLE_TEN_PLUS_RE = re.compile(r"\bPasa[l1i][l1i]([0-9]+[A-Z]?)\b", re.IGNORECASE)
+OCR_ARTICLE_RE = re.compile(r"\bPasa[1i]([0-9]+[A-Z]?)\b", re.IGNORECASE)
+COMPACT_ARTICLE_RE = re.compile(r"\bPasal([0-9]+[A-Z]?)\b", re.IGNORECASE)
+THR_COMPACT_RE = re.compile(r"\bTHR(?=Keagamaan\b)", re.IGNORECASE)
+
+
+def normalize_legal_line(line: str) -> str:
+    """Normalize common legal-heading and OCR artifacts without rewriting prose."""
+    normalized = " ".join(line.split()).strip()
+    normalized = THR_COMPACT_RE.sub("THR ", normalized)
+    normalized = OCR_ARTICLE_TEN_PLUS_RE.sub(
+        lambda match: f"Pasal 1{match.group(1)}",
+        normalized,
+    )
+    normalized = OCR_ARTICLE_RE.sub(
+        lambda match: f"Pasal {match.group(1)}",
+        normalized,
+    )
+    normalized = COMPACT_ARTICLE_RE.sub(
+        lambda match: f"Pasal {match.group(1)}",
+        normalized,
+    )
+    if match := COMPACT_CHAPTER_RE.match(normalized):
+        return f"BAB {match.group(1).upper()}{normalized[match.end() :]}"
+    return normalized
 
 
 def parse_legal_segments(document_id: str, pages: list[ExtractedPage]) -> list[LegalSegment]:
@@ -48,7 +74,7 @@ def parse_legal_segments(document_id: str, pages: list[ExtractedPage]) -> list[L
 
     for page in pages:
         for raw_line in page.text.splitlines():
-            line = raw_line.strip()
+            line = normalize_legal_line(raw_line)
             if not line:
                 continue
 
@@ -60,6 +86,7 @@ def parse_legal_segments(document_id: str, pages: list[ExtractedPage]) -> list[L
             if chapter_match:
                 flush()
                 chapter = f"BAB {chapter_match.group(1).upper()}"
+                section = None
                 current_paragraph = None
             elif section_match:
                 flush()

@@ -1,6 +1,6 @@
 # Retrieval and Ranking
 
-Task 5 mengimplementasikan retrieval lokal berbasis artifact ingestion. Engine ini membaca `chunks.json` dan `embeddings.json` dari `storage/ingestion/`, sehingga bisa berjalan tanpa PostgreSQL saat development.
+Task 5 mengimplementasikan retrieval lokal berbasis artifact ingestion. Mode industri menambahkan retrieval Pinecone melalui kontrak response yang sama, sehingga API dan frontend tidak berubah.
 
 ## Command
 
@@ -8,6 +8,12 @@ Jalankan dari `apps/api`:
 
 ```bash
 .venv\Scripts\python -m app.services.retrieval.cli "Apakah pekerja PKWT memperoleh kompensasi?"
+```
+
+Untuk retrieval Pinecone:
+
+```bash
+.venv\Scripts\python -m app.services.retrieval.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store pinecone
 ```
 
 Pastikan minimal satu dokumen sudah di-ingest:
@@ -23,12 +29,16 @@ Pastikan minimal satu dokumen sudah di-ingest:
    - deteksi topik
    - deteksi intent
    - ekspansi singkatan seperti `PKWT`, `PHK`, `THR`, `JHT`, `JKK`, `JKP`, dan `K3`
+   - ekspansi istilah waktu seperti `batas waktu` menjadi frasa legal `paling lambat`
+     dan `wajib dibayarkan`
    - filter artikel, tahun, topik, jenis peraturan, dan status
 2. Lexical search:
    - token matching dengan scoring BM25-lite
 3. Semantic search:
    - cosine similarity terhadap embedding chunk
-   - default memakai `local-hash-embedding-v1`
+   - mode lokal memakai artifact embedding
+   - mode industri memakai minimal 100 kandidat Pinecone dari BGE-M3 query
+     embedding sebelum lexical reranking
 4. Hybrid retrieval:
    - Reciprocal Rank Fusion dari ranking lexical dan semantic
 5. Reranking:
@@ -37,6 +47,8 @@ Pastikan minimal satu dokumen sudah di-ingest:
    - mengambil chunk tetangga dalam dokumen/pasal/halaman terkait
 7. Guardrail:
    - `should_refuse` aktif jika tidak ada chunk melewati threshold
+   - query di luar domain ketenagakerjaan ditolak dengan `out_of_scope_query`
+     sebelum embedding dan answer generation
    - warning muncul jika sumber `needs_verification`, historical, atau revoked
 
 ## Output
@@ -53,4 +65,4 @@ Response berisi:
 
 ## Catatan
 
-Engine ini adalah retrieval baseline. Saat PostgreSQL + pgvector aktif, loader artifact dapat diganti dengan repository database tanpa mengubah kontrak `RetrievalDocument` dan `RetrievalResponse`.
+Engine lokal tetap menjadi fallback development. Untuk mode industri, `PineconeRetrievalStore` membuat/membaca index Pinecone serverless dan mengembalikan `RetrievalDocument` serta `RetrievalResponse` yang sama dengan mode artifact.

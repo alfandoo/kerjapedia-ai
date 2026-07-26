@@ -5,7 +5,6 @@ import { useState } from "react";
 
 import { ExternalIcon, FileIcon, ThumbsDownIcon, ThumbsUpIcon } from "./icons";
 import { submitFeedback } from "@/lib/api";
-import { fallbackCitation } from "@/lib/sample-data";
 import type { Citation } from "@/lib/types";
 
 type SourcePanelProps = {
@@ -13,10 +12,10 @@ type SourcePanelProps = {
   question?: string;
 };
 
-export function SourcePanel({ citations = [fallbackCitation], question = "" }: SourcePanelProps) {
+export function SourcePanel({ citations = [], question = "" }: SourcePanelProps) {
   const [activeTab, setActiveTab] = useState<"sumber" | "pasal" | "kutipan">("sumber");
   const [feedback, setFeedback] = useState<"helpful" | "not_helpful" | null>(null);
-  const activeCitations = citations.length > 0 ? citations : [fallbackCitation];
+  const activeCitations = citations;
 
   async function handleFeedback(rating: "helpful" | "not_helpful") {
     setFeedback(rating);
@@ -33,6 +32,8 @@ export function SourcePanel({ citations = [fallbackCitation], question = "" }: S
             key={tab}
             type="button"
             role="tab"
+            id={`source-tab-${tab}`}
+            aria-controls={`source-content-${tab}`}
             aria-selected={activeTab === tab}
             className={activeTab === tab ? "source-tab active" : "source-tab"}
             onClick={() => setActiveTab(tab)}
@@ -41,33 +42,67 @@ export function SourcePanel({ citations = [fallbackCitation], question = "" }: S
           </button>
         ))}
       </div>
-      <div className="source-list">
+      <div
+        className="source-list"
+        id={`source-content-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`source-tab-${activeTab}`}
+      >
+        {activeCitations.length === 0 ? (
+          <div className="source-empty">
+            <FileIcon className="icon" />
+            <h3>Belum ada sumber</h3>
+            <p>Sumber resmi akan muncul setelah KerjaPedia menjawab pertanyaan Anda.</p>
+          </div>
+        ) : null}
         {activeCitations.map((citation, index) => (
           <article className="source-card" key={citation.citation_id}>
             <div className="source-title">
               <span className="source-index">{index + 1}</span>
               <h3>{citation.document_title}</h3>
             </div>
-            <dl className="source-meta">
-              <div>
-                <dt>Pasal</dt>
-                <dd>{citation.article ?? "-"}</dd>
+            {activeTab !== "kutipan" ? (
+              <dl className="source-meta">
+                <div>
+                  <dt>Pasal</dt>
+                  <dd>
+                    {[citation.article, citation.paragraph].filter(Boolean).join(" · ") || "-"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Halaman</dt>
+                  <dd>
+                    {citation.page_start}-{citation.page_end}
+                  </dd>
+                </div>
+                {activeTab === "sumber" ? (
+                  <div>
+                    <dt>Status</dt>
+                    <dd>
+                      <span
+                        className={
+                          citation.legal_status === "active"
+                            ? "legal-status verified"
+                            : "legal-status warning"
+                        }
+                      >
+                        {citation.legal_status === "active"
+                          ? "Berlaku"
+                          : citation.legal_status === "needs_verification"
+                            ? "Perlu verifikasi"
+                            : citation.legal_status}
+                      </span>
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : null}
+            {activeTab !== "pasal" ? (
+              <div className="quote-box">
+                <FileIcon className="icon" />
+                <p>{citation.quote}</p>
               </div>
-              <div>
-                <dt>Halaman</dt>
-                <dd>
-                  {citation.page_start}-{citation.page_end}
-                </dd>
-              </div>
-              <div>
-                <dt>Status</dt>
-                <dd>{citation.legal_status}</dd>
-              </div>
-            </dl>
-            <div className="quote-box">
-              <FileIcon className="icon" />
-              <p>{citation.quote}</p>
-            </div>
+            ) : null}
             <a href={citation.source_url} target="_blank" rel="noreferrer" className="source-link">
               Buka sumber resmi
               <ExternalIcon className="icon" />
@@ -96,7 +131,9 @@ export function SourcePanel({ citations = [fallbackCitation], question = "" }: S
           </article>
         ))}
       </div>
-      <p className="source-note">Periksa tanggal dan versi regulasi sebelum digunakan.</p>
+      {activeCitations.length > 0 ? (
+        <p className="source-note">Periksa status dan versi regulasi sebelum digunakan.</p>
+      ) : null}
       <Link href="/legal/disclaimer" className="source-disclaimer">
         <FileIcon className="icon" />
         Baca disclaimer hukum

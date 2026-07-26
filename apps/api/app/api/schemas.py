@@ -14,6 +14,7 @@ class HealthResponse(ApiModel):
     status: str
     service: str
     version: str
+    providers: dict[str, Any] = Field(default_factory=dict)
 
 
 class LoginRequest(ApiModel):
@@ -69,6 +70,10 @@ class ConversationDetail(ApiModel):
     messages: list[MessageResponse]
     created_at: datetime
     updated_at: datetime
+
+
+class ConversationUpdateRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=80)
 
 
 class DocumentSummary(ApiModel):

@@ -1,9 +1,9 @@
 # Answer Generation and Citation
 
-Task 6 menambahkan lapisan jawaban setelah retrieval. Implementasi saat ini bersifat
-offline-first: service membuat jawaban terstruktur dari chunk retrieval tanpa memanggil
-LLM eksternal. Prompt dan konteks tetap disiapkan agar mudah disambungkan ke model pada
-tahap API/chat berikutnya.
+Task 6 menambahkan lapisan jawaban setelah retrieval. Implementasi mendukung mode
+offline-first dan mode Groq. Mode lokal membuat jawaban terstruktur dari chunk retrieval
+tanpa memanggil LLM eksternal. Mode industri mengirim prompt dan konteks retrieval ke
+Groq, lalu memvalidasi JSON dan citation sebelum response dikirim ke frontend.
 
 ## Komponen
 
@@ -11,6 +11,8 @@ tahap API/chat berikutnya.
   berversi `kerjapedia-grounded-answer-v1`.
 - `apps/api/app/services/answering/generator.py`: orchestration refusal,
   clarification, confidence, disclaimer, dan answer composition.
+- `apps/api/app/services/answering/groq_generator.py`: Groq chat completion,
+  JSON parsing, citation validation, timeout/retry config, dan fallback aman.
 - `apps/api/app/services/answering/citations.py`: formatter citation dan related
   documents.
 - `apps/api/app/services/answering/schemas.py`: kontrak response untuk frontend.
@@ -54,5 +56,14 @@ Jalankan dari `apps/api` setelah ingestion artifact tersedia:
 ```
 
 Untuk saat ini kualitas jawaban mengikuti kualitas retrieval dan artifact lokal. Ketika
-LLM sudah diaktifkan, `debug.rendered_user_prompt` dapat digunakan sebagai payload awal
-yang dikirim ke model.
+Groq diaktifkan, gunakan:
+
+```bash
+.venv\Scripts\python -m app.services.answering.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store pinecone --llm-provider groq
+```
+
+Jika Groq gagal mengembalikan JSON valid atau mencoba mengutip chunk yang tidak
+diretrieve, service memakai fallback lokal berbasis citation yang sudah aman.
+Pada respons Groq yang valid, citation dan related document hanya dibentuk dari
+`cited_chunk_ids` yang benar-benar dipilih model, bukan dari seluruh kandidat
+retrieval.
