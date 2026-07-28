@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request, status
@@ -18,8 +19,21 @@ from app.api.routes_ingestion import router as ingestion_router
 from app.api.routes_system import router as system_router
 from app.api.state import state
 from app.core.config import settings
+from app.services.storage import ensure_bucket
+from app.services.supabase import get_supabase
 
 logger = logging.getLogger("kerjapedia.api")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        get_supabase()
+        ensure_bucket()
+    except Exception:
+        logger.warning("Supabase init failed — check credentials")
+    yield
+
 
 app = FastAPI(
     title=settings.app_name,
@@ -28,6 +42,7 @@ app = FastAPI(
         "Backend API for KerjaPedia AI. OpenAPI documentation is available at "
         "`/docs` and `/openapi.json`."
     ),
+    lifespan=lifespan,
 )
 
 app.add_middleware(

@@ -4,9 +4,10 @@ from uuid import uuid4
 
 from fastapi import APIRouter
 
-from app.api.dependencies import AdminUser, OptionalUser
+from app.api.dependencies import AdminUser, DbSession, OptionalUser
 from app.api.schemas import FeedbackRequest
-from app.api.state import now_utc, state
+from app.api.state import now_utc
+from app.models.business import Feedback
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
@@ -14,18 +15,42 @@ router = APIRouter(prefix="/feedback", tags=["feedback"])
 @router.post("")
 def create_feedback(
     payload: FeedbackRequest,
+    session: DbSession,
     user: OptionalUser,
 ) -> dict:
-    feedback = {
-        "feedback_id": f"fb_{uuid4().hex}",
-        "user_id": user.user_id if user else "anonymous",
-        "created_at": now_utc(),
+    feedback = Feedback(
+        feedback_id=f"fb_{uuid4().hex}",
+        user_id=user.user_id if user else "anonymous",
+        question=payload.question,
+        answer_id=payload.answer_id,
+        rating=payload.rating,
+        issue_category=payload.issue_category,
+        comment=payload.comment,
+        created_at=now_utc(),
+    )
+    session.add(feedback)
+    session.commit()
+    return {
+        "feedback_id": feedback.feedback_id,
+        "user_id": feedback.user_id,
+        "created_at": feedback.created_at,
         **payload.model_dump(),
     }
-    state.feedback.append(feedback)
-    return feedback
 
 
 @router.get("")
-def list_feedback(_: AdminUser) -> list[dict]:
-    return sorted(state.feedback, key=lambda item: item["created_at"], reverse=True)
+def list_feedback(_: AdminUser, session: DbSession) -> list[dict]:
+    rows = session.query(Feedback).order_by(Feedback.created_at.desc()).all()
+    return [
+        {
+            "feedback_id": r.feedback_id,
+            "user_id": r.user_id,
+            "question": r.question,
+            "answer_id": r.answer_id,
+            "rating": r.rating,
+            "issue_category": r.issue_category,
+            "comment": r.comment,
+            "created_at": r.created_at,
+        }
+        for r in rows
+    ]

@@ -18,7 +18,7 @@ export function ChatAppHeader() {
 
   return (
     <header className="editorial-header">
-      <Link href="/" className="editorial-brand" aria-label="KerjaPedia AI beranda">
+      <Link href="/chat" className="editorial-brand" aria-label="KerjaPedia AI beranda">
         <span className="editorial-brand-mark">KP</span>
         <span>KerjaPedia AI</span>
       </Link>

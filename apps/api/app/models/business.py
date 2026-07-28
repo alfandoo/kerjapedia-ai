@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    user_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(240), nullable=False)
+    roles: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    conversation_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("user_profiles.user_id"), nullable=True
+    )
+    guest_id: Mapped[str | None] = mapped_column(String(80))
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    message_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.conversation_id"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    meta_data: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+
+    feedback_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(String(80))
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    answer_id: Mapped[str | None] = mapped_column(String(120))
+    rating: Mapped[str] = mapped_column(String(20), nullable=False)
+    issue_category: Mapped[str | None] = mapped_column(String(80))
+    comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class EvaluationDataset(Base):
+    __tablename__ = "evaluation_datasets"
+
+    dataset_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    name: Mapped[str] = mapped_column(String(240), nullable=False)
+    questions: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class EvaluationRun(Base):
+    __tablename__ = "evaluation_runs"
+
+    run_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(
+        ForeignKey("evaluation_datasets.dataset_id"), nullable=False
+    )
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    report: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class DocumentAdmin(Base):
+    __tablename__ = "document_admin"
+
+    document_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    publication_status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    overrides: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    relationships: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    versions_history: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[str] = mapped_column(String(80), nullable=False, default="System")
+
+
+class UploadedDocument(Base):
+    __tablename__ = "uploaded_documents"
+
+    upload_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    document_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    file_name: Mapped[str] = mapped_column(Text, nullable=False)
+    storage_path: Mapped[str] = mapped_column(Text, nullable=False)
+    topic: Mapped[str] = mapped_column(String(80), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="uploaded")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

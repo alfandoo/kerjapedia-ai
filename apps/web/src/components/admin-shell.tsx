@@ -1,23 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
 import {
+  ChartIcon,
   ChatIcon,
   DatabaseIcon,
   FileIcon,
+  LogoutIcon,
   PlayIcon,
   ScaleIcon,
   SettingsIcon,
   UploadIcon,
 } from "./icons";
+import { SESSION_STORAGE_KEY } from "@/lib/api";
 import { useStoredSession } from "@/hooks/use-stored-session";
 
 type AdminShellProps = { children: ReactNode };
 
 const adminNavigation = [
+  { href: "/admin/dashboard", label: "Dashboard", icon: ChartIcon },
   { href: "/admin", label: "Dokumen", icon: FileIcon },
   { href: "/admin/upload", label: "Upload PDF", icon: UploadIcon },
   { href: "/admin/ingestion", label: "Ingestion", icon: DatabaseIcon },
@@ -27,7 +31,14 @@ const adminNavigation = [
 
 export function AdminShell({ children }: AdminShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const session = useStoredSession();
+
+  function handleLogout() {
+    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    window.dispatchEvent(new Event("kerjapedia-session-change"));
+    router.push("/");
+  }
 
   if (!session || !session.user.roles.includes("admin")) {
     return (
@@ -41,7 +52,7 @@ export function AdminShell({ children }: AdminShellProps) {
           <Link href="/login" className="admin-primary-button">
             Login sebagai admin
           </Link>
-          <Link href="/" className="admin-text-link">
+          <Link href="/chat" className="admin-text-link">
             Kembali ke Chat
           </Link>
         </div>
@@ -52,14 +63,14 @@ export function AdminShell({ children }: AdminShellProps) {
   return (
     <div className="admin-shell">
       <header className="admin-topbar">
-        <Link href="/" className="brand" aria-label="KerjaPedia AI beranda">
+        <Link href="/chat" className="brand" aria-label="KerjaPedia AI beranda">
           <span className="brand-mark">
             <ScaleIcon className="icon" />
           </span>
           <span>KerjaPedia AI</span>
         </Link>
         <strong className="admin-product-title">Admin Knowledge Base</strong>
-        <Link href="/" className="admin-back-link">
+        <Link href="/chat" className="admin-back-link">
           Kembali ke Chat
         </Link>
         <Link href="/login" className="session-chip">
@@ -93,6 +104,10 @@ export function AdminShell({ children }: AdminShellProps) {
             <SettingsIcon className="icon" />
             Pengaturan
           </Link>
+          <button type="button" className="admin-nav-item admin-logout-button" onClick={handleLogout}>
+            <LogoutIcon className="icon" />
+            Keluar
+          </button>
         </aside>
         <main className="admin-main">{children}</main>
       </div>

@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.schemas import HealthResponse
 from app.core.config import settings
 from app.services.providers import pinecone_store_from_settings
+from app.services.supabase import get_supabase
 
 router = APIRouter(tags=["system"])
 
@@ -12,8 +13,15 @@ router = APIRouter(tags=["system"])
 @router.get("/health", response_model=HealthResponse)
 def health_check() -> HealthResponse:
     pinecone_ready = None
+    supabase_ready = False
     if settings.vector_store == "pinecone" and settings.pinecone_api_key:
         pinecone_ready = pinecone_store_from_settings(settings).is_ready()
+    try:
+        supabase = get_supabase()
+        supabase.auth.get_user("")
+        supabase_ready = True
+    except Exception:
+        supabase_ready = False
     return HealthResponse(
         status="ok",
         service=settings.app_name,
@@ -27,5 +35,6 @@ def health_check() -> HealthResponse:
             "pinecone_index": settings.pinecone_index_name,
             "pinecone_namespace": settings.pinecone_namespace,
             "pinecone_ready": pinecone_ready,
+            "supabase_auth": supabase_ready,
         },
     )

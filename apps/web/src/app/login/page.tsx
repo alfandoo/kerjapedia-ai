@@ -1,67 +1,54 @@
 "use client";
 
-import Link from "next/link";
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { ScaleIcon } from "@/components/icons";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
-import { AppShell } from "@/components/app-shell";
-import { login, register, SESSION_STORAGE_KEY } from "@/lib/api";
+import { login, SESSION_STORAGE_KEY } from "@/lib/api";
 
-function LoginPageContent() {
+export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const isSignup = searchParams.get("mode") === "signup";
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState(isSignup ? "" : "admin@example.com");
-  const [password, setPassword] = useState(isSignup ? "" : "secret");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus("Memeriksa sesi...");
+    if (loading) return;
+    setLoading(true);
+    setStatus(null);
     try {
-      const session = isSignup
-        ? await register(name.trim(), email.trim(), password)
-        : await login(email.trim(), password);
+      const session = await login(email.trim(), password);
+      if (!session.user.roles.includes("admin")) {
+        setStatus("Akses ditolak. Hanya admin yang dapat masuk.");
+        setLoading(false);
+        return;
+      }
       window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
       window.dispatchEvent(new Event("kerjapedia-session-change"));
-      setStatus(
-        isSignup
-          ? `Akun siap digunakan sebagai ${session.user.name}.`
-          : `Login berhasil sebagai ${session.user.name}.`
-      );
-      router.push(!isSignup && session.user.roles.includes("admin") ? "/admin" : "/");
+      router.push("/admin/dashboard");
     } catch (err) {
-      setStatus(`Login gagal: ${(err as Error).message}`);
+      const message = (err as Error).message;
+      setStatus(message || "Gagal. Coba lagi.");
+      setLoading(false);
     }
   }
 
   return (
-    <AppShell>
-      <section className="auth-page">
-        <div className="page-heading">
-          <h1>{isSignup ? "Daftar gratis" : "Masuk"}</h1>
-          <p>
-            {isSignup
-              ? "Buat sesi KerjaPedia agar percakapan dan riwayat Anda tetap tersedia."
-              : "Masuk untuk menyimpan riwayat percakapan dan mengakses fitur sesuai kewenangan."}
-          </p>
+    <div className="auth-standalone-page">
+      <div className="auth-standalone-card">
+        <div className="auth-standalone-brand">
+          <ScaleIcon className="icon" />
+          <span>KerjaPedia AI</span>
         </div>
+        <div className="admin-login-badge">Admin</div>
+        <h1>Masuk</h1>
+        <p className="auth-standalone-desc">
+          Masuk dengan akun admin untuk mengelola knowledge base.
+        </p>
         <form className="auth-form" onSubmit={handleSubmit}>
-          {isSignup ? (
-            <>
-              <label htmlFor="name">Nama lengkap</label>
-              <input
-                id="name"
-                type="text"
-                autoComplete="name"
-                minLength={2}
-                required
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </>
-          ) : null}
           <label htmlFor="email">Email</label>
           <input
             id="email"
@@ -72,35 +59,34 @@ function LoginPageContent() {
             onChange={(event) => setEmail(event.target.value)}
           />
           <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            autoComplete={isSignup ? "new-password" : "current-password"}
-            minLength={isSignup ? 8 : 1}
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          <button className="send-button" type="submit">
-            {isSignup ? "Buat akun" : "Masuk"}
+          <div className="auth-password-field">
+            <input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+            <button
+              type="button"
+              className="auth-password-toggle"
+              aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+              onClick={() => setShowPassword((prev) => !prev)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                <circle cx="12" cy="12" r="2.8" />
+                {showPassword ? <path d="m4 4 16 16" /> : null}
+              </svg>
+            </button>
+          </div>
+          <button className="send-button" type="submit" disabled={loading}>
+            {loading ? "Memeriksa..." : "Masuk"}
           </button>
-          <p className="auth-mode-switch">
-            {isSignup ? "Sudah memiliki akun?" : "Belum memiliki akun?"}{" "}
-            <Link href={isSignup ? "/login" : "/login?mode=signup"}>
-              {isSignup ? "Masuk" : "Daftar gratis"}
-            </Link>
-          </p>
           {status ? <p className="form-status">{status}</p> : null}
         </form>
-      </section>
-    </AppShell>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={null}>
-      <LoginPageContent />
-    </Suspense>
+      </div>
+    </div>
   );
 }

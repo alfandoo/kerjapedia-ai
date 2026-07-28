@@ -178,6 +178,32 @@ export type RetrievalPlaygroundResult = {
   match_reasons: string[];
 };
 
+export type AdminStats = {
+  documents: {
+    total: number;
+    published: number;
+    needs_review: number;
+    failed: number;
+  };
+  users: number;
+  conversations: number;
+  messages: number;
+  feedback: {
+    total: number;
+    helpful: number;
+    not_helpful: number;
+  };
+  ingestion_jobs: {
+    total: number;
+    recent: {
+      job_id: string;
+      document_id: string;
+      status: string;
+      created_at: string;
+    }[];
+  };
+};
+
 export type RetrievalPlaygroundResponse = {
   query: string;
   latency_ms: number;

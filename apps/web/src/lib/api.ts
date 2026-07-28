@@ -1,6 +1,7 @@
 import type {
   AdminOverview,
   AdminRelationship,
+  AdminStats,
   AskResponse,
   ConversationDetail,
   ConversationSummary,
@@ -225,6 +226,14 @@ export async function register(
     body: JSON.stringify({ name, email, password }),
   });
   return parseJsonResponse<UserSession>(response);
+}
+
+export async function fetchAdminStats(signal?: AbortSignal): Promise<AdminStats> {
+  const response = await fetch(`${API_URL}/admin/stats`, {
+    headers: adminHeaders(),
+    signal,
+  });
+  return parseJsonResponse<AdminStats>(response);
 }
 
 export async function fetchAdminOverview(signal?: AbortSignal): Promise<AdminOverview> {

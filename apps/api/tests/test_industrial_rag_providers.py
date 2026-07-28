@@ -330,7 +330,6 @@ def test_chat_ask_can_use_configured_pinecone_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with state.lock:
-        state.conversations.clear()
         state.request_counts.clear()
     monkeypatch.setattr(settings, "vector_store", "pinecone")
     monkeypatch.setattr(settings, "llm_provider", "local")

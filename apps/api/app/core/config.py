@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/kerjapedia"
     database_connect_timeout_seconds: int = 10
     database_pool_timeout_seconds: int = 30
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    supabase_anon_key: str = ""
+    supabase_storage_bucket: str = "regulations"
     openai_api_key: str | None = None
     vector_store: str = "artifact"
     pinecone_api_key: str | None = None

@@ -8,15 +8,16 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from sqlalchemy import func as sa_func
 
-from app.api.dependencies import AdminUser
+from app.api.dependencies import AdminUser, DbSession
 from app.api.schemas import (
     DocumentRelationshipRequest,
     DocumentUpdateRequest,
     PublicationRequest,
     RetrievalPlaygroundRequest,
 )
-from app.api.state import now_utc, state
+from app.api.state import now_utc
 from app.api.utils import (
     dataset_metadata_path,
     find_dataset_document,
@@ -25,9 +26,19 @@ from app.api.utils import (
 )
 from app.api.utils import project_root as get_project_root
 from app.core.config import settings
+from app.models.business import (
+    Conversation,
+    DocumentAdmin,
+    Feedback,
+    Message,
+    UploadedDocument,
+    UserProfile,
+)
+from app.models.ingestion import IngestionJob
 from app.services.providers import pinecone_store_from_settings
 from app.services.retrieval.engine import RetrievalEngine
 from app.services.retrieval.store import load_artifact_documents
+from app.services.storage import upload_bytes
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -39,60 +50,133 @@ def project_root() -> Path:
 
 def _manifest_relationships() -> list[dict]:
     data = json.loads(dataset_metadata_path().read_text(encoding="utf-8"))
-    return data.get("relationships", [])
+    return     data.get("relationships", [])
 
 
-def _default_admin_record(document_id: str, index: int) -> dict:
-    relationships = [
-        item for item in _manifest_relationships() if item["from_document_id"] == document_id
-    ]
-    return {
-        "publication_status": "published" if index % 3 else "draft",
-        "version": 2 if index % 4 else 1,
-        "updated_at": now_utc(),
-        "updated_by": "Admin",
-        "relationships": relationships,
-        "versions": [
-            {
-                "version": 1,
-                "status": "draft",
-                "created_at": now_utc(),
-                "created_by": "System",
-            }
-        ],
-        "overrides": {},
-    }
+def _now_iso() -> str:
+    return now_utc().isoformat()
 
 
-def _admin_record(document_id: str, index: int = 0) -> dict:
-    if document_id not in state.document_admin:
-        state.document_admin[document_id] = _default_admin_record(document_id, index)
-    return state.document_admin[document_id]
+def _get_or_create_admin_record(document_id: str, session) -> DocumentAdmin:
+    record = session.get(DocumentAdmin, document_id)
+    if record is None:
+        relationships = [
+            item
+            for item in _manifest_relationships()
+            if item["from_document_id"] == document_id
+        ]
+        record = DocumentAdmin(
+            document_id=document_id,
+            publication_status="draft",
+            version=1,
+            relationships=relationships,
+            versions_history=[
+                {"version": 1, "status": "draft", "created_at": _now_iso(), "created_by": "System"}
+            ],
+        )
+        session.add(record)
+        session.commit()
+    return record
 
 
-def _latest_jobs() -> dict[str, dict]:
+def _latest_jobs(session) -> dict[str, dict]:
+    from app.models.ingestion import IngestionJob
+
     jobs: dict[str, dict] = {}
-    for job in sorted(
-        state.ingestion_jobs.values(),
-        key=lambda item: item["updated_at"],
-        reverse=True,
-    ):
-        jobs.setdefault(job["document_id"], job)
+    rows = (
+        session.query(IngestionJob)
+        .order_by(IngestionJob.created_at.desc())
+        .all()
+    )
+    for job in rows:
+        jobs.setdefault(job.document_id, {
+            "job_id": job.job_id,
+            "document_id": job.document_id,
+            "status": job.status,
+            "error": None,
+            "updated_at": job.created_at,
+        })
     return jobs
 
 
-@router.get("/documents")
-def list_admin_documents(_: AdminUser) -> dict:
+@router.get("/stats")
+def admin_stats(session: DbSession, _: AdminUser) -> dict:
     documents = load_dataset_documents()
     chunks = load_artifact_documents(storage_root())
     chunk_counts: dict[str, int] = {}
     for chunk in chunks:
         chunk_counts[chunk.document_id] = chunk_counts.get(chunk.document_id, 0) + 1
-    jobs = _latest_jobs()
+    jobs = _latest_jobs(session)
+
+    doc_counts = {"total": len(documents), "published": 0, "needs_review": 0, "failed": 0}
+    for doc in documents:
+        record = session.get(DocumentAdmin, doc.document_id)
+        pub = record.publication_status if record else "draft"
+        job = jobs.get(doc.document_id)
+        ing_status = (
+            job["status"]
+            if job
+            else ("completed" if chunk_counts.get(doc.document_id, 0) else "needs_review")
+        )
+        if pub == "published":
+            doc_counts["published"] += 1
+        if ing_status == "needs_review":
+            doc_counts["needs_review"] += 1
+        if ing_status == "failed":
+            doc_counts["failed"] += 1
+
+    user_count = session.query(UserProfile).count()
+    conversation_count = session.query(Conversation).count()
+    message_count = session.query(sa_func.count(Message.message_id)).scalar() or 0
+    feedback_count = session.query(Feedback).count()
+    feedback_helpful = session.query(Feedback).filter(
+        Feedback.rating == "helpful"
+    ).count()
+    job_count = session.query(IngestionJob).count()
+    recent_jobs = (
+        session.query(IngestionJob)
+        .order_by(IngestionJob.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    return {
+        "documents": doc_counts,
+        "users": user_count,
+        "conversations": conversation_count,
+        "messages": message_count,
+        "feedback": {
+            "total": feedback_count,
+            "helpful": feedback_helpful,
+            "not_helpful": feedback_count - feedback_helpful,
+        },
+        "ingestion_jobs": {
+            "total": job_count,
+            "recent": [
+                {
+                    "job_id": j.job_id,
+                    "document_id": j.document_id,
+                    "status": j.status,
+                    "created_at": j.created_at.isoformat(),
+                }
+                for j in recent_jobs
+            ],
+        },
+    }
+
+
+@router.get("/documents")
+def list_admin_documents(session: DbSession, _: AdminUser) -> dict:
+    documents = load_dataset_documents()
+    chunks = load_artifact_documents(storage_root())
+    chunk_counts: dict[str, int] = {}
+    for chunk in chunks:
+        chunk_counts[chunk.document_id] = chunk_counts.get(chunk.document_id, 0) + 1
+    jobs = _latest_jobs(session)
     results = []
 
-    for index, document in enumerate(documents):
-        record = _admin_record(document.document_id, index)
+    for _index, document in enumerate(documents):
+        record = _get_or_create_admin_record(document.document_id, session)
         job = jobs.get(document.document_id)
         ingestion_status = (
             job["status"]
@@ -100,17 +184,17 @@ def list_admin_documents(_: AdminUser) -> dict:
             else ("completed" if chunk_counts.get(document.document_id, 0) else "needs_review")
         )
         payload = asdict(document)
-        payload.update(record["overrides"])
+        payload.update(record.overrides)
         payload.update(
             {
                 "ingestion_status": ingestion_status,
                 "chunk_count": chunk_counts.get(document.document_id, 0),
-                "publication_status": record["publication_status"],
-                "version": record["version"],
-                "updated_at": record["updated_at"],
-                "updated_by": record["updated_by"],
-                "relationships": record["relationships"],
-                "versions": list(reversed(record["versions"])),
+                "publication_status": record.publication_status,
+                "version": record.version,
+                "updated_at": record.updated_at,
+                "updated_by": record.updated_by,
+                "relationships": record.relationships,
+                "versions": list(reversed(record.versions_history)),
                 "last_error": job.get("error") if job else None,
             }
         )
@@ -129,13 +213,15 @@ def list_admin_documents(_: AdminUser) -> dict:
 def update_admin_document(
     document_id: str,
     payload: DocumentUpdateRequest,
+    session: DbSession,
     _: AdminUser,
 ) -> dict:
     find_dataset_document(document_id)
-    record = _admin_record(document_id)
+    record = _get_or_create_admin_record(document_id, session)
     changes = payload.model_dump(exclude_none=True)
-    record["overrides"].update(changes)
-    record["updated_at"] = now_utc()
+    record.overrides = {**record.overrides, **changes}
+    record.updated_at = now_utc()
+    session.commit()
     return {"status": "updated", "document_id": document_id, "changes": changes}
 
 
@@ -143,6 +229,7 @@ def update_admin_document(
 def replace_relationships(
     document_id: str,
     payload: list[DocumentRelationshipRequest],
+    session: DbSession,
     _: AdminUser,
 ) -> dict:
     find_dataset_document(document_id)
@@ -155,9 +242,10 @@ def replace_relationships(
                 **relationship.model_dump(),
             }
         )
-    record = _admin_record(document_id)
-    record["relationships"] = relationships
-    record["updated_at"] = now_utc()
+    record = _get_or_create_admin_record(document_id, session)
+    record.relationships = relationships
+    record.updated_at = now_utc()
+    session.commit()
     return {"status": "updated", "relationships": relationships}
 
 
@@ -165,32 +253,35 @@ def replace_relationships(
 def update_publication(
     document_id: str,
     payload: PublicationRequest,
+    session: DbSession,
     _: AdminUser,
 ) -> dict:
     find_dataset_document(document_id)
-    record = _admin_record(document_id)
+    record = _get_or_create_admin_record(document_id, session)
     publication_status = "published" if payload.action == "publish" else "draft"
-    record["version"] += 1
-    record["publication_status"] = publication_status
-    record["updated_at"] = now_utc()
-    record["versions"].append(
+    record.version += 1
+    record.publication_status = publication_status
+    record.updated_at = now_utc()
+    record.versions_history.append(
         {
-            "version": record["version"],
+            "version": record.version,
             "status": publication_status,
-            "created_at": record["updated_at"],
+            "created_at": _now_iso(),
             "created_by": "Admin",
         }
     )
+    session.commit()
     return {
         "status": publication_status,
-        "version": record["version"],
-        "versions": list(reversed(record["versions"])),
+        "version": record.version,
+        "versions": list(reversed(record.versions_history)),
     }
 
 
 @router.post("/documents/upload", status_code=status.HTTP_201_CREATED)
 async def upload_document(
     request: Request,
+    session: DbSession,
     _: AdminUser,
     file_name: str = Query(min_length=5, max_length=180),
     topic: str = Query(default="uncategorized", min_length=2, max_length=80),
@@ -205,22 +296,32 @@ async def upload_document(
         raise HTTPException(status_code=413, detail="PDF file exceeds the 50 MB limit.")
 
     upload_id = f"upload_{uuid4().hex}"
-    destination_dir = project_root() / "storage" / "uploads"
-    destination_dir.mkdir(parents=True, exist_ok=True)
-    destination = destination_dir / f"{upload_id}_{safe_name}"
-    destination.write_bytes(content)
     document_id = re.sub(r"[^A-Z0-9]+", "-", Path(safe_name).stem.upper()).strip("-")
-    uploaded = {
+    storage_path = f"uploads/{upload_id}_{safe_name}"
+
+    public_url = upload_bytes(content, storage_path)
+
+    uploaded = UploadedDocument(
+        upload_id=upload_id,
+        document_id=document_id,
+        file_name=safe_name,
+        storage_path=storage_path,
+        topic=topic,
+        size_bytes=len(content),
+        status="uploaded",
+    )
+    session.add(uploaded)
+    session.commit()
+    return {
         "upload_id": upload_id,
         "document_id": document_id,
         "file_name": safe_name,
         "topic": topic,
         "size_bytes": len(content),
         "status": "uploaded",
-        "created_at": now_utc(),
+        "storage_url": public_url,
+        "created_at": uploaded.created_at,
     }
-    state.uploaded_documents.append(uploaded)
-    return uploaded
 
 
 @router.post("/retrieval/search")

@@ -14,6 +14,7 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 
 def to_document_summary(document) -> DocumentSummary:
+    pdf_url = f"/documents/{document.document_id}/pdf"
     return DocumentSummary(
         document_id=document.document_id,
         title=document.title,
@@ -24,7 +25,7 @@ def to_document_summary(document) -> DocumentSummary:
         legal_status=document.legal_status,
         topics=document.topics,
         source_url=document.source_url,
-        pdf_url=f"/documents/{document.document_id}/pdf",
+        pdf_url=pdf_url,
     )
 
 

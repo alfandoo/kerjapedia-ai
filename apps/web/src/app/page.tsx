@@ -1,5 +1,5 @@
-import { EditorialChatExperience } from "@/components/editorial-chat-experience";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <EditorialChatExperience />;
+  redirect("/chat");
 }

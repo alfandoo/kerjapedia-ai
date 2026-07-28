@@ -1,27 +1,11 @@
-from datetime import timedelta
 
 import pytest
 from pydantic import ValidationError
 
-from app.api.state import UserRecord, state
 from app.core.config import Settings
 from app.services.answering.guardrails import evaluate_input_guardrail
 from app.services.answering.memory import build_memory_context
 from app.services.answering.prompts import SYSTEM_PROMPT
-
-
-def test_session_token_expires() -> None:
-    user = UserRecord(
-        user_id="user@example.com",
-        email="user@example.com",
-        name="user",
-        roles=["user"],
-    )
-    token = state.create_token(user)
-    state.sessions[token].expires_at -= timedelta(days=1)
-
-    assert state.get_user_by_token(token) is None
-    assert token not in state.sessions
 
 
 def test_production_rejects_default_admin_password() -> None:

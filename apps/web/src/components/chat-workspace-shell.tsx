@@ -223,7 +223,7 @@ export function ChatWorkspaceShell({
     <>
       <div className="chatgpt-sidebar-heading">
         <Link
-          href="/"
+          href="/chat"
           className="chatgpt-sidebar-mark chatgpt-sidebar-brand-full"
           aria-label="KerjaPedia AI beranda"
         >

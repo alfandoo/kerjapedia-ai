@@ -21,12 +21,17 @@ type AppShellProps = {
   editorial?: boolean;
 };
 
-const navigation = [
-  { href: "/", label: "Chat", icon: ChatIcon },
-  { href: "/search", label: "Cari Regulasi", icon: SearchIcon },
-  { href: "/admin", label: "Admin", icon: DatabaseIcon },
-  { href: "/legal/disclaimer", label: "Legal", icon: FileIcon },
-];
+function getNavigation(session: { user: { roles: string[] } } | null) {
+  const base = [
+    { href: "/chat", label: "Chat", icon: ChatIcon },
+    { href: "/search", label: "Cari Regulasi", icon: SearchIcon },
+  ];
+  if (session?.user.roles.includes("admin")) {
+    base.push({ href: "/admin", label: "Admin", icon: DatabaseIcon });
+  }
+  base.push({ href: "/legal/disclaimer", label: "Legal", icon: FileIcon });
+  return base;
+}
 
 function formatHistoryTime(value: string) {
   return new Intl.DateTimeFormat("id-ID", {
@@ -82,14 +87,14 @@ export function AppShell({
   return (
     <div className="public-shell">
       <header className="public-header">
-        <Link href="/" className="public-brand" aria-label="KerjaPedia AI beranda">
+        <Link href="/chat" className="public-brand" aria-label="KerjaPedia AI beranda">
           <span className="public-brand-mark">
             <ScaleIcon className="icon" />
           </span>
           <span>KerjaPedia AI</span>
         </Link>
         <nav className="public-nav" aria-label="Navigasi utama">
-          {navigation.map((item) => {
+          {getNavigation(session).map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return (
               <Link

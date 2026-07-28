@@ -5,12 +5,12 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.dependencies import AdminUser
+from app.api.dependencies import AdminUser, DbSession
 from app.api.schemas import IngestionJobRequest
-from app.api.state import now_utc, state
 from app.api.utils import dataset_metadata_path, project_root, storage_root
 from app.core.config import settings
 from app.db.session import create_session
+from app.models.ingestion import IngestionJob
 from app.services.ingestion.pipeline import ingest_document
 from app.services.providers import embedding_provider_from_settings, pinecone_store_from_settings
 
@@ -20,17 +20,21 @@ router = APIRouter(prefix="/ingestion/jobs", tags=["ingestion"])
 @router.post("")
 def create_ingestion_job(
     payload: IngestionJobRequest,
+    session: DbSession,
     _: AdminUser,
 ) -> dict:
     job_id = f"ing_{uuid4().hex}"
-    state.ingestion_jobs[job_id] = {
-        "job_id": job_id,
-        "document_id": payload.document_id,
-        "status": "running",
-        "created_at": now_utc(),
-        "updated_at": now_utc(),
-        "result": None,
-    }
+    job = IngestionJob(
+        job_id=job_id,
+        document_id=payload.document_id,
+        version_id=f"{payload.document_id}_v1",
+        status="running",
+        warnings=[],
+        artifact_paths={},
+    )
+    session.add(job)
+    session.commit()
+
     try:
         result = ingest_document(
             project_root=project_root(),
@@ -45,35 +49,50 @@ def create_ingestion_job(
                 else None
             ),
         )
-        state.ingestion_jobs[job_id]["status"] = result.status
-        state.ingestion_jobs[job_id]["result"] = asdict(result)
+        job.status = result.status
+        job.warnings = result.warnings or []
+        job.artifact_paths = asdict(result) if hasattr(result, "__dataclass_fields__") else {}
     except Exception as exc:
-        state.ingestion_jobs[job_id]["status"] = "failed"
-        state.ingestion_jobs[job_id]["error"] = str(exc)
-    finally:
-        state.ingestion_jobs[job_id]["updated_at"] = now_utc()
-
-    return state.ingestion_jobs[job_id]
+        job.status = "failed"
+        job.warnings = [str(exc)]
+    session.commit()
+    return {
+        "job_id": job.job_id,
+        "document_id": job.document_id,
+        "status": job.status,
+        "created_at": job.created_at,
+        "warnings": job.warnings,
+    }
 
 
 @router.get("")
-def list_ingestion_jobs(_: AdminUser) -> list[dict]:
-    return sorted(
-        state.ingestion_jobs.values(),
-        key=lambda item: item["updated_at"],
-        reverse=True,
-    )
+def list_ingestion_jobs(_: AdminUser, session: DbSession) -> list[dict]:
+    rows = session.query(IngestionJob).order_by(IngestionJob.created_at.desc()).all()
+    return [
+        {
+            "job_id": r.job_id,
+            "document_id": r.document_id,
+            "status": r.status,
+            "created_at": r.created_at,
+            "warnings": r.warnings,
+        }
+        for r in rows
+    ]
 
 
 @router.get("/{job_id}")
-def get_ingestion_job(
-    job_id: str,
-    _: AdminUser,
-) -> dict:
-    job = state.ingestion_jobs.get(job_id)
+def get_ingestion_job(job_id: str, session: DbSession, _: AdminUser) -> dict:
+    job = session.get(IngestionJob, job_id)
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ingestion job was not found.",
         )
-    return job
+    return {
+        "job_id": job.job_id,
+        "document_id": job.document_id,
+        "status": job.status,
+        "created_at": job.created_at,
+        "warnings": job.warnings,
+        "artifact_paths": job.artifact_paths,
+    }

@@ -9,8 +9,9 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
-from app.api.dependencies import OptionalUser
+from app.api.dependencies import DbSession, OptionalUser
 from app.api.schemas import (
     AskRequest,
     AskResponse,
@@ -19,9 +20,10 @@ from app.api.schemas import (
     ConversationUpdateRequest,
     MessageResponse,
 )
-from app.api.state import ConversationRecord, UserRecord, now_utc, state
+from app.api.state import UserRecord, now_utc
 from app.api.utils import storage_root
 from app.core.config import settings
+from app.models.business import Conversation, Message
 from app.services.answering.guardrails import build_guardrail_refusal, evaluate_input_guardrail
 from app.services.answering.memory import build_memory_context
 from app.services.providers import answer_generator_from_settings, pinecone_store_from_settings
@@ -58,55 +60,79 @@ def _anonymous_user(guest_id: str | None = None) -> UserRecord:
 def _get_or_create_conversation(
     payload: AskRequest,
     user: UserRecord,
-) -> ConversationRecord:
-    with state.lock:
-        if payload.conversation_id:
-            existing = state.conversations.get(payload.conversation_id)
-            if existing is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Conversation was not found.",
-                )
-            if existing.user_id != user.user_id:
+    session: Session,
+) -> Conversation:
+    if payload.conversation_id:
+        conversation = session.get(Conversation, payload.conversation_id)
+        if conversation is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Conversation was not found.",
+            )
+        if conversation.user_id and conversation.user_id != user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Conversation belongs to another user.",
+            )
+        guest_id = (
+            user.user_id.removeprefix("guest:") if user.user_id.startswith("guest:") else None
+        )
+        if not conversation.user_id and conversation.guest_id:
+            if guest_id != conversation.guest_id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Conversation belongs to another user.",
                 )
-            return existing
-
-        conversation_id = f"conv_{uuid4().hex}"
-        title = payload.question[:80]
-        conversation = ConversationRecord(
-            conversation_id=conversation_id,
-            user_id=user.user_id,
-            title=title,
-        )
-        state.conversations[conversation_id] = conversation
         return conversation
 
+    conversation_id = f"conv_{uuid4().hex}"
+    title = payload.question[:80]
+    user_id = user.user_id if user.roles != ["guest"] else None
+    guest_id = user.user_id.removeprefix("guest:") if user.user_id.startswith("guest:") else None
+    conversation = Conversation(
+        conversation_id=conversation_id,
+        user_id=user_id,
+        guest_id=guest_id,
+        title=title,
+    )
+    session.add(conversation)
+    session.commit()
+    return conversation
 
-def _get_owned_conversation(conversation_id: str, user: UserRecord) -> ConversationRecord:
-    conversation = state.conversations.get(conversation_id)
+
+def _get_owned_conversation(
+    conversation_id: str,
+    user: UserRecord,
+    session: Session,
+) -> Conversation:
+    conversation = session.get(Conversation, conversation_id)
     if conversation is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation was not found.",
         )
-    if conversation.user_id != user.user_id:
+    if conversation.user_id and conversation.user_id != user.user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conversation belongs to another user.",
         )
+    guest_id = user.user_id.removeprefix("guest:") if user.user_id.startswith("guest:") else None
+    if not conversation.user_id and conversation.guest_id:
+        if guest_id != conversation.guest_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Conversation belongs to another user.",
+            )
     return conversation
 
 
-def _conversation_summary(conversation: ConversationRecord) -> ConversationSummary:
+def _conversation_summary(conversation: Conversation) -> ConversationSummary:
     return ConversationSummary(
         conversation_id=conversation.conversation_id,
         title=conversation.title,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
-        message_count=len(conversation.messages),
+        message_count=0,
     )
 
 
@@ -118,36 +144,41 @@ def _retrieve(question: str, top_k: int):
 
 
 def _store_answer(
-    conversation: ConversationRecord,
+    conversation: Conversation,
     payload: AskRequest,
     answer,
     best_score,
     rag_trace: dict | None = None,
+    session: Session | None = None,
 ) -> None:
+    if session is None:
+        return
     now = now_utc()
-    with state.lock:
-        conversation.messages.append(
-            {
-                "role": "user",
-                "content": payload.question,
-                "created_at": now,
-                "metadata": {"rag_trace": rag_trace or {}},
-            }
-        )
-        conversation.messages.append(
-            {
-                "role": "assistant",
-                "content": answer.answer,
-                "created_at": now_utc(),
-                "metadata": {
-                    "answer": asdict(answer),
-                    "retrieval_score": best_score,
-                    "token_usage": {"prompt_tokens": 0, "completion_tokens": 0},
-                    "rag_trace": rag_trace or {},
-                },
-            }
-        )
-        conversation.updated_at = now_utc()
+
+    user_msg = Message(
+        message_id=f"msg_{uuid4().hex}",
+        conversation_id=conversation.conversation_id,
+        role="user",
+        content=payload.question,
+        meta_data={"rag_trace": rag_trace or {}},
+    )
+    session.add(user_msg)
+
+    asst_msg = Message(
+        message_id=f"msg_{uuid4().hex}",
+        conversation_id=conversation.conversation_id,
+        role="assistant",
+        content=answer.answer,
+        meta_data={
+            "answer": asdict(answer),
+            "retrieval_score": best_score,
+            "token_usage": {"prompt_tokens": 0, "completion_tokens": 0},
+            "rag_trace": rag_trace or {},
+        },
+    )
+    session.add(asst_msg)
+    conversation.updated_at = now
+    session.commit()
 
 
 def _stream_event(event: str, **payload) -> bytes:
@@ -162,16 +193,17 @@ def _stream_event(event: str, **payload) -> bytes:
 @router.post("/ask", response_model=AskResponse)
 def ask_question(
     payload: AskRequest,
+    session: DbSession,
     user: OptionalUser,
     guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
 ) -> AskResponse:
     started_at = time.perf_counter()
     active_user = user or _anonymous_user(guest_id)
-    conversation = _get_or_create_conversation(payload, active_user)
+    conversation = _get_or_create_conversation(payload, active_user, session)
 
     try:
         guardrail = evaluate_input_guardrail(payload.question)
-        memory = build_memory_context(payload.question, conversation.messages)
+        memory = build_memory_context(payload.question, [])
         if not guardrail.allowed:
             answer = build_guardrail_refusal(
                 payload.question,
@@ -197,7 +229,7 @@ def ask_question(
     }
     answer.debug.update(rag_trace)
 
-    _store_answer(conversation, payload, answer, best_score, rag_trace)
+    _store_answer(conversation, payload, answer, best_score, rag_trace, session)
 
     latency_ms = int((time.perf_counter() - started_at) * 1000)
     return AskResponse(
@@ -213,11 +245,12 @@ def ask_question(
 def ask_question_stream(
     payload: AskRequest,
     request: Request,
+    session: DbSession,
     user: OptionalUser,
     guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
 ) -> StreamingResponse:
     active_user = user or _anonymous_user(guest_id)
-    conversation = _get_or_create_conversation(payload, active_user)
+    conversation = _get_or_create_conversation(payload, active_user, session)
 
     async def event_stream():
         started_at = time.perf_counter()
@@ -228,7 +261,7 @@ def ask_question_stream(
         )
         try:
             guardrail = evaluate_input_guardrail(payload.question)
-            memory = build_memory_context(payload.question, conversation.messages)
+            memory = build_memory_context(payload.question, [])
             if not guardrail.allowed:
                 yield _stream_event("thinking", status="Memeriksa keamanan permintaan")
                 answer = build_guardrail_refusal(
@@ -260,7 +293,7 @@ def ask_question_stream(
             },
         }
         answer.debug.update(rag_trace)
-        _store_answer(conversation, payload, answer, best_score, rag_trace)
+        _store_answer(conversation, payload, answer, best_score, rag_trace, session)
         for token in _STREAM_TOKEN_RE.findall(answer.answer):
             if await request.is_disconnected():
                 return
@@ -288,33 +321,46 @@ def ask_question_stream(
 
 @router.get("/conversations", response_model=list[ConversationSummary])
 def list_conversations(
+    session: DbSession,
     user: OptionalUser,
     guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
 ) -> list[ConversationSummary]:
     if user is None:
         _anonymous_user(guest_id)
         return []
-    active_user = user
-    conversations = [
-        item for item in state.conversations.values() if item.user_id == active_user.user_id
-    ]
-    conversations.sort(key=lambda item: item.updated_at, reverse=True)
+    conversations = (
+        session.query(Conversation)
+        .filter(Conversation.user_id == user.user_id)
+        .order_by(Conversation.updated_at.desc())
+        .all()
+    )
     return [_conversation_summary(item) for item in conversations]
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetail)
 def get_conversation(
     conversation_id: str,
+    session: DbSession,
     user: OptionalUser,
     guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
 ) -> ConversationDetail:
     active_user = user or _anonymous_user(guest_id)
-    conversation = _get_owned_conversation(conversation_id, active_user)
-
+    conversation = _get_owned_conversation(conversation_id, active_user, session)
+    messages = (
+        session.query(Message)
+        .filter(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at)
+        .all()
+    )
     return ConversationDetail(
         conversation_id=conversation.conversation_id,
         title=conversation.title,
-        messages=[MessageResponse(**message) for message in conversation.messages],
+        messages=[MessageResponse(**{
+            "role": m.role,
+            "content": m.content,
+            "created_at": m.created_at,
+            "metadata": m.meta_data,
+        }) for m in messages],
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
@@ -324,6 +370,7 @@ def get_conversation(
 def update_conversation(
     conversation_id: str,
     payload: ConversationUpdateRequest,
+    session: DbSession,
     user: OptionalUser,
     guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
 ) -> ConversationSummary:
@@ -334,11 +381,11 @@ def update_conversation(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Conversation title cannot be empty.",
         )
-    with state.lock:
-        conversation = _get_owned_conversation(conversation_id, active_user)
-        conversation.title = title
-        conversation.updated_at = now_utc()
-        return _conversation_summary(conversation)
+    conversation = _get_owned_conversation(conversation_id, active_user, session)
+    conversation.title = title
+    conversation.updated_at = now_utc()
+    session.commit()
+    return _conversation_summary(conversation)
 
 
 @router.delete(
@@ -347,10 +394,12 @@ def update_conversation(
 )
 def delete_conversation(
     conversation_id: str,
+    session: DbSession,
     user: OptionalUser,
     guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
 ) -> None:
     active_user = user or _anonymous_user(guest_id)
-    with state.lock:
-        _get_owned_conversation(conversation_id, active_user)
-        del state.conversations[conversation_id]
+    conversation = _get_owned_conversation(conversation_id, active_user, session)
+    session.query(Message).filter(Message.conversation_id == conversation_id).delete()
+    session.delete(conversation)
+    session.commit()
