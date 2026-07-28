@@ -40,10 +40,6 @@ export function AdminShell({ children }: AdminShellProps) {
     router.push("/");
   }
 
-  if (typeof window === "undefined") {
-    return null;
-  }
-
   if (!session || !session.user.roles.includes("admin")) {
     return (
       <div className="admin-access-page">
@@ -53,7 +49,7 @@ export function AdminShell({ children }: AdminShellProps) {
           </span>
           <h1>Akses admin diperlukan</h1>
           <p>Masuk dengan akun yang memiliki role admin untuk mengelola knowledge base.</p>
-          <Link href="/login" className="admin-primary-button">
+          <Link href="/login-admin" className="admin-primary-button">
             Login sebagai admin
           </Link>
           <Link href="/chat" className="admin-text-link">
@@ -77,7 +73,7 @@ export function AdminShell({ children }: AdminShellProps) {
         <Link href="/chat" className="admin-back-link">
           Kembali ke Chat
         </Link>
-        <Link href="/login" className="session-chip">
+        <Link href="/login-admin" className="session-chip">
           <span className="avatar">{session.user.name.slice(0, 2).toUpperCase()}</span>
           <span>
             <strong>{session.user.name}</strong>

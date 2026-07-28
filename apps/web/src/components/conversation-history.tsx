@@ -113,7 +113,7 @@ export function ConversationHistory({
           <div className="editorial-guest-history">
             <strong>Riwayat tamu tidak disimpan</strong>
             <p>Masuk agar percakapan tetap tersedia saat Anda kembali.</p>
-            <Link href="/login">Masuk untuk menyimpan</Link>
+            <Link href="/login-admin">Masuk untuk menyimpan</Link>
           </div>
         ) : null}
         {loading ? <p className="editorial-history-empty">Memuat riwayat…</p> : null}

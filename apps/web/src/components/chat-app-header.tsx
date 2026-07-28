@@ -36,7 +36,7 @@ export function ChatAppHeader() {
           );
         })}
       </nav>
-      <Link href="/login" className="editorial-session">
+      <Link href="/login-admin" className="editorial-session">
         <span className="editorial-avatar">
           {session ? session.user.name.slice(0, 2).toUpperCase() : "TM"}
         </span>

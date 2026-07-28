@@ -107,7 +107,7 @@ export function AppShell({
             );
           })}
         </nav>
-        <Link href="/login" className="public-session">
+        <Link href="/login-admin" className="public-session">
           <span className="public-avatar">
             {session ? session.user.name.slice(0, 2).toUpperCase() : "TM"}
           </span>
