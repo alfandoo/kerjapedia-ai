@@ -63,7 +63,7 @@ export function AdminUpload() {
           <h1>Upload PDF</h1>
           <p>Tambahkan dokumen resmi ke knowledge base untuk diproses oleh pipeline ingestion.</p>
         </div>
-        <Link href="/admin" className="admin-secondary-button">
+        <Link href="/documents" className="admin-secondary-button">
           Kembali ke dokumen
         </Link>
       </div>

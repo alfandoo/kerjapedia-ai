@@ -71,9 +71,10 @@ export function AdminDashboardPage() {
     );
   }
 
-  const docPercent = stats.documents.total > 0
-    ? Math.round((stats.documents.published / stats.documents.total) * 100)
-    : 0;
+  const docPercent =
+    stats.documents.total > 0
+      ? Math.round((stats.documents.published / stats.documents.total) * 100)
+      : 0;
 
   return (
     <div className="admin-dashboard">
@@ -179,7 +180,8 @@ export function AdminDashboardPage() {
                 <strong>
                   {stats.feedback.total > 0
                     ? Math.round((stats.feedback.helpful / stats.feedback.total) * 100)
-                    : 0}%
+                    : 0}
+                  %
                 </strong>
                 <span>Kepuasan</span>
               </div>
@@ -198,9 +200,15 @@ export function AdminDashboardPage() {
                 <div
                   className="bar-fill success"
                   style={{
-                    width: `${stats.documents.total > 0
-                      ? ((stats.documents.total - stats.documents.needs_review - stats.documents.failed) / stats.documents.total) * 100
-                      : 0}%`,
+                    width: `${
+                      stats.documents.total > 0
+                        ? ((stats.documents.total -
+                            stats.documents.needs_review -
+                            stats.documents.failed) /
+                            stats.documents.total) *
+                          100
+                        : 0
+                    }%`,
                   }}
                 />
               </div>
@@ -214,9 +222,11 @@ export function AdminDashboardPage() {
                 <div
                   className="bar-fill warning"
                   style={{
-                    width: `${stats.documents.total > 0
-                      ? (stats.documents.needs_review / stats.documents.total) * 100
-                      : 0}%`,
+                    width: `${
+                      stats.documents.total > 0
+                        ? (stats.documents.needs_review / stats.documents.total) * 100
+                        : 0
+                    }%`,
                   }}
                 />
               </div>
@@ -228,9 +238,11 @@ export function AdminDashboardPage() {
                 <div
                   className="bar-fill danger"
                   style={{
-                    width: `${stats.documents.total > 0
-                      ? (stats.documents.failed / stats.documents.total) * 100
-                      : 0}%`,
+                    width: `${
+                      stats.documents.total > 0
+                        ? (stats.documents.failed / stats.documents.total) * 100
+                        : 0
+                    }%`,
                   }}
                 />
               </div>
@@ -254,7 +266,9 @@ export function AdminDashboardPage() {
                 <div className="dashboard-list-item" key={job.job_id}>
                   <div className="dashboard-list-item-main">
                     <strong>{job.document_id}</strong>
-                    <span className="status-badge">{ingestionStatusLabel[job.status] ?? job.status}</span>
+                    <span className="status-badge">
+                      {ingestionStatusLabel[job.status] ?? job.status}
+                    </span>
                   </div>
                   <small>{formatDate(job.created_at)}</small>
                 </div>
@@ -271,7 +285,7 @@ export function AdminDashboardPage() {
             <UploadIcon className="icon" />
             <span>Upload PDF</span>
           </Link>
-          <Link href="/admin" className="quick-action-item">
+          <Link href="/documents" className="quick-action-item">
             <FileIcon className="icon" />
             <span>Kelola Dokumen</span>
           </Link>

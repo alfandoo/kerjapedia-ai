@@ -22,7 +22,7 @@ type AdminShellProps = { children: ReactNode };
 
 const adminNavigation = [
   { href: "/admin/dashboard", label: "Dashboard", icon: ChartIcon },
-  { href: "/admin", label: "Dokumen", icon: FileIcon },
+  { href: "/documents", label: "Dokumen", icon: FileIcon },
   { href: "/admin/upload", label: "Upload PDF", icon: UploadIcon },
   { href: "/admin/ingestion", label: "Ingestion", icon: DatabaseIcon },
   { href: "/admin/feedback", label: "Feedback", icon: ChatIcon },
@@ -38,6 +38,10 @@ export function AdminShell({ children }: AdminShellProps) {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
     window.dispatchEvent(new Event("kerjapedia-session-change"));
     router.push("/");
+  }
+
+  if (typeof window === "undefined") {
+    return null;
   }
 
   if (!session || !session.user.roles.includes("admin")) {
@@ -87,7 +91,9 @@ export function AdminShell({ children }: AdminShellProps) {
             {adminNavigation.map((item) => {
               const Icon = item.icon;
               const active =
-                item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+                item.href === "/documents"
+                  ? pathname === "/documents"
+                  : pathname.startsWith(item.href);
               return (
                 <Link
                   href={item.href}
@@ -104,7 +110,11 @@ export function AdminShell({ children }: AdminShellProps) {
             <SettingsIcon className="icon" />
             Pengaturan
           </Link>
-          <button type="button" className="admin-nav-item admin-logout-button" onClick={handleLogout}>
+          <button
+            type="button"
+            className="admin-nav-item admin-logout-button"
+            onClick={handleLogout}
+          >
             <LogoutIcon className="icon" />
             Keluar
           </button>
