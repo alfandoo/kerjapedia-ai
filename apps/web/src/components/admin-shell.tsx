@@ -61,26 +61,28 @@ export function AdminShell({ children }: AdminShellProps) {
   }
 
   return (
-    <div className="admin-shell">
-      <header className="admin-topbar">
-        <Link href="/chat" className="brand" aria-label="KerjaPedia AI beranda">
-          <span className="brand-mark">
-            <ScaleIcon className="icon" />
+    <div className="editorial-shell admin-editorial">
+      <header className="editorial-header">
+        <Link href="/chat" className="editorial-brand" aria-label="KerjaPedia AI beranda">
+          <span className="editorial-brand-mark">
+            <ScaleIcon style={{ width: 18, height: 18, strokeWidth: 2.2 }} />
           </span>
           <span>KerjaPedia AI</span>
         </Link>
-        <strong className="admin-product-title">Admin Knowledge Base</strong>
-        <div className="session-chip">
-          <span className="avatar">{session.user.name.slice(0, 2).toUpperCase()}</span>
+        <nav className="editorial-nav" aria-label="Navigasi admin">
+          <span className="editorial-nav-item active">Admin Knowledge Base</span>
+        </nav>
+        <div className="editorial-session">
+          <span className="editorial-avatar">{session.user.name.slice(0, 2).toUpperCase()}</span>
           <span>
             <strong>{session.user.name}</strong>
             <small>Administrator</small>
           </span>
         </div>
       </header>
-      <div className="admin-layout">
-        <aside className="admin-sidebar" aria-label="Navigasi admin">
-          <nav>
+      <div className="editorial-workspace">
+        <aside className="admin-editorial-sidebar" aria-label="Navigasi admin">
+          <nav className="admin-editorial-nav">
             {adminNavigation.map((item) => {
               const Icon = item.icon;
               const active =
@@ -91,7 +93,9 @@ export function AdminShell({ children }: AdminShellProps) {
                 <Link
                   href={item.href}
                   key={item.href}
-                  className={active ? "admin-nav-item active" : "admin-nav-item"}
+                  className={
+                    active ? "admin-editorial-nav-item active" : "admin-editorial-nav-item"
+                  }
                 >
                   <Icon className="icon" />
                   <span>{item.label}</span>
@@ -99,20 +103,22 @@ export function AdminShell({ children }: AdminShellProps) {
               );
             })}
           </nav>
-          <Link href="/admin/settings" className="admin-nav-item admin-settings-link">
-            <SettingsIcon className="icon" />
-            Pengaturan
-          </Link>
-          <button
-            type="button"
-            className="admin-nav-item admin-logout-button"
-            onClick={handleLogout}
-          >
-            <LogoutIcon className="icon" />
-            Keluar
-          </button>
+          <div className="admin-editorial-sidebar-footer">
+            <Link href="/admin/settings" className="admin-editorial-nav-item">
+              <SettingsIcon className="icon" />
+              <span>Pengaturan</span>
+            </Link>
+            <button
+              type="button"
+              className="admin-editorial-nav-item admin-editorial-logout"
+              onClick={handleLogout}
+            >
+              <LogoutIcon className="icon" />
+              <span>Keluar</span>
+            </button>
+          </div>
         </aside>
-        <main className="admin-main">{children}</main>
+        <main className="editorial-main">{children}</main>
       </div>
     </div>
   );
