@@ -73,13 +73,13 @@ export function AdminShell({ children }: AdminShellProps) {
         <Link href="/chat" className="admin-back-link">
           Kembali ke Chat
         </Link>
-        <Link href="/login-admin" className="session-chip">
+        <div className="session-chip">
           <span className="avatar">{session.user.name.slice(0, 2).toUpperCase()}</span>
           <span>
             <strong>{session.user.name}</strong>
             <small>Administrator</small>
           </span>
-        </Link>
+        </div>
       </header>
       <div className="admin-layout">
         <aside className="admin-sidebar" aria-label="Navigasi admin">

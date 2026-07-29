@@ -27,7 +27,7 @@ function getNavigation(session: { user: { roles: string[] } } | null) {
     { href: "/search", label: "Cari Regulasi", icon: SearchIcon },
   ];
   if (session?.user.roles.includes("admin")) {
-    base.push({ href: "/admin", label: "Admin", icon: DatabaseIcon });
+    base.push({ href: "/admin/dashboard", label: "Admin", icon: DatabaseIcon });
   }
   base.push({ href: "/legal/disclaimer", label: "Legal", icon: FileIcon });
   return base;
@@ -95,7 +95,7 @@ export function AppShell({
         </Link>
         <nav className="public-nav" aria-label="Navigasi utama">
           {getNavigation(session).map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const active = pathname.startsWith(item.href);
             return (
               <Link
                 key={item.href}
@@ -107,15 +107,23 @@ export function AppShell({
             );
           })}
         </nav>
-        <Link href="/login-admin" className="public-session">
-          <span className="public-avatar">
-            {session ? session.user.name.slice(0, 2).toUpperCase() : "TM"}
-          </span>
-          <span>
-            <strong>{session ? session.user.name : "Tamu"}</strong>
-            <small>{session ? session.user.roles.join(", ") : "Belum masuk"}</small>
-          </span>
-        </Link>
+        {session ? (
+          <Link href="/chat" className="public-session">
+            <span className="public-avatar">{session.user.name.slice(0, 2).toUpperCase()}</span>
+            <span>
+              <strong>{session.user.name}</strong>
+              <small>{session.user.roles.join(", ")}</small>
+            </span>
+          </Link>
+        ) : (
+          <Link href="/register" className="public-session">
+            <span className="public-avatar">TM</span>
+            <span>
+              <strong>Tamu</strong>
+              <small>Masuk / Daftar</small>
+            </span>
+          </Link>
+        )}
       </header>
       <div className="public-workspace">
         <aside className="history-rail" aria-label="Riwayat percakapan">

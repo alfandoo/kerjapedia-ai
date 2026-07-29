@@ -5,16 +5,18 @@ import { usePathname } from "next/navigation";
 
 import { useStoredSession } from "@/hooks/use-stored-session";
 
-const navigation = [
-  { href: "/", label: "Chat" },
-  { href: "/search", label: "Cari Regulasi" },
-  { href: "/admin", label: "Admin" },
-  { href: "/legal/disclaimer", label: "Legal" },
-];
-
 export function ChatAppHeader() {
   const pathname = usePathname();
   const session = useStoredSession();
+
+  const navigation = [
+    { href: "/chat", label: "Chat" },
+    { href: "/search", label: "Cari Regulasi" },
+    ...(session?.user.roles.includes("admin")
+      ? [{ href: "/admin/dashboard", label: "Admin" }]
+      : []),
+    { href: "/legal/disclaimer", label: "Legal" },
+  ];
 
   return (
     <header className="editorial-header">
@@ -24,7 +26,7 @@ export function ChatAppHeader() {
       </Link>
       <nav className="editorial-nav" aria-label="Navigasi utama">
         {navigation.map((item) => {
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const active = pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}
@@ -36,15 +38,26 @@ export function ChatAppHeader() {
           );
         })}
       </nav>
-      <Link href="/login-admin" className="editorial-session">
-        <span className="editorial-avatar">
-          {session ? session.user.name.slice(0, 2).toUpperCase() : "TM"}
-        </span>
-        <span>
-          <strong>{session ? session.user.name : "Tamu"}</strong>
-          <small>{session ? session.user.roles.join(", ") : "Belum masuk"}</small>
-        </span>
-      </Link>
+      {session ? (
+        <Link
+          href={session.user.roles.includes("admin") ? "/admin/dashboard" : "/chat"}
+          className="editorial-session"
+        >
+          <span className="editorial-avatar">{session.user.name.slice(0, 2).toUpperCase()}</span>
+          <span>
+            <strong>{session.user.name}</strong>
+            <small>{session.user.roles.join(", ")}</small>
+          </span>
+        </Link>
+      ) : (
+        <Link href="/register" className="editorial-session">
+          <span className="editorial-avatar">TM</span>
+          <span>
+            <strong>Tamu</strong>
+            <small>Masuk / Daftar</small>
+          </span>
+        </Link>
+      )}
     </header>
   );
 }
