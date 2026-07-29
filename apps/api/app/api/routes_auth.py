@@ -94,6 +94,15 @@ def login(payload: LoginRequest) -> LoginResponse:
 
 @router.post("/register", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest) -> LoginResponse:
+    with create_session() as session:
+        existing = session.query(UserProfile).filter(
+            UserProfile.email == payload.email
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email sudah terdaftar.",
+            )
     try:
         supabase = supabase_service.get_supabase_anon()
         result = supabase.auth.sign_up(
@@ -124,8 +133,8 @@ def register(payload: RegisterRequest) -> LoginResponse:
         raise
     except Exception as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email sudah terdaftar atau registrasi gagal.",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registrasi gagal: {exc}",
         ) from exc
 
 
