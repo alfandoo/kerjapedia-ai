@@ -113,18 +113,15 @@ def register(payload: RegisterRequest) -> LoginResponse:
             }
         )
         user = result.user
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Email sudah terdaftar.",
-            )
-        uid = user.id
-        record = _sync_user_profile(uid, payload.email, payload.name)
         if result.session:
+            uid = user.id
+            record = _sync_user_profile(uid, payload.email, payload.name)
             return LoginResponse(
                 access_token=result.session.access_token,
                 user=to_user_response(record),
             )
+        uid = user.id
+        record = _sync_user_profile(uid, payload.email, payload.name)
         return LoginResponse(
             access_token="",
             user=to_user_response(record),
@@ -132,6 +129,27 @@ def register(payload: RegisterRequest) -> LoginResponse:
     except HTTPException:
         raise
     except Exception as exc:
+        err = str(exc).lower()
+        if "already registered" in err or "already exists" in err:
+            try:
+                supabase = supabase_service.get_supabase_anon()
+                result = supabase.auth.sign_in_with_password(
+                    {"email": payload.email, "password": payload.password}
+                )
+                user = result.user
+                if user:
+                    uid = user.id
+                    record = _sync_user_profile(uid, payload.email, payload.name)
+                    return LoginResponse(
+                        access_token=result.session.access_token if result.session else "",
+                        user=to_user_response(record),
+                    )
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email sudah terdaftar.",
+            ) from exc
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Registrasi gagal: {exc}",
