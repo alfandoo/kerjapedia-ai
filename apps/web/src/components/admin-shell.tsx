@@ -70,9 +70,6 @@ export function AdminShell({ children }: AdminShellProps) {
           <span>KerjaPedia AI</span>
         </Link>
         <strong className="admin-product-title">Admin Knowledge Base</strong>
-        <Link href="/chat" className="admin-back-link">
-          Kembali ke Chat
-        </Link>
         <div className="session-chip">
           <span className="avatar">{session.user.name.slice(0, 2).toUpperCase()}</span>
           <span>
