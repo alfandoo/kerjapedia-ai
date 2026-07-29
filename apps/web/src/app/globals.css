@@ -910,7 +910,9 @@ a {
   font-size: 14px;
   min-height: 46px;
   padding: 0 14px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .auth-standalone-card .auth-password-field {
@@ -968,7 +970,9 @@ a {
   margin-top: 20px;
   min-height: 46px;
   padding: 0 20px;
-  transition: background 0.15s, opacity 0.15s;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
 }
 
 .auth-standalone-card .send-button:hover {
@@ -978,6 +982,17 @@ a {
 .auth-standalone-card .send-button:disabled {
   opacity: 0.6;
   pointer-events: none;
+}
+
+.auth-mode-switch {
+  font-size: 13px;
+  margin: 16px 0 0;
+  text-align: center;
+}
+
+.auth-mode-switch a {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .auth-standalone-card .form-status {
@@ -1517,7 +1532,9 @@ a {
   gap: 6px;
   padding: 16px 20px;
   text-decoration: none;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .quick-action-item:hover {
