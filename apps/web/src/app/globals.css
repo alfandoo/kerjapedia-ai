@@ -1174,7 +1174,6 @@ a {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  overflow: hidden;
 }
 
 .admin-shell-sidebar-inner {
@@ -1183,7 +1182,6 @@ a {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  overflow-x: hidden;
   padding: 12px 8px;
 }
 
@@ -1316,7 +1314,7 @@ a {
 }
 
 .admin-shell.collapsed .admin-shell-collapse-btn {
-  display: none;
+  margin-left: 0;
 }
 
 .admin-shell.collapsed .admin-shell-nav-item span {
@@ -1328,11 +1326,7 @@ a {
   padding: 0;
   width: 40px;
   height: 40px;
-  margin: 4px auto;
-}
-
-.admin-shell.collapsed .admin-shell-sidebar-inner {
-  align-items: center;
+  margin: 0 auto;
 }
 
 .admin-standard-page,
@@ -2309,7 +2303,7 @@ a {
   }
 
   .admin-shell-collapse-btn {
-    display: none;
+    margin-left: 0;
   }
 
   .admin-shell-nav-item span {
@@ -2321,11 +2315,7 @@ a {
     padding: 0;
     width: 40px;
     height: 40px;
-    margin: 4px auto;
-  }
-
-  .admin-shell-sidebar-inner {
-    align-items: center;
+    margin: 0 auto;
   }
 }
 
