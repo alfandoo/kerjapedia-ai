@@ -1,24 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 import {
   ChartIcon,
   ChatIcon,
+  ChevronLeftIcon,
   DatabaseIcon,
   FileIcon,
-  LogoutIcon,
   PlayIcon,
   ScaleIcon,
-  SettingsIcon,
   UploadIcon,
 } from "./icons";
-import { SESSION_STORAGE_KEY } from "@/lib/api";
 import { useStoredSession } from "@/hooks/use-stored-session";
 
-type AdminShellProps = { children: ReactNode };
+type AdminShellProps = Record<string, never>;
 
 const adminNavigation = [
   { href: "/admin/dashboard", label: "Dashboard", icon: ChartIcon },
@@ -29,22 +27,16 @@ const adminNavigation = [
   { href: "/admin/retrieval", label: "Retrieval Playground", icon: PlayIcon },
 ];
 
-export function AdminShell({ children }: AdminShellProps) {
+export function AdminShell() {
   const pathname = usePathname();
-  const router = useRouter();
   const session = useStoredSession();
-
-  function handleLogout() {
-    window.localStorage.removeItem(SESSION_STORAGE_KEY);
-    window.dispatchEvent(new Event("kerjapedia-session-change"));
-    router.push("/");
-  }
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   if (!session || !session.user.roles.includes("admin")) {
     return (
       <div className="admin-access-page">
         <div className="admin-access-panel">
-          <span className="brand-mark">
+          <span className="admin-access-mark">
             <ScaleIcon className="icon" />
           </span>
           <h1>Akses admin diperlukan</h1>
@@ -60,42 +52,37 @@ export function AdminShell({ children }: AdminShellProps) {
     );
   }
 
+  const isActive = (href: string) =>
+    href === "/documents" ? pathname === "/documents" : pathname.startsWith(href);
+
   return (
-    <div className="editorial-shell admin-editorial">
-      <header className="editorial-header">
-        <Link href="/chat" className="editorial-brand" aria-label="KerjaPedia AI beranda">
-          <span className="editorial-brand-mark">
-            <ScaleIcon style={{ width: 18, height: 18, strokeWidth: 2.2 }} />
-          </span>
-          <span>KerjaPedia AI</span>
-        </Link>
-        <nav className="editorial-nav" aria-label="Navigasi admin">
-          <span className="editorial-nav-item active">Admin Knowledge Base</span>
-        </nav>
-        <div className="editorial-session">
-          <span className="editorial-avatar">{session.user.name.slice(0, 2).toUpperCase()}</span>
-          <span>
-            <strong>{session.user.name}</strong>
-            <small>Administrator</small>
-          </span>
-        </div>
-      </header>
-      <div className="editorial-workspace">
-        <aside className="admin-editorial-sidebar" aria-label="Navigasi admin">
-          <nav className="admin-editorial-nav">
+    <div className={sidebarCollapsed ? "admin-shell collapsed" : "admin-shell"}>
+      <aside className="admin-shell-sidebar" aria-label="Navigasi admin">
+        <div className="admin-shell-sidebar-inner">
+          <div className="admin-shell-sidebar-brand">
+            <span className="admin-shell-sidebar-mark">
+              <ScaleIcon />
+            </span>
+            <span className="admin-shell-sidebar-title">KerjaPedia AI</span>
+            <button
+              type="button"
+              className="admin-shell-collapse-btn"
+              aria-label={sidebarCollapsed ? "Buka sidebar" : "Tutup sidebar"}
+              onClick={() => setSidebarCollapsed((prev) => !prev)}
+            >
+              <ChevronLeftIcon className="icon" />
+            </button>
+          </div>
+          <nav className="admin-shell-nav">
             {adminNavigation.map((item) => {
               const Icon = item.icon;
-              const active =
-                item.href === "/documents"
-                  ? pathname === "/documents"
-                  : pathname.startsWith(item.href);
+              const active = isActive(item.href);
               return (
                 <Link
                   href={item.href}
                   key={item.href}
-                  className={
-                    active ? "admin-editorial-nav-item active" : "admin-editorial-nav-item"
-                  }
+                  className={active ? "admin-shell-nav-item active" : "admin-shell-nav-item"}
+                  title={sidebarCollapsed ? item.label : undefined}
                 >
                   <Icon className="icon" />
                   <span>{item.label}</span>
@@ -103,23 +90,8 @@ export function AdminShell({ children }: AdminShellProps) {
               );
             })}
           </nav>
-          <div className="admin-editorial-sidebar-footer">
-            <Link href="/admin/settings" className="admin-editorial-nav-item">
-              <SettingsIcon className="icon" />
-              <span>Pengaturan</span>
-            </Link>
-            <button
-              type="button"
-              className="admin-editorial-nav-item admin-editorial-logout"
-              onClick={handleLogout}
-            >
-              <LogoutIcon className="icon" />
-              <span>Keluar</span>
-            </button>
-          </div>
-        </aside>
-        <main className="editorial-main">{children}</main>
-      </div>
+        </div>
+      </aside>
     </div>
   );
 }

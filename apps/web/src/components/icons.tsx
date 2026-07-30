@@ -4,8 +4,20 @@ type IconProps = {
 
 export function ScaleIcon({ className }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 3v18M6 7h12M8 7l-4 8h8L8 7Zm8 0-4 8h8l-4-8Z" />
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3v18" />
+      <path d="M6 7h12" />
+      <path d="M6 7l-3 8h6l-3-8z" />
+      <path d="M18 7l-3 8h6l-3-8z" />
     </svg>
   );
 }
@@ -187,6 +199,14 @@ export function LogoutIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9" />
+    </svg>
+  );
+}
+
+export function ChevronLeftIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
     </svg>
   );
 }
