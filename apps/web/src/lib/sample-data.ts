@@ -1,5 +1,6 @@
 import type {
   AdminDocument,
+  AdminStats,
   Citation,
   DocumentSummary,
   FeedbackItem,
@@ -216,3 +217,43 @@ export const fallbackRetrievalResults: RetrievalPlaygroundResult[] = [
     match_reasons: ["context_expansion"],
   },
 ];
+
+export const fallbackAdminStats: AdminStats = {
+  documents: {
+    total: 20,
+    published: 12,
+    needs_review: 5,
+    failed: 3,
+  },
+  users: 42,
+  conversations: 156,
+  messages: 1247,
+  feedback: {
+    total: 38,
+    helpful: 31,
+    not_helpful: 7,
+  },
+  ingestion_jobs: {
+    total: 24,
+    recent: [
+      {
+        job_id: "ing_001",
+        document_id: "PP-35-2021",
+        status: "completed",
+        created_at: "2026-07-28T08:30:00Z",
+      },
+      {
+        job_id: "ing_002",
+        document_id: "UU-13-2003",
+        status: "completed",
+        created_at: "2026-07-27T14:15:00Z",
+      },
+      {
+        job_id: "ing_003",
+        document_id: "PP-36-2021",
+        status: "needs_review",
+        created_at: "2026-07-26T09:45:00Z",
+      },
+    ],
+  },
+};

@@ -14,6 +14,7 @@ import {
   UserIcon,
 } from "./icons";
 import { fetchAdminStats } from "@/lib/api";
+import { fallbackAdminStats } from "@/lib/sample-data";
 import type { AdminStats } from "@/lib/types";
 
 const ingestionStatusLabel: Record<string, string> = {
@@ -37,7 +38,6 @@ function formatDate(value: string) {
 export function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -47,7 +47,7 @@ export function AdminDashboardPage() {
         setLoading(false);
       })
       .catch(() => {
-        setError("Gagal memuat data dashboard.");
+        setStats(fallbackAdminStats);
         setLoading(false);
       });
     return () => controller.abort();
@@ -62,17 +62,13 @@ export function AdminDashboardPage() {
     );
   }
 
-  if (error || !stats) {
+  if (!stats) {
     return (
-      <div className="admin-error-state">
+      <div className="admin-loading">
         <AlertIcon className="icon" />
-        <span>{error ?? "Data tidak tersedia."}</span>
-        <button
-          type="button"
-          className="admin-btn"
-          onClick={() => window.location.reload()}
-        >
-          Muat Ulang
+        <span>Data tidak tersedia.</span>
+        <button type="button" className="admin-btn" onClick={() => window.location.reload()}>
+          Muat ulang
         </button>
       </div>
     );
@@ -88,10 +84,10 @@ export function AdminDashboardPage() {
       <div className="admin-page-header">
         <div>
           <h1>Dashboard</h1>
-          <p>Ringkasan knowledge base, percakapan, dan feedback</p>
+          <p>Ringkasan knowledge base, percakapan, dan feedback pengguna</p>
         </div>
         <Link href="/admin/upload" className="admin-btn admin-btn-primary">
-          <UploadIcon className="icon" /> Upload Dokumen
+          <UploadIcon className="icon" /> Upload dokumen
         </Link>
       </div>
 
@@ -102,10 +98,10 @@ export function AdminDashboardPage() {
           </div>
           <div className="admin-stat-card-body">
             <h3>{stats.documents.total}</h3>
-            <p>Total Dokumen</p>
+            <p>Total dokumen</p>
           </div>
           <div className="admin-stat-card-footer">
-            <span>{docPercent}% terbit</span>
+            <span>{docPercent}% telah diterbitkan</span>
           </div>
         </div>
 
@@ -115,10 +111,10 @@ export function AdminDashboardPage() {
           </div>
           <div className="admin-stat-card-body">
             <h3>{stats.documents.published}</h3>
-            <p>Dokumen Terbit</p>
+            <p>Dokumen aktif</p>
           </div>
           <div className="admin-stat-card-footer">
-            <span>{stats.documents.needs_review} perlu review</span>
+            <span>{stats.documents.needs_review} menunggu review</span>
           </div>
         </div>
 
@@ -128,10 +124,10 @@ export function AdminDashboardPage() {
           </div>
           <div className="admin-stat-card-body">
             <h3>{stats.users}</h3>
-            <p>Pengguna Terdaftar</p>
+            <p>Pengguna terdaftar</p>
           </div>
           <div className="admin-stat-card-footer">
-            <span>{stats.conversations} percakapan</span>
+            <span>{stats.conversations} percakapan aktif</span>
           </div>
         </div>
 
@@ -141,10 +137,10 @@ export function AdminDashboardPage() {
           </div>
           <div className="admin-stat-card-body">
             <h3>{stats.messages}</h3>
-            <p>Total Pesan</p>
+            <p>Total pesan</p>
           </div>
           <div className="admin-stat-card-footer">
-            <span>{stats.feedback.total} feedback</span>
+            <span>{stats.feedback.total} feedback masuk</span>
           </div>
         </div>
       </div>
@@ -152,7 +148,7 @@ export function AdminDashboardPage() {
       <div className="admin-grid-2">
         <div className="admin-card">
           <div className="admin-card-header">
-            <h2>Status Dokumen</h2>
+            <h2>Proses dokumen</h2>
           </div>
           <div className="admin-card-body">
             <div className="admin-progress-list">
@@ -160,9 +156,7 @@ export function AdminDashboardPage() {
                 <div className="admin-progress-label">
                   <span className="admin-progress-name">Selesai</span>
                   <span className="admin-progress-value">
-                    {stats.documents.total -
-                      stats.documents.needs_review -
-                      stats.documents.failed}
+                    {stats.documents.total - stats.documents.needs_review - stats.documents.failed}
                   </span>
                 </div>
                 <div className="admin-progress-bar">
@@ -185,7 +179,7 @@ export function AdminDashboardPage() {
 
               <div className="admin-progress-item">
                 <div className="admin-progress-label">
-                  <span className="admin-progress-name">Perlu Review</span>
+                  <span className="admin-progress-name">Perlu review</span>
                   <span className="admin-progress-value">{stats.documents.needs_review}</span>
                 </div>
                 <div className="admin-progress-bar">
@@ -226,7 +220,7 @@ export function AdminDashboardPage() {
 
         <div className="admin-card">
           <div className="admin-card-header">
-            <h2>Feedback Ringkasan</h2>
+            <h2>Feedback pengguna</h2>
           </div>
           <div className="admin-card-body">
             <div className="admin-feedback-summary">
@@ -241,7 +235,7 @@ export function AdminDashboardPage() {
                 <AlertIcon className="icon" />
                 <div>
                   <strong>{stats.feedback.not_helpful}</strong>
-                  <span>Tidak Membantu</span>
+                  <span>Tidak membantu</span>
                 </div>
               </div>
               <div className="admin-feedback-box blue">
@@ -253,7 +247,7 @@ export function AdminDashboardPage() {
                       : 0}
                     %
                   </strong>
-                  <span>Kepuasan</span>
+                  <span>Tingkat kepuasan</span>
                 </div>
               </div>
             </div>
@@ -263,9 +257,9 @@ export function AdminDashboardPage() {
 
       <div className="admin-card">
         <div className="admin-card-header">
-          <h2>Ingestion Terbaru</h2>
+          <h2>Ingestion terbaru</h2>
           <Link href="/admin/ingestion" className="admin-btn admin-btn-sm">
-            Lihat Semua
+            Lihat semua
           </Link>
         </div>
         <div className="admin-card-body no-padding">
@@ -313,7 +307,7 @@ export function AdminDashboardPage() {
 
       <div className="admin-card">
         <div className="admin-card-header">
-          <h2>Aksi Cepat</h2>
+          <h2>Aksi cepat</h2>
         </div>
         <div className="admin-card-body">
           <div className="admin-quick-actions">
@@ -323,7 +317,7 @@ export function AdminDashboardPage() {
             </Link>
             <Link href="/documents" className="admin-quick-action">
               <FileIcon className="icon" />
-              <span>Kelola Dokumen</span>
+              <span>Kelola dokumen</span>
             </Link>
             <Link href="/admin/ingestion" className="admin-quick-action">
               <DatabaseIcon className="icon" />
@@ -335,7 +329,7 @@ export function AdminDashboardPage() {
             </Link>
             <Link href="/admin/retrieval" className="admin-quick-action">
               <RefreshIcon className="icon" />
-              <span>Retrieval Playground</span>
+              <span>Retrieval lab</span>
             </Link>
           </div>
         </div>

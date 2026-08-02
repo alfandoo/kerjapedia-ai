@@ -391,23 +391,23 @@ export function AdminDashboard() {
         <div className="admin-summary-strip" aria-label="Ringkasan knowledge base">
           <div>
             <strong>{summary.documents}</strong>
-            <span>dokumen</span>
-            <small>Total dokumen</small>
+            <span>Dokumen</span>
+            <small>Total regulasi</small>
           </div>
           <div>
             <strong>{summary.published}</strong>
-            <span>terbit</span>
+            <span>Terbit</span>
             <small>Sudah dipublikasikan</small>
           </div>
           <div className="warning">
             <strong>{summary.needsReview}</strong>
-            <span>perlu review</span>
+            <span>Review</span>
             <small>Perlu ditinjau</small>
           </div>
           <div className="danger">
             <strong>{summary.failed}</strong>
-            <span>gagal</span>
-            <small>Ingestion gagal</small>
+            <span>Gagal</span>
+            <small>Ingestion error</small>
           </div>
         </div>
 
@@ -450,11 +450,11 @@ export function AdminDashboard() {
           <div className="admin-document-row table-header" role="row">
             <span>Dokumen</span>
             <span>Topik</span>
-            <span>Status ingestion</span>
+            <span>Ingestion</span>
             <span>Publikasi</span>
             <span>Versi</span>
             <span>Diperbarui</span>
-            <span>Aksi</span>
+            <span></span>
           </div>
           {filteredDocuments.map((document) => (
             <div

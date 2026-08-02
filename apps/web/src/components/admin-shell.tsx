@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useRef, useState, useEffect, type ReactNode } from "react";
+import { useRef, useState, useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 import {
   ChartIcon,
@@ -30,7 +30,16 @@ const adminNavigation = [
   { href: "/admin/retrieval", label: "Retrieval Playground", icon: PlayIcon },
 ];
 
+function useIsClient() {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+}
+
 export function AdminShell({ children }: AdminShellProps) {
+  const isClient = useIsClient();
   const pathname = usePathname();
   const router = useRouter();
   const session = useStoredSession();
@@ -48,7 +57,7 @@ export function AdminShell({ children }: AdminShellProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  if (typeof window === "undefined") {
+  if (!isClient) {
     return null;
   }
 
@@ -76,7 +85,7 @@ export function AdminShell({ children }: AdminShellProps) {
     href === "/documents" ? pathname === "/documents" : pathname.startsWith(href);
 
   function handleLogout() {
-    localStorage.removeItem("kerjapedia-session");
+    localStorage.removeItem("kerjapedia-session-v1");
     router.push("/login-admin");
   }
 
