@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useRef, useState, useEffect, type ReactNode } from "react";
 
 import {
   ChartIcon,
   ChatIcon,
   DatabaseIcon,
   FileIcon,
+  LogoutIcon,
   PanelLeftIcon,
   PlayIcon,
   ScaleIcon,
+  SettingIcon,
   UploadIcon,
   UserIcon,
 } from "./icons";
@@ -30,8 +32,25 @@ const adminNavigation = [
 
 export function AdminShell({ children }: AdminShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const session = useStoredSession();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  if (typeof window === "undefined") {
+    return null;
+  }
 
   if (!session || !session.user.roles.includes("admin")) {
     return (
@@ -56,6 +75,11 @@ export function AdminShell({ children }: AdminShellProps) {
   const isActive = (href: string) =>
     href === "/documents" ? pathname === "/documents" : pathname.startsWith(href);
 
+  function handleLogout() {
+    localStorage.removeItem("kerjapedia-session");
+    router.push("/login-admin");
+  }
+
   return (
     <div className={sidebarCollapsed ? "admin-shell collapsed" : "admin-shell"}>
       <aside className="admin-shell-sidebar" aria-label="Navigasi admin">
@@ -65,14 +89,16 @@ export function AdminShell({ children }: AdminShellProps) {
               <ScaleIcon />
             </span>
             <span className="admin-shell-sidebar-title">KerjaPedia AI</span>
-            <button
-              type="button"
-              className="admin-shell-collapse-btn"
-              aria-label={sidebarCollapsed ? "Buka sidebar" : "Tutup sidebar"}
-              onClick={() => setSidebarCollapsed((prev) => !prev)}
-            >
-              <PanelLeftIcon className="icon" />
-            </button>
+            {!sidebarCollapsed && (
+              <button
+                type="button"
+                className="admin-shell-collapse-btn"
+                aria-label="Tutup sidebar"
+                onClick={() => setSidebarCollapsed(true)}
+              >
+                <PanelLeftIcon className="icon" />
+              </button>
+            )}
           </div>
           <nav className="admin-shell-nav">
             {adminNavigation.map((item) => {
@@ -96,12 +122,48 @@ export function AdminShell({ children }: AdminShellProps) {
       <div className="admin-shell-body">
         <header className="admin-shell-topbar">
           <div className="admin-shell-topbar-left">
+            {sidebarCollapsed && (
+              <button
+                type="button"
+                className="admin-shell-collapse-btn"
+                aria-label="Buka sidebar"
+                onClick={() => setSidebarCollapsed(false)}
+              >
+                <PanelLeftIcon className="icon" />
+              </button>
+            )}
             <span className="admin-shell-topbar-title">Dashboard</span>
           </div>
           <div className="admin-shell-topbar-right">
-            <div className="admin-shell-topbar-user">
-              <UserIcon className="icon" />
-              <span>{session.user.email}</span>
+            <div className="admin-shell-topbar-user" ref={dropdownRef}>
+              <button
+                type="button"
+                className="admin-shell-user-btn"
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+              >
+                <UserIcon className="icon" />
+                <span>{session.user.name}</span>
+              </button>
+              {dropdownOpen && (
+                <div className="admin-shell-dropdown">
+                  <Link
+                    href="/admin/dashboard"
+                    className="admin-shell-dropdown-item"
+                    onClick={() => setDropdownOpen(false)}
+                  >
+                    <SettingIcon className="icon" />
+                    <span>Pengaturan</span>
+                  </Link>
+                  <button
+                    type="button"
+                    className="admin-shell-dropdown-item"
+                    onClick={handleLogout}
+                  >
+                    <LogoutIcon className="icon" />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>

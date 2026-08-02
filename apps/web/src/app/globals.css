@@ -1178,6 +1178,11 @@ a {
   padding: 12px 8px;
 }
 
+.admin-shell.collapsed .admin-shell-sidebar-inner {
+  overflow: hidden;
+  padding: 12px 0;
+}
+
 .admin-shell-sidebar-brand {
   align-items: center;
   display: flex;
@@ -1289,22 +1294,72 @@ a {
 }
 
 .admin-shell-topbar-user {
+  position: relative;
+}
+
+.admin-shell-user-btn {
   align-items: center;
   background: #f8fafc;
   border: 1px solid #e5e7eb;
   border-radius: 20px;
   color: #475569;
+  cursor: pointer;
   display: flex;
   font:
     500 12px/1 "Inter",
     sans-serif;
   gap: 8px;
   padding: 6px 12px 6px 8px;
+  transition: background 0.15s;
 }
 
-.admin-shell-topbar-user .icon {
+.admin-shell-user-btn:hover {
+  background: #f1f5f9;
+}
+
+.admin-shell-user-btn .icon {
   width: 18px;
   height: 18px;
+  color: #64748b;
+}
+
+.admin-shell-dropdown {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 160px;
+  padding: 4px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 50;
+}
+
+.admin-shell-dropdown-item {
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: #374151;
+  cursor: pointer;
+  display: flex;
+  font:
+    400 13px/1 "Inter",
+    sans-serif;
+  gap: 8px;
+  padding: 8px 12px;
+  text-decoration: none;
+  width: 100%;
+  transition: background 0.15s;
+}
+
+.admin-shell-dropdown-item:hover {
+  background: #f3f4f6;
+}
+
+.admin-shell-dropdown-item .icon {
+  width: 16px;
+  height: 16px;
   color: #64748b;
 }
 
@@ -1885,6 +1940,19 @@ a {
 /* ── Collapsed sidebar ── */
 .admin-shell.collapsed .admin-shell-sidebar {
   width: 56px;
+}
+
+.admin-shell.collapsed .admin-shell-sidebar-brand {
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.admin-shell.collapsed .admin-shell-sidebar-title {
+  display: none;
+}
+
+.admin-shell.collapsed .admin-shell-nav {
+  padding: 8px 0;
 }
 
 .admin-shell.collapsed .admin-shell-nav-item span {
