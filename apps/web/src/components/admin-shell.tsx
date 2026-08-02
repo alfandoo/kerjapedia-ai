@@ -2,21 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import {
   ChartIcon,
   ChatIcon,
-  ChevronLeftIcon,
   DatabaseIcon,
   FileIcon,
+  PanelLeftIcon,
   PlayIcon,
   ScaleIcon,
   UploadIcon,
+  UserIcon,
 } from "./icons";
 import { useStoredSession } from "@/hooks/use-stored-session";
 
-type AdminShellProps = Record<string, never>;
+type AdminShellProps = { children: ReactNode };
 
 const adminNavigation = [
   { href: "/admin/dashboard", label: "Dashboard", icon: ChartIcon },
@@ -27,7 +28,7 @@ const adminNavigation = [
   { href: "/admin/retrieval", label: "Retrieval Playground", icon: PlayIcon },
 ];
 
-export function AdminShell() {
+export function AdminShell({ children }: AdminShellProps) {
   const pathname = usePathname();
   const session = useStoredSession();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -70,7 +71,7 @@ export function AdminShell() {
               aria-label={sidebarCollapsed ? "Buka sidebar" : "Tutup sidebar"}
               onClick={() => setSidebarCollapsed((prev) => !prev)}
             >
-              <ChevronLeftIcon className="icon" />
+              <PanelLeftIcon className="icon" />
             </button>
           </div>
           <nav className="admin-shell-nav">
@@ -92,6 +93,20 @@ export function AdminShell() {
           </nav>
         </div>
       </aside>
+      <div className="admin-shell-body">
+        <header className="admin-shell-topbar">
+          <div className="admin-shell-topbar-left">
+            <span className="admin-shell-topbar-title">Dashboard</span>
+          </div>
+          <div className="admin-shell-topbar-right">
+            <div className="admin-shell-topbar-user">
+              <UserIcon className="icon" />
+              <span>{session.user.email}</span>
+            </div>
+          </div>
+        </header>
+        <main className="admin-shell-main">{children}</main>
+      </div>
     </div>
   );
 }

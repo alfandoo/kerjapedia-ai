@@ -55,18 +55,25 @@ export function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div className="admin-page-heading">
-        <h1>Dashboard</h1>
-        <p>Memuat data dashboard...</p>
+      <div className="admin-loading">
+        <RefreshIcon className="icon spin" />
+        <span>Memuat data...</span>
       </div>
     );
   }
 
   if (error || !stats) {
     return (
-      <div className="admin-page-heading">
-        <h1>Dashboard</h1>
-        <p className="admin-inline-message">{error ?? "Data tidak tersedia."}</p>
+      <div className="admin-error-state">
+        <AlertIcon className="icon" />
+        <span>{error ?? "Data tidak tersedia."}</span>
+        <button
+          type="button"
+          className="admin-btn"
+          onClick={() => window.location.reload()}
+        >
+          Muat Ulang
+        </button>
       </div>
     );
   }
@@ -78,231 +85,261 @@ export function AdminDashboardPage() {
 
   return (
     <div className="admin-dashboard">
-      <div className="admin-page-heading">
+      <div className="admin-page-header">
         <div>
           <h1>Dashboard</h1>
           <p>Ringkasan knowledge base, percakapan, dan feedback</p>
         </div>
-        <Link href="/admin/upload" className="admin-primary-button">
-          <UploadIcon className="icon" /> Upload dokumen
+        <Link href="/admin/upload" className="admin-btn admin-btn-primary">
+          <UploadIcon className="icon" /> Upload Dokumen
         </Link>
       </div>
 
-      <div className="admin-summary-strip">
-        <div>
-          <FileIcon className="icon" />
-          <strong>{stats.documents.total}</strong>
-          <span>dokumen</span>
-          <small>Total regulasi</small>
+      <div className="admin-stat-cards">
+        <div className="admin-stat-card">
+          <div className="admin-stat-card-icon blue">
+            <FileIcon className="icon" />
+          </div>
+          <div className="admin-stat-card-body">
+            <h3>{stats.documents.total}</h3>
+            <p>Total Dokumen</p>
+          </div>
+          <div className="admin-stat-card-footer">
+            <span>{docPercent}% terbit</span>
+          </div>
         </div>
-        <div>
-          <CheckIcon className="icon" />
-          <strong>{stats.documents.published}</strong>
-          <span>terbit</span>
-          <small>{docPercent}% dari total</small>
+
+        <div className="admin-stat-card">
+          <div className="admin-stat-card-icon green">
+            <CheckIcon className="icon" />
+          </div>
+          <div className="admin-stat-card-body">
+            <h3>{stats.documents.published}</h3>
+            <p>Dokumen Terbit</p>
+          </div>
+          <div className="admin-stat-card-footer">
+            <span>{stats.documents.needs_review} perlu review</span>
+          </div>
         </div>
-        <div className={stats.documents.needs_review > 0 ? "warning" : ""}>
-          <AlertIcon className="icon" />
-          <strong>{stats.documents.needs_review}</strong>
-          <span>perlu review</span>
-          <small>Dokumen perlu ditinjau</small>
+
+        <div className="admin-stat-card">
+          <div className="admin-stat-card-icon yellow">
+            <UserIcon className="icon" />
+          </div>
+          <div className="admin-stat-card-body">
+            <h3>{stats.users}</h3>
+            <p>Pengguna Terdaftar</p>
+          </div>
+          <div className="admin-stat-card-footer">
+            <span>{stats.conversations} percakapan</span>
+          </div>
         </div>
-        <div className={stats.documents.failed > 0 ? "danger" : ""}>
-          <AlertIcon className="icon" />
-          <strong>{stats.documents.failed}</strong>
-          <span>gagal</span>
-          <small>Ingestion gagal</small>
+
+        <div className="admin-stat-card">
+          <div className="admin-stat-card-icon red">
+            <ChatIcon className="icon" />
+          </div>
+          <div className="admin-stat-card-body">
+            <h3>{stats.messages}</h3>
+            <p>Total Pesan</p>
+          </div>
+          <div className="admin-stat-card-footer">
+            <span>{stats.feedback.total} feedback</span>
+          </div>
         </div>
       </div>
 
-      <div className="dashboard-grid">
-        <section className="dashboard-card">
-          <h2>Ringkasan Aktivitas</h2>
-          <div className="dashboard-metrics">
-            <div className="metric-item">
-              <UserIcon className="icon" />
-              <div>
-                <strong>{stats.users}</strong>
-                <span>Pengguna terdaftar</span>
+      <div className="admin-grid-2">
+        <div className="admin-card">
+          <div className="admin-card-header">
+            <h2>Status Dokumen</h2>
+          </div>
+          <div className="admin-card-body">
+            <div className="admin-progress-list">
+              <div className="admin-progress-item">
+                <div className="admin-progress-label">
+                  <span className="admin-progress-name">Selesai</span>
+                  <span className="admin-progress-value">
+                    {stats.documents.total -
+                      stats.documents.needs_review -
+                      stats.documents.failed}
+                  </span>
+                </div>
+                <div className="admin-progress-bar">
+                  <div
+                    className="admin-progress-fill green"
+                    style={{
+                      width: `${
+                        stats.documents.total > 0
+                          ? ((stats.documents.total -
+                              stats.documents.needs_review -
+                              stats.documents.failed) /
+                              stats.documents.total) *
+                            100
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="admin-progress-item">
+                <div className="admin-progress-label">
+                  <span className="admin-progress-name">Perlu Review</span>
+                  <span className="admin-progress-value">{stats.documents.needs_review}</span>
+                </div>
+                <div className="admin-progress-bar">
+                  <div
+                    className="admin-progress-fill yellow"
+                    style={{
+                      width: `${
+                        stats.documents.total > 0
+                          ? (stats.documents.needs_review / stats.documents.total) * 100
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="admin-progress-item">
+                <div className="admin-progress-label">
+                  <span className="admin-progress-name">Gagal</span>
+                  <span className="admin-progress-value">{stats.documents.failed}</span>
+                </div>
+                <div className="admin-progress-bar">
+                  <div
+                    className="admin-progress-fill red"
+                    style={{
+                      width: `${
+                        stats.documents.total > 0
+                          ? (stats.documents.failed / stats.documents.total) * 100
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
               </div>
             </div>
-            <div className="metric-item">
-              <ChatIcon className="icon" />
-              <div>
-                <strong>{stats.conversations}</strong>
-                <span>Percakapan</span>
+          </div>
+        </div>
+
+        <div className="admin-card">
+          <div className="admin-card-header">
+            <h2>Feedback Ringkasan</h2>
+          </div>
+          <div className="admin-card-body">
+            <div className="admin-feedback-summary">
+              <div className="admin-feedback-box green">
+                <CheckIcon className="icon" />
+                <div>
+                  <strong>{stats.feedback.helpful}</strong>
+                  <span>Membantu</span>
+                </div>
+              </div>
+              <div className="admin-feedback-box red">
+                <AlertIcon className="icon" />
+                <div>
+                  <strong>{stats.feedback.not_helpful}</strong>
+                  <span>Tidak Membantu</span>
+                </div>
+              </div>
+              <div className="admin-feedback-box blue">
+                <ChatIcon className="icon" />
+                <div>
+                  <strong>
+                    {stats.feedback.total > 0
+                      ? Math.round((stats.feedback.helpful / stats.feedback.total) * 100)
+                      : 0}
+                    %
+                  </strong>
+                  <span>Kepuasan</span>
+                </div>
               </div>
             </div>
-            <div className="metric-item">
-              <ChatIcon className="icon" />
-              <div>
-                <strong>{stats.messages}</strong>
-                <span>Pesan</span>
-              </div>
-            </div>
-            <div className="metric-item">
+          </div>
+        </div>
+      </div>
+
+      <div className="admin-card">
+        <div className="admin-card-header">
+          <h2>Ingestion Terbaru</h2>
+          <Link href="/admin/ingestion" className="admin-btn admin-btn-sm">
+            Lihat Semua
+          </Link>
+        </div>
+        <div className="admin-card-body no-padding">
+          {stats.ingestion_jobs.recent.length === 0 ? (
+            <div className="admin-empty">
               <DatabaseIcon className="icon" />
-              <div>
-                <strong>{stats.ingestion_jobs.total}</strong>
-                <span>Job ingestion</span>
-              </div>
+              <p>Belum ada job ingestion</p>
             </div>
-          </div>
-        </section>
-
-        <section className="dashboard-card">
-          <h2>Feedback</h2>
-          <div className="dashboard-metrics">
-            <div className="metric-item">
-              <CheckIcon className="icon" />
-              <div>
-                <strong>{stats.feedback.helpful}</strong>
-                <span>Membantu</span>
-              </div>
-            </div>
-            <div className="metric-item">
-              <AlertIcon className="icon" />
-              <div>
-                <strong>{stats.feedback.not_helpful}</strong>
-                <span>Tidak membantu</span>
-              </div>
-            </div>
-            <div className="metric-item">
-              <ChatIcon className="icon" />
-              <div>
-                <strong>{stats.feedback.total}</strong>
-                <span>Total feedback</span>
-              </div>
-            </div>
-            <div className="metric-item">
-              <span />
-              <div>
-                <strong>
-                  {stats.feedback.total > 0
-                    ? Math.round((stats.feedback.helpful / stats.feedback.total) * 100)
-                    : 0}
-                  %
-                </strong>
-                <span>Kepuasan</span>
-              </div>
-            </div>
-          </div>
-        </section>
+          ) : (
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Dokumen</th>
+                  <th>Status</th>
+                  <th>Waktu</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.ingestion_jobs.recent.map((job) => (
+                  <tr key={job.job_id}>
+                    <td className="font-medium">{job.document_id}</td>
+                    <td>
+                      <span
+                        className={`admin-badge ${
+                          job.status === "completed"
+                            ? "green"
+                            : job.status === "failed"
+                              ? "red"
+                              : job.status === "needs_review"
+                                ? "yellow"
+                                : ""
+                        }`}
+                      >
+                        {ingestionStatusLabel[job.status] ?? job.status}
+                      </span>
+                    </td>
+                    <td className="text-muted">{formatDate(job.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
 
-      <div className="dashboard-grid">
-        <section className="dashboard-card">
-          <h2>Status Dokumen</h2>
-          <div className="dashboard-bar-chart">
-            <div className="bar-item">
-              <span className="bar-label">Selesai</span>
-              <div className="bar-track">
-                <div
-                  className="bar-fill success"
-                  style={{
-                    width: `${
-                      stats.documents.total > 0
-                        ? ((stats.documents.total -
-                            stats.documents.needs_review -
-                            stats.documents.failed) /
-                            stats.documents.total) *
-                          100
-                        : 0
-                    }%`,
-                  }}
-                />
-              </div>
-              <span className="bar-value">
-                {stats.documents.total - stats.documents.needs_review - stats.documents.failed}
-              </span>
-            </div>
-            <div className="bar-item">
-              <span className="bar-label">Perlu review</span>
-              <div className="bar-track">
-                <div
-                  className="bar-fill warning"
-                  style={{
-                    width: `${
-                      stats.documents.total > 0
-                        ? (stats.documents.needs_review / stats.documents.total) * 100
-                        : 0
-                    }%`,
-                  }}
-                />
-              </div>
-              <span className="bar-value">{stats.documents.needs_review}</span>
-            </div>
-            <div className="bar-item">
-              <span className="bar-label">Gagal</span>
-              <div className="bar-track">
-                <div
-                  className="bar-fill danger"
-                  style={{
-                    width: `${
-                      stats.documents.total > 0
-                        ? (stats.documents.failed / stats.documents.total) * 100
-                        : 0
-                    }%`,
-                  }}
-                />
-              </div>
-              <span className="bar-value">{stats.documents.failed}</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="dashboard-card">
-          <div className="dashboard-card-header">
-            <h2>Ingestion Terbaru</h2>
-            <Link href="/admin/ingestion" className="dashboard-card-link">
-              Lihat semua
+      <div className="admin-card">
+        <div className="admin-card-header">
+          <h2>Aksi Cepat</h2>
+        </div>
+        <div className="admin-card-body">
+          <div className="admin-quick-actions">
+            <Link href="/admin/upload" className="admin-quick-action">
+              <UploadIcon className="icon" />
+              <span>Upload PDF</span>
+            </Link>
+            <Link href="/documents" className="admin-quick-action">
+              <FileIcon className="icon" />
+              <span>Kelola Dokumen</span>
+            </Link>
+            <Link href="/admin/ingestion" className="admin-quick-action">
+              <DatabaseIcon className="icon" />
+              <span>Ingestion</span>
+            </Link>
+            <Link href="/admin/feedback" className="admin-quick-action">
+              <ChatIcon className="icon" />
+              <span>Feedback</span>
+            </Link>
+            <Link href="/admin/retrieval" className="admin-quick-action">
+              <RefreshIcon className="icon" />
+              <span>Retrieval Playground</span>
             </Link>
           </div>
-          {stats.ingestion_jobs.recent.length === 0 ? (
-            <p className="admin-empty-copy">Belum ada job ingestion.</p>
-          ) : (
-            <div className="dashboard-list">
-              {stats.ingestion_jobs.recent.map((job) => (
-                <div className="dashboard-list-item" key={job.job_id}>
-                  <div className="dashboard-list-item-main">
-                    <strong>{job.document_id}</strong>
-                    <span className="status-badge">
-                      {ingestionStatusLabel[job.status] ?? job.status}
-                    </span>
-                  </div>
-                  <small>{formatDate(job.created_at)}</small>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
-
-      <section className="dashboard-card dashboard-quick-actions">
-        <h2>Aksi Cepat</h2>
-        <div className="quick-action-grid">
-          <Link href="/admin/upload" className="quick-action-item">
-            <UploadIcon className="icon" />
-            <span>Upload PDF</span>
-          </Link>
-          <Link href="/documents" className="quick-action-item">
-            <FileIcon className="icon" />
-            <span>Kelola Dokumen</span>
-          </Link>
-          <Link href="/admin/ingestion" className="quick-action-item">
-            <DatabaseIcon className="icon" />
-            <span>Ingestion</span>
-          </Link>
-          <Link href="/admin/feedback" className="quick-action-item">
-            <ChatIcon className="icon" />
-            <span>Feedback</span>
-          </Link>
-          <Link href="/admin/retrieval" className="quick-action-item">
-            <RefreshIcon className="icon" />
-            <span>Retrieval Playground</span>
-          </Link>
         </div>
-      </section>
+      </div>
     </div>
   );
 }
