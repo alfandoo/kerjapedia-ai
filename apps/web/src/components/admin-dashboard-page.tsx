@@ -14,7 +14,6 @@ import {
   UserIcon,
 } from "./icons";
 import { fetchAdminStats } from "@/lib/api";
-import { fallbackAdminStats } from "@/lib/sample-data";
 import type { AdminStats } from "@/lib/types";
 
 const ingestionStatusLabel: Record<string, string> = {
@@ -38,6 +37,7 @@ function formatDate(value: string) {
 export function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -47,7 +47,7 @@ export function AdminDashboardPage() {
         setLoading(false);
       })
       .catch(() => {
-        setStats(fallbackAdminStats);
+        setError("Gagal memuat data dashboard.");
         setLoading(false);
       });
     return () => controller.abort();
@@ -62,11 +62,11 @@ export function AdminDashboardPage() {
     );
   }
 
-  if (!stats) {
+  if (error || !stats) {
     return (
       <div className="admin-loading">
         <AlertIcon className="icon" />
-        <span>Data tidak tersedia.</span>
+        <span>{error ?? "Data tidak tersedia."}</span>
         <button type="button" className="admin-btn" onClick={() => window.location.reload()}>
           Muat ulang
         </button>
