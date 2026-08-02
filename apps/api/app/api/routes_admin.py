@@ -37,7 +37,7 @@ from app.models.business import (
 from app.models.ingestion import IngestionJob
 from app.services.providers import pinecone_store_from_settings
 from app.services.retrieval.engine import RetrievalEngine
-from app.services.retrieval.store import load_artifact_documents
+from app.services.retrieval.store import count_chunks_per_document, load_artifact_documents
 from app.services.storage import upload_bytes
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -102,10 +102,7 @@ def _latest_jobs(session) -> dict[str, dict]:
 @router.get("/stats")
 def admin_stats(session: DbSession, _: AdminUser) -> dict:
     documents = load_dataset_documents()
-    chunks = load_artifact_documents(storage_root())
-    chunk_counts: dict[str, int] = {}
-    for chunk in chunks:
-        chunk_counts[chunk.document_id] = chunk_counts.get(chunk.document_id, 0) + 1
+    chunk_counts = count_chunks_per_document(storage_root())
     jobs = _latest_jobs(session)
 
     doc_counts = {"total": len(documents), "published": 0, "needs_review": 0, "failed": 0}

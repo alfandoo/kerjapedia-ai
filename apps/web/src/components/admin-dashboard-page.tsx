@@ -46,8 +46,9 @@ export function AdminDashboardPage() {
         setStats(data);
         setLoading(false);
       })
-      .catch(() => {
-        setError("Gagal memuat data dashboard.");
+      .catch((err) => {
+        const message = (err as Error).message || "Gagal memuat data dashboard.";
+        setError(message);
         setLoading(false);
       });
     return () => controller.abort();

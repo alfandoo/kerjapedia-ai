@@ -11,6 +11,16 @@ def load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def count_chunks_per_document(storage_root: Path) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for chunks_path in storage_root.glob("documents/*/v*/processed/chunks.json"):
+        chunks = load_json(chunks_path)
+        if chunks:
+            doc_id = chunks[0].get("document_id", "")
+            counts[doc_id] = counts.get(doc_id, 0) + len(chunks)
+    return counts
+
+
 def load_artifact_documents(storage_root: Path) -> list[RetrievalDocument]:
     documents: list[RetrievalDocument] = []
 
