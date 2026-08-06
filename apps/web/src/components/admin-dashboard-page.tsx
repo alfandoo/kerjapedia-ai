@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   AlertIcon,
@@ -37,6 +37,8 @@ function formatDate(value: string) {
 
 export function AdminDashboardPage() {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,17 +51,18 @@ export function AdminDashboardPage() {
         setLoading(false);
       })
       .catch((err) => {
+        if ((err as Error).name === "AbortError") return;
         const message = (err as Error).message || "Gagal memuat data dashboard.";
         if (message === "Invalid or expired token." || message === "Missing bearer token.") {
           clearStoredSession();
-          router.push("/login-admin");
+          routerRef.current.push("/login-admin");
           return;
         }
         setError(message);
         setLoading(false);
       });
     return () => controller.abort();
-  }, [router]);
+  }, []);
 
   if (loading) {
     return (
