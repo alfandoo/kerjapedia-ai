@@ -3,7 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Header, HTTPException, status
 
 from app.api.dependencies import CurrentUser, _extract_bearer_token
-from app.api.schemas import LoginRequest, LoginResponse, RegisterRequest, UserResponse
+from app.api.schemas import (
+    LoginRequest,
+    LoginResponse,
+    RefreshRequest,
+    RegisterRequest,
+    UserResponse,
+)
 from app.api.state import UserRecord
 from app.core.config import settings
 from app.db.session import create_session
@@ -81,6 +87,7 @@ def login(payload: LoginRequest) -> LoginResponse:
         record = _sync_user_profile(uid, email, name)
         return LoginResponse(
             access_token=result.session.access_token if result.session else "",
+            refresh_token=result.session.refresh_token if result.session else "",
             user=to_user_response(record),
         )
     except HTTPException:
@@ -89,6 +96,35 @@ def login(payload: LoginRequest) -> LoginResponse:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email atau password salah.",
+        ) from exc
+
+
+@router.post("/refresh", response_model=LoginResponse)
+def refresh(payload: RefreshRequest) -> LoginResponse:
+    try:
+        supabase = supabase_service.get_supabase_anon()
+        result = supabase.auth.refresh_session(payload.refresh_token)
+        user = result.user
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sesi telah berakhir. Silakan masuk kembali.",
+            )
+        uid = user.id
+        email = user.email or ""
+        name = user.user_metadata.get("name") or email.split("@")[0] or "User"
+        record = _sync_user_profile(uid, email, name)
+        return LoginResponse(
+            access_token=result.session.access_token,
+            refresh_token=result.session.refresh_token,
+            user=to_user_response(record),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesi telah berakhir. Silakan masuk kembali.",
         ) from exc
 
 
@@ -118,12 +154,14 @@ def register(payload: RegisterRequest) -> LoginResponse:
             record = _sync_user_profile(uid, payload.email, payload.name)
             return LoginResponse(
                 access_token=result.session.access_token,
+                refresh_token=result.session.refresh_token,
                 user=to_user_response(record),
             )
         uid = user.id
         record = _sync_user_profile(uid, payload.email, payload.name)
         return LoginResponse(
             access_token="",
+            refresh_token="",
             user=to_user_response(record),
         )
     except HTTPException:
@@ -142,6 +180,7 @@ def register(payload: RegisterRequest) -> LoginResponse:
                     record = _sync_user_profile(uid, payload.email, payload.name)
                     return LoginResponse(
                         access_token=result.session.access_token if result.session else "",
+                        refresh_token=result.session.refresh_token if result.session else "",
                         user=to_user_response(record),
                     )
             except Exception:

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
@@ -13,7 +14,7 @@ import {
   UploadIcon,
   UserIcon,
 } from "./icons";
-import { fetchAdminStats } from "@/lib/api";
+import { clearStoredSession, fetchAdminStats } from "@/lib/api";
 import type { AdminStats } from "@/lib/types";
 
 const ingestionStatusLabel: Record<string, string> = {
@@ -35,6 +36,7 @@ function formatDate(value: string) {
 }
 
 export function AdminDashboardPage() {
+  const router = useRouter();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,11 +50,16 @@ export function AdminDashboardPage() {
       })
       .catch((err) => {
         const message = (err as Error).message || "Gagal memuat data dashboard.";
+        if (message === "Invalid or expired token." || message === "Missing bearer token.") {
+          clearStoredSession();
+          router.push("/login-admin");
+          return;
+        }
         setError(message);
         setLoading(false);
       });
     return () => controller.abort();
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (

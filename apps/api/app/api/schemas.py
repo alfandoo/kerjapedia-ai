@@ -37,8 +37,13 @@ class UserResponse(ApiModel):
 
 class LoginResponse(ApiModel):
     access_token: str
+    refresh_token: str = ""
     token_type: str = "bearer"
     user: UserResponse
+
+
+class RefreshRequest(ApiModel):
+    refresh_token: str = Field(min_length=10, max_length=1000)
 
 
 class MessageResponse(ApiModel):

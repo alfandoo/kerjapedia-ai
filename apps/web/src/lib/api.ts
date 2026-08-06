@@ -27,6 +27,12 @@ export function getStoredSession(): UserSession | null {
   }
 }
 
+export function clearStoredSession(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  window.dispatchEvent(new Event("kerjapedia-session-change"));
+}
+
 function adminHeaders(contentType = true): HeadersInit {
   const session = getStoredSession();
   return {
@@ -228,19 +234,56 @@ export async function register(
   return parseJsonResponse<UserSession>(response);
 }
 
-export async function fetchAdminStats(signal?: AbortSignal): Promise<AdminStats> {
-  const response = await fetch(`${API_URL}/admin/stats`, {
-    headers: adminHeaders(),
-    signal,
+async function refreshStoredSession(): Promise<UserSession | null> {
+  const session = getStoredSession();
+  if (!session?.refresh_token) return null;
+  const response = await fetch(`${API_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: session.refresh_token }),
   });
+  if (!response.ok) return null;
+  const fresh = await response.json();
+  if (!fresh.access_token) return null;
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(fresh));
+  window.dispatchEvent(new Event("kerjapedia-session-change"));
+  return fresh as UserSession;
+}
+
+async function fetchWithAuthRetry(
+  url: string,
+  options: RequestInit,
+  signal?: AbortSignal
+): Promise<Response> {
+  const response = await fetch(url, { ...options, signal });
+  if (response.status !== 401) return response;
+  const fresh = await refreshStoredSession();
+  if (!fresh) return response;
+  return fetch(url, {
+    ...options,
+    signal,
+    headers: {
+      ...options.headers,
+      Authorization: `Bearer ${fresh.access_token}`,
+    },
+  });
+}
+
+export async function fetchAdminStats(signal?: AbortSignal): Promise<AdminStats> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/stats`,
+    { headers: adminHeaders() },
+    signal
+  );
   return parseJsonResponse<AdminStats>(response);
 }
 
 export async function fetchAdminOverview(signal?: AbortSignal): Promise<AdminOverview> {
-  const response = await fetch(`${API_URL}/admin/documents`, {
-    headers: adminHeaders(),
-    signal,
-  });
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/documents`,
+    { headers: adminHeaders() },
+    signal
+  );
   return parseJsonResponse<AdminOverview>(response);
 }
 
@@ -248,7 +291,7 @@ export async function updateAdminDocument(
   documentId: string,
   payload: { legal_status: string; verification_status: string; topics: string[] }
 ): Promise<void> {
-  const response = await fetch(`${API_URL}/admin/documents/${documentId}`, {
+  const response = await fetchWithAuthRetry(`${API_URL}/admin/documents/${documentId}`, {
     method: "PATCH",
     headers: adminHeaders(),
     body: JSON.stringify(payload),
@@ -260,11 +303,14 @@ export async function updateAdminRelationships(
   documentId: string,
   relationships: Omit<AdminRelationship, "from_document_id">[]
 ): Promise<void> {
-  const response = await fetch(`${API_URL}/admin/documents/${documentId}/relationships`, {
-    method: "PUT",
-    headers: adminHeaders(),
-    body: JSON.stringify(relationships),
-  });
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/documents/${documentId}/relationships`,
+    {
+      method: "PUT",
+      headers: adminHeaders(),
+      body: JSON.stringify(relationships),
+    }
+  );
   await parseJsonResponse(response);
 }
 
@@ -272,16 +318,19 @@ export async function updateAdminPublication(
   documentId: string,
   action: "publish" | "unpublish"
 ): Promise<{ status: "published" | "draft"; version: number }> {
-  const response = await fetch(`${API_URL}/admin/documents/${documentId}/publication`, {
-    method: "POST",
-    headers: adminHeaders(),
-    body: JSON.stringify({ action }),
-  });
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/documents/${documentId}/publication`,
+    {
+      method: "POST",
+      headers: adminHeaders(),
+      body: JSON.stringify({ action }),
+    }
+  );
   return parseJsonResponse(response);
 }
 
 export async function createIngestionJob(documentId: string): Promise<IngestionJob> {
-  const response = await fetch(`${API_URL}/ingestion/jobs`, {
+  const response = await fetchWithAuthRetry(`${API_URL}/ingestion/jobs`, {
     method: "POST",
     headers: adminHeaders(),
     body: JSON.stringify({ document_id: documentId, persist_db: false }),
@@ -290,18 +339,20 @@ export async function createIngestionJob(documentId: string): Promise<IngestionJ
 }
 
 export async function fetchIngestionJobs(signal?: AbortSignal): Promise<IngestionJob[]> {
-  const response = await fetch(`${API_URL}/ingestion/jobs`, {
-    headers: adminHeaders(),
-    signal,
-  });
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/ingestion/jobs`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
   return parseJsonResponse<IngestionJob[]>(response);
 }
 
 export async function fetchAdminFeedback(signal?: AbortSignal): Promise<FeedbackItem[]> {
-  const response = await fetch(`${API_URL}/feedback`, {
-    headers: adminHeaders(),
-    signal,
-  });
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/feedback`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
   return parseJsonResponse<FeedbackItem[]>(response);
 }
 
@@ -309,7 +360,7 @@ export async function runRetrievalPlayground(
   question: string,
   topK: number
 ): Promise<RetrievalPlaygroundResponse> {
-  const response = await fetch(`${API_URL}/admin/retrieval/search`, {
+  const response = await fetchWithAuthRetry(`${API_URL}/admin/retrieval/search`, {
     method: "POST",
     headers: adminHeaders(),
     body: JSON.stringify({ question, top_k: topK }),
@@ -319,7 +370,7 @@ export async function runRetrievalPlayground(
 
 export async function uploadAdminDocument(file: File, topic: string): Promise<void> {
   const query = new URLSearchParams({ file_name: file.name, topic });
-  const response = await fetch(`${API_URL}/admin/documents/upload?${query}`, {
+  const response = await fetchWithAuthRetry(`${API_URL}/admin/documents/upload?${query}`, {
     method: "POST",
     headers: adminHeaders(false),
     body: file,
