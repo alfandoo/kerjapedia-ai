@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useRef, useState, useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 import {
@@ -9,6 +9,7 @@ import {
   ChatIcon,
   DatabaseIcon,
   FileIcon,
+  GaugeIcon,
   LogoutIcon,
   PanelLeftIcon,
   PlayIcon,
@@ -18,6 +19,7 @@ import {
   UserIcon,
 } from "./icons";
 import { useStoredSession } from "@/hooks/use-stored-session";
+import { signOut } from "@/lib/api";
 
 type AdminShellProps = { children: ReactNode };
 
@@ -28,6 +30,7 @@ const adminNavigation = [
   { href: "/admin/ingestion", label: "Ingestion", icon: DatabaseIcon },
   { href: "/admin/feedback", label: "Feedback", icon: ChatIcon },
   { href: "/admin/retrieval", label: "Retrieval Playground", icon: PlayIcon },
+  { href: "/admin/evaluation", label: "Evaluasi RAG", icon: GaugeIcon },
 ];
 
 function useIsClient() {
@@ -41,7 +44,6 @@ function useIsClient() {
 export function AdminShell({ children }: AdminShellProps) {
   const isClient = useIsClient();
   const pathname = usePathname();
-  const router = useRouter();
   const session = useStoredSession();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -84,9 +86,12 @@ export function AdminShell({ children }: AdminShellProps) {
   const isActive = (href: string) =>
     href === "/documents" ? pathname === "/documents" : pathname.startsWith(href);
 
-  function handleLogout() {
-    localStorage.removeItem("kerjapedia-session-v1");
-    router.push("/login-admin");
+  async function handleLogout() {
+    try {
+      await signOut();
+    } finally {
+      window.location.assign("/login-admin");
+    }
   }
 
   return (
@@ -156,7 +161,7 @@ export function AdminShell({ children }: AdminShellProps) {
               {dropdownOpen && (
                 <div className="admin-shell-dropdown">
                   <Link
-                    href="/admin/dashboard"
+                    href="/admin/settings"
                     className="admin-shell-dropdown-item"
                     onClick={() => setDropdownOpen(false)}
                   >

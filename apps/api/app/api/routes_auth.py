@@ -28,6 +28,14 @@ def to_user_response(user: UserRecord) -> UserResponse:
     )
 
 
+def _session_tokens(session) -> tuple[str, str]:
+    if session is None:
+        return "", ""
+    access_token = getattr(session, "access_token", None) or ""
+    refresh_token = getattr(session, "refresh_token", None) or ""
+    return str(access_token), str(refresh_token)
+
+
 def _sync_user_profile(
     uid: str, email: str, name: str, roles: list[str] | None = None
 ) -> UserRecord:
@@ -61,15 +69,6 @@ def _sync_user_profile(
 
 @router.post("/login", response_model=LoginResponse)
 def login(payload: LoginRequest) -> LoginResponse:
-    with create_session() as session:
-        profile_exists = session.query(UserProfile).filter(
-            UserProfile.email == payload.email
-        ).first() is not None
-        if not profile_exists:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email belum terdaftar.",
-            )
     try:
         supabase = supabase_service.get_supabase_anon()
         result = supabase.auth.sign_in_with_password(
@@ -85,9 +84,10 @@ def login(payload: LoginRequest) -> LoginResponse:
         email = user.email or payload.email
         name = user.user_metadata.get("name") or email.split("@")[0]
         record = _sync_user_profile(uid, email, name)
+        access_token, refresh_token = _session_tokens(result.session)
         return LoginResponse(
-            access_token=result.session.access_token if result.session else "",
-            refresh_token=result.session.refresh_token if result.session else "",
+            access_token=access_token,
+            refresh_token=refresh_token,
             user=to_user_response(record),
         )
     except HTTPException:
@@ -114,9 +114,10 @@ def refresh(payload: RefreshRequest) -> LoginResponse:
         email = user.email or ""
         name = user.user_metadata.get("name") or email.split("@")[0] or "User"
         record = _sync_user_profile(uid, email, name)
+        access_token, refresh_token = _session_tokens(result.session)
         return LoginResponse(
-            access_token=result.session.access_token,
-            refresh_token=result.session.refresh_token,
+            access_token=access_token,
+            refresh_token=refresh_token,
             user=to_user_response(record),
         )
     except HTTPException:
@@ -152,9 +153,10 @@ def register(payload: RegisterRequest) -> LoginResponse:
         if result.session:
             uid = user.id
             record = _sync_user_profile(uid, payload.email, payload.name)
+            access_token, refresh_token = _session_tokens(result.session)
             return LoginResponse(
-                access_token=result.session.access_token,
-                refresh_token=result.session.refresh_token,
+                access_token=access_token,
+                refresh_token=refresh_token,
                 user=to_user_response(record),
             )
         uid = user.id
@@ -178,9 +180,10 @@ def register(payload: RegisterRequest) -> LoginResponse:
                 if user:
                     uid = user.id
                     record = _sync_user_profile(uid, payload.email, payload.name)
+                    access_token, refresh_token = _session_tokens(result.session)
                     return LoginResponse(
-                        access_token=result.session.access_token if result.session else "",
-                        refresh_token=result.session.refresh_token if result.session else "",
+                        access_token=access_token,
+                        refresh_token=refresh_token,
                         user=to_user_response(record),
                     )
             except Exception:
@@ -191,19 +194,27 @@ def register(payload: RegisterRequest) -> LoginResponse:
             ) from exc
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Registrasi gagal: {exc}",
+            detail="Registrasi gagal. Silakan coba lagi.",
         ) from exc
 
 
 @router.post("/logout")
 def logout(authorization: str | None = Header(default=None)) -> dict[str, str]:
     token = _extract_bearer_token(authorization)
-    if token:
-        try:
-            supabase = supabase_service.get_supabase_anon()
-            supabase.auth.admin.sign_out(token)
-        except Exception:
-            pass
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing bearer token.",
+        )
+    try:
+        supabase = supabase_service.get_supabase()
+        user = supabase.auth.get_user(token)
+        if user and user.user:
+            supabase.auth.admin.sign_out(user.user.id, scope="global")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
     return {"status": "ok"}
 
 

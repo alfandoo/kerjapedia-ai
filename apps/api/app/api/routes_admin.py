@@ -35,8 +35,20 @@ from app.models.business import (
     UserProfile,
 )
 from app.models.ingestion import IngestionJob
+from app.services.audit import list_audit_logs, log_audit
+from app.services.ingestion.manifest_updater import (
+    MANIFEST_EDITABLE_FIELDS,
+    manifest_contains,
+    update_manifest_metadata,
+)
+from app.services.ingestion.uploads import (
+    load_uploads_manifest,
+    merge_documents,
+    register_upload,
+)
 from app.services.providers import pinecone_store_from_settings
 from app.services.retrieval.engine import RetrievalEngine
+from app.services.retrieval.relationships import relationship_index_for_manifest
 from app.services.retrieval.store import count_chunks_per_document, load_artifact_documents
 from app.services.storage import upload_bytes
 
@@ -164,7 +176,10 @@ def admin_stats(session: DbSession, _: AdminUser) -> dict:
 
 @router.get("/documents")
 def list_admin_documents(session: DbSession, _: AdminUser) -> dict:
-    documents = load_dataset_documents()
+    documents = merge_documents(
+        load_dataset_documents(),
+        load_uploads_manifest(storage_root()),
+    )
     chunks = load_artifact_documents(storage_root())
     chunk_counts: dict[str, int] = {}
     for chunk in chunks:
@@ -211,15 +226,48 @@ def update_admin_document(
     document_id: str,
     payload: DocumentUpdateRequest,
     session: DbSession,
-    _: AdminUser,
+    user: AdminUser,
 ) -> dict:
-    find_dataset_document(document_id)
-    record = _get_or_create_admin_record(document_id, session)
+    dataset_path = dataset_metadata_path()
     changes = payload.model_dump(exclude_none=True)
-    record.overrides = {**record.overrides, **changes}
+
+    manifest_path = dataset_path
+    if not manifest_contains(manifest_path, document_id):
+        upload_path = storage_root() / "uploads" / "manifest.json"
+        if manifest_contains(upload_path, document_id):
+            manifest_path = upload_path
+        else:
+            find_dataset_document(document_id)
+
+    applied: dict = {}
+    if changes:
+        try:
+            applied = update_manifest_metadata(manifest_path, document_id, changes)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Document {document_id} was not found.",
+            ) from exc
+
+    record = _get_or_create_admin_record(document_id, session)
+    record.overrides = {**record.overrides, **applied}
     record.updated_at = now_utc()
+    record.updated_by = user.user_id
     session.commit()
-    return {"status": "updated", "document_id": document_id, "changes": changes}
+
+    log_audit(
+        actor=user.user_id,
+        action="document.metadata_updated",
+        target_type="document",
+        target_id=document_id,
+        details={"applied": {key: str(value) for key, value in applied.items()}},
+    )
+    return {
+        "status": "updated",
+        "document_id": document_id,
+        "applied_changes": applied,
+        "editable_fields": sorted(MANIFEST_EDITABLE_FIELDS),
+    }
 
 
 @router.put("/documents/{document_id}/relationships")
@@ -227,7 +275,7 @@ def replace_relationships(
     document_id: str,
     payload: list[DocumentRelationshipRequest],
     session: DbSession,
-    _: AdminUser,
+    user: AdminUser,
 ) -> dict:
     find_dataset_document(document_id)
     relationships = []
@@ -243,6 +291,13 @@ def replace_relationships(
     record.relationships = relationships
     record.updated_at = now_utc()
     session.commit()
+    log_audit(
+        actor=user.user_id,
+        action="document.relationships_updated",
+        target_type="document",
+        target_id=document_id,
+        details={"relationships": relationships},
+    )
     return {"status": "updated", "relationships": relationships}
 
 
@@ -251,7 +306,7 @@ def update_publication(
     document_id: str,
     payload: PublicationRequest,
     session: DbSession,
-    _: AdminUser,
+    user: AdminUser,
 ) -> dict:
     find_dataset_document(document_id)
     record = _get_or_create_admin_record(document_id, session)
@@ -264,10 +319,17 @@ def update_publication(
             "version": record.version,
             "status": publication_status,
             "created_at": _now_iso(),
-            "created_by": "Admin",
+            "created_by": user.user_id,
         }
     )
     session.commit()
+    log_audit(
+        actor=user.user_id,
+        action=f"document.{publication_status}",
+        target_type="document",
+        target_id=document_id,
+        details={"version": record.version},
+    )
     return {
         "status": publication_status,
         "version": record.version,
@@ -279,7 +341,7 @@ def update_publication(
 async def upload_document(
     request: Request,
     session: DbSession,
-    _: AdminUser,
+    user: AdminUser,
     file_name: str = Query(min_length=5, max_length=180),
     topic: str = Query(default="uncategorized", min_length=2, max_length=80),
 ) -> dict:
@@ -309,6 +371,26 @@ async def upload_document(
     )
     session.add(uploaded)
     session.commit()
+
+    manifest_document = register_upload(
+        storage_root(),
+        document_id=document_id,
+        file_name=safe_name,
+        topic=topic,
+        content=content,
+        source_url=public_url,
+    )
+    log_audit(
+        actor=user.user_id,
+        action="document.uploaded",
+        target_type="document",
+        target_id=document_id,
+        details={
+            "file_name": safe_name,
+            "topic": topic,
+            "size_bytes": len(content),
+        },
+    )
     return {
         "upload_id": upload_id,
         "document_id": document_id,
@@ -317,6 +399,8 @@ async def upload_document(
         "size_bytes": len(content),
         "status": "uploaded",
         "storage_url": public_url,
+        "sha256": manifest_document.sha256,
+        "manifest_ready": True,
         "created_at": uploaded.created_at,
     }
 
@@ -337,6 +421,7 @@ def retrieval_playground(
             engine = RetrievalEngine(
                 documents=load_artifact_documents(storage_root()),
                 top_k=payload.top_k,
+                relationship_index=relationship_index_for_manifest(dataset_metadata_path()),
             )
             response = engine.search(payload.question, top_k=payload.top_k)
     except RuntimeError as exc:
@@ -347,11 +432,21 @@ def retrieval_playground(
     results = []
     for item in response.results:
         document = item.document
+        metadata = document.metadata or {}
+        if (
+            payload.regulation_type
+            and metadata.get("regulation_type", "").lower() != payload.regulation_type.lower()
+        ):
+            continue
+        if payload.year is not None and metadata.get("year") != payload.year:
+            continue
+        if payload.legal_status and document.legal_status != payload.legal_status:
+            continue
         results.append(
             {
                 "chunk_id": document.chunk_id,
                 "document_id": document.document_id,
-                "short_title": document.metadata.get("short_title", document.document_id),
+                "short_title": metadata.get("short_title", document.document_id),
                 "article": document.article,
                 "page_start": document.page_start,
                 "page_end": document.page_end,
@@ -370,3 +465,26 @@ def retrieval_playground(
         "should_refuse": response.should_refuse,
         "results": results,
     }
+
+
+@router.get("/settings")
+def admin_settings(_: AdminUser) -> dict:
+    return {
+        "app_name": settings.app_name,
+        "app_version": settings.app_version,
+        "admin_email": settings.admin_email,
+        "rate_limit_per_minute": settings.rate_limit_per_minute,
+        "vector_store": settings.vector_store,
+        "embedding_provider": settings.embedding_provider,
+        "llm_provider": settings.llm_provider,
+        "session_expires_in_seconds": 3600,
+    }
+
+
+@router.get("/audit-logs")
+def audit_logs(
+    session: DbSession,
+    _: AdminUser,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[dict]:
+    return list_audit_logs(session, limit=limit)

@@ -21,13 +21,14 @@ from app.api.schemas import (
     MessageResponse,
 )
 from app.api.state import UserRecord, now_utc
-from app.api.utils import storage_root
+from app.api.utils import dataset_metadata_path, storage_root
 from app.core.config import settings
 from app.models.business import Conversation, Message
 from app.services.answering.guardrails import build_guardrail_refusal, evaluate_input_guardrail
-from app.services.answering.memory import build_memory_context
+from app.services.answering.memory import MemoryContext, build_memory_context
 from app.services.providers import answer_generator_from_settings, pinecone_store_from_settings
 from app.services.retrieval.engine import RetrievalEngine
+from app.services.retrieval.relationships import relationship_index_for_manifest
 from app.services.retrieval.store import load_artifact_documents
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -126,21 +127,50 @@ def _get_owned_conversation(
     return conversation
 
 
-def _conversation_summary(conversation: Conversation) -> ConversationSummary:
+def _conversation_summary(
+    conversation: Conversation, session: Session | None = None
+) -> ConversationSummary:
+    message_count = 0
+    if session is not None:
+        message_count = (
+            session.query(Message)
+            .filter(Message.conversation_id == conversation.conversation_id)
+            .count()
+        )
     return ConversationSummary(
         conversation_id=conversation.conversation_id,
         title=conversation.title,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
-        message_count=0,
+        message_count=message_count,
     )
+
+
+def _recent_messages(
+    conversation: Conversation,
+    session: Session,
+    limit: int = 8,
+) -> list[dict[str, str]]:
+    rows = (
+        session.query(Message)
+        .filter(Message.conversation_id == conversation.conversation_id)
+        .order_by(Message.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [{"role": row.role, "content": row.content} for row in reversed(rows)]
 
 
 def _retrieve(question: str, top_k: int):
     if settings.vector_store == "pinecone":
         return pinecone_store_from_settings(settings).search(question, top_k=top_k)
     documents = load_artifact_documents(storage_root())
-    return RetrievalEngine(documents=documents, top_k=top_k).search(question, top_k=top_k)
+    index = relationship_index_for_manifest(dataset_metadata_path())
+    return RetrievalEngine(
+        documents=documents,
+        top_k=top_k,
+        relationship_index=index,
+    ).search(question, top_k=top_k)
 
 
 def _store_answer(
@@ -181,6 +211,12 @@ def _store_answer(
     session.commit()
 
 
+def _generator_query(question: str, memory: MemoryContext) -> str:
+    if not memory.used:
+        return question
+    return f'{question} (konteks percakapan sebelumnya: {memory.retrieval_query})'
+
+
 def _stream_event(event: str, **payload) -> bytes:
     serialized = json.dumps(
         {"event": event, **payload},
@@ -203,7 +239,10 @@ def ask_question(
 
     try:
         guardrail = evaluate_input_guardrail(payload.question)
-        memory = build_memory_context(payload.question, [])
+        memory = build_memory_context(
+            payload.question,
+            _recent_messages(conversation, session),
+        )
         if not guardrail.allowed:
             answer = build_guardrail_refusal(
                 payload.question,
@@ -212,7 +251,10 @@ def ask_question(
             retrieval = None
         else:
             retrieval = _retrieve(memory.retrieval_query, payload.top_k)
-            answer = answer_generator_from_settings(settings).generate(payload.question, retrieval)
+            answer = answer_generator_from_settings(settings).generate(
+                _generator_query(payload.question, memory),
+                retrieval,
+            )
     except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -261,7 +303,10 @@ def ask_question_stream(
         )
         try:
             guardrail = evaluate_input_guardrail(payload.question)
-            memory = build_memory_context(payload.question, [])
+            memory = build_memory_context(
+                payload.question,
+                _recent_messages(conversation, session),
+            )
             if not guardrail.allowed:
                 yield _stream_event("thinking", status="Memeriksa keamanan permintaan")
                 answer = build_guardrail_refusal(
@@ -278,7 +323,11 @@ def ask_question_stream(
                 )
                 yield _stream_event("thinking", status="Menyusun jawaban berdasarkan sumber")
                 generator = answer_generator_from_settings(settings)
-                answer = await asyncio.to_thread(generator.generate, payload.question, retrieval)
+                answer = await asyncio.to_thread(
+                    generator.generate,
+                    _generator_query(payload.question, memory),
+                    retrieval,
+                )
         except RuntimeError as exc:
             yield _stream_event("error", detail=str(exc))
             return
@@ -334,7 +383,7 @@ def list_conversations(
         .order_by(Conversation.updated_at.desc())
         .all()
     )
-    return [_conversation_summary(item) for item in conversations]
+    return [_conversation_summary(item, session) for item in conversations]
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetail)
@@ -385,7 +434,7 @@ def update_conversation(
     conversation.title = title
     conversation.updated_at = now_utc()
     session.commit()
-    return _conversation_summary(conversation)
+    return _conversation_summary(conversation, session)
 
 
 @router.delete(

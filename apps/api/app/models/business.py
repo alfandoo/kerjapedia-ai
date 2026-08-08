@@ -59,6 +59,7 @@ class Feedback(Base):
     user_id: Mapped[str | None] = mapped_column(String(80))
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer_id: Mapped[str | None] = mapped_column(String(120))
+    conversation_id: Mapped[str | None] = mapped_column(String(80))
     rating: Mapped[str] = mapped_column(String(20), nullable=False)
     issue_category: Mapped[str | None] = mapped_column(String(80))
     comment: Mapped[str | None] = mapped_column(Text)
@@ -113,4 +114,16 @@ class UploadedDocument(Base):
     topic: Mapped[str] = mapped_column(String(80), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="uploaded")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    audit_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    actor: Mapped[str] = mapped_column(String(160), nullable=False)
+    action: Mapped[str] = mapped_column(String(80), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    target_id: Mapped[str | None] = mapped_column(String(160))
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

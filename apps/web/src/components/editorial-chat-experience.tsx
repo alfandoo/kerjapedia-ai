@@ -252,12 +252,19 @@ export function EditorialChatExperience() {
       streamingMessageRef.current = null;
     }
   }
-  async function handleFeedback(message: ChatMessage, rating: "helpful" | "not_helpful") {
+  async function handleFeedback(
+    message: ChatMessage,
+    rating: "helpful" | "not_helpful",
+    detail?: { issue: "citation_incorrect" | "answer_incomplete" | "outdated_regulation" | "other"; comment: string }
+  ) {
     setFeedback((current) => ({ ...current, [message.id]: rating }));
     await submitFeedback({
       question: message.answer?.query ?? "Feedback chat",
       rating,
       answer_id: message.id,
+      conversation_id: conversationId ?? undefined,
+      issue_category: detail?.issue,
+      comment: detail?.comment || undefined,
     }).catch(() => setError("Feedback belum dapat disimpan."));
   }
 

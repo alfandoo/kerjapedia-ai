@@ -20,7 +20,26 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
     return token
 
 
+def _token_is_expired(token: str) -> bool:
+    try:
+        import base64
+        import json
+        import time
+
+        payload_segment = token.split(".")[1]
+        padding = "=" * (-len(payload_segment) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_segment + padding))
+        expires_at = payload.get("exp")
+        if expires_at is None:
+            return False
+        return time.time() >= float(expires_at)
+    except Exception:
+        return False
+
+
 def _get_user_from_supabase(token: str) -> UserRecord | None:
+    if _token_is_expired(token):
+        return None
     try:
         supabase = supabase_service.get_supabase()
         user = supabase.auth.get_user(token)

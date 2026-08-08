@@ -26,10 +26,17 @@ def ingest_document(
     embedding_provider: EmbeddingProvider | None = None,
     database_session_factory=None,
     vector_store=None,
+    extra_manifest_path: Path | None = None,
 ) -> IngestionResult:
     started_at = time.time()
     manifest = load_manifest(metadata_path)
     documents = manifest["documents"]
+    if extra_manifest_path is not None and extra_manifest_path.exists():
+        extra_documents = load_manifest(extra_manifest_path)["documents"]
+        by_id = {document.document_id: document for document in documents}
+        for document in extra_documents:
+            by_id[document.document_id] = document
+        documents = list(by_id.values())
     document = find_document(documents, document_id)
     pdf_path = project_root / document.local_file
     artifact_store = ArtifactStore(output_dir)

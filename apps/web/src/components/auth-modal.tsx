@@ -159,6 +159,11 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
       return;
     }
 
+    if (mode === "signup" && password.length < 8) {
+      setError("Password minimal 8 karakter.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const session =

@@ -187,6 +187,14 @@ export function ChartIcon({ className }: IconProps) {
   );
 }
 
+export function GaugeIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 15l3.5-3.5M5.6 18.4a9 9 0 1 1 12.8 0M12 9a3 3 0 0 0-3 3V15a3 3 0 0 1 6 0v-3a3 3 0 0 0-3-3z" />
+    </svg>
+  );
+}
+
 export function CheckIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">

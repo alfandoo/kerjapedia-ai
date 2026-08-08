@@ -28,6 +28,12 @@ logger = logging.getLogger("kerjapedia.api")
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     try:
+        from app.db.session import ensure_schema
+
+        ensure_schema()
+    except Exception:
+        logger.warning("Schema initialization failed — check database connectivity")
+    try:
         get_supabase()
         ensure_bucket()
     except Exception:

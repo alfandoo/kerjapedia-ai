@@ -161,6 +161,8 @@ export type FeedbackItem = {
   rating: "helpful" | "not_helpful";
   issue_category?: string | null;
   comment?: string | null;
+  conversation_id?: string | null;
+  answer_id?: string | null;
   created_at: string;
 };
 
@@ -211,4 +213,73 @@ export type RetrievalPlaygroundResponse = {
   warnings: string[];
   should_refuse: boolean;
   results: RetrievalPlaygroundResult[];
+};
+
+export type EvaluationMetricSet = {
+  question_count: number;
+  answerable_count: number;
+  refusal_count: number;
+  recall_at_5: number;
+  mean_reciprocal_rank: number;
+  citation_correctness: number;
+  faithfulness: number;
+  refusal_accuracy: number;
+  hard_negative_recall_at_5: number;
+};
+
+export type EvaluationDatasetQuestion = {
+  question_id: string;
+  category: string;
+  question: string;
+  expected_answer: string;
+  expected_document_ids: string[];
+  expected_articles: string[];
+  expected_topics: string[];
+  should_refuse: boolean;
+  hard_negative: boolean;
+  status: string;
+};
+
+export type EvaluationDataset = {
+  dataset_id: string;
+  name: string;
+  questions: EvaluationDatasetQuestion[];
+  created_at: string;
+};
+
+export type EvaluationRunSummary = {
+  run_id: string;
+  dataset_id: string;
+  created_at: string;
+  metrics: Record<string, EvaluationMetricSet>;
+};
+
+export type EvaluationQuestionResult = {
+  question_id: string;
+  category: string;
+  mode: string;
+  recall_at_5: number | null;
+  reciprocal_rank: number | null;
+  citation_correctness: number | null;
+  faithfulness: number | null;
+  refusal_correct: boolean;
+  actual_refuse: boolean;
+  retrieved_document_ids: string[];
+  retrieved_chunk_ids: string[];
+  warnings: string[];
+};
+
+export type EvaluationExperiment = {
+  mode: string;
+  metrics: EvaluationMetricSet;
+  per_topic: Record<string, EvaluationMetricSet>;
+  results: EvaluationQuestionResult[];
+};
+
+export type EvaluationRunDetail = EvaluationRunSummary & {
+  report?: {
+    question_count: number;
+    top_k: number;
+    experiments: EvaluationExperiment[];
+  };
 };

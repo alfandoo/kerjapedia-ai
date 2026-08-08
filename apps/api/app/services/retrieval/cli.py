@@ -8,6 +8,7 @@ from pathlib import Path
 from app.core.config import settings
 from app.services.providers import pinecone_store_from_settings
 from app.services.retrieval.engine import RetrievalEngine
+from app.services.retrieval.relationships import relationship_index_for_manifest
 from app.services.retrieval.store import load_artifact_documents
 
 
@@ -43,7 +44,12 @@ def main() -> None:
         response = pinecone_store_from_settings(settings).search(args.query, top_k=args.top_k)
     else:
         documents = load_artifact_documents(storage_root)
-        engine = RetrievalEngine(documents=documents, top_k=args.top_k)
+        manifest = project_root / "dataset" / "metadata.json"
+        engine = RetrievalEngine(
+            documents=documents,
+            top_k=args.top_k,
+            relationship_index=relationship_index_for_manifest(manifest),
+        )
         response = engine.search(args.query, top_k=args.top_k)
     print(json.dumps(asdict(response), ensure_ascii=False, indent=2))
 

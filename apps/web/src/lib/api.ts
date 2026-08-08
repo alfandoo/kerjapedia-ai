@@ -6,6 +6,9 @@ import type {
   ConversationDetail,
   ConversationSummary,
   DocumentSummary,
+  EvaluationDataset,
+  EvaluationRunDetail,
+  EvaluationRunSummary,
   FeedbackItem,
   IngestionJob,
   RetrievalPlaygroundResponse,
@@ -61,8 +64,21 @@ function chatHeaders(contentType = false): HeadersInit {
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(body?.detail ?? `Request failed with status ${response.status}`);
+    const body = (await response.json().catch(() => null)) as {
+      detail?: string | { msg?: string }[];
+    } | null;
+    let message = `Request failed with status ${response.status}`;
+    if (body?.detail) {
+      if (typeof body.detail === "string") {
+        message = body.detail;
+      } else if (Array.isArray(body.detail)) {
+        message = body.detail
+          .map((item) => item?.msg)
+          .filter(Boolean)
+          .join("; ");
+      }
+    }
+    throw new Error(message);
   }
   return (await response.json()) as T;
 }
@@ -200,16 +216,29 @@ export function documentPdfUrl(documentId: string): string {
   return `${API_URL}/documents/${encodeURIComponent(documentId)}/pdf`;
 }
 
+export type FeedbackRating = "helpful" | "not_helpful";
+export type FeedbackIssue =
+  | "citation_incorrect"
+  | "answer_incomplete"
+  | "outdated_regulation"
+  | "other";
+
 export async function submitFeedback(payload: {
   question: string;
-  rating: "helpful" | "not_helpful";
+  rating: FeedbackRating;
   answer_id?: string;
+  conversation_id?: string;
+  issue_category?: FeedbackIssue;
+  comment?: string;
 }): Promise<void> {
-  await fetch(`${API_URL}/feedback`, {
+  const response = await fetch(`${API_URL}/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+  if (!response.ok) {
+    throw new Error("Feedback belum dapat disimpan.");
+  }
 }
 
 export async function login(email: string, password: string): Promise<UserSession> {
@@ -276,6 +305,95 @@ export async function fetchAdminStats(signal?: AbortSignal): Promise<AdminStats>
     signal
   );
   return parseJsonResponse<AdminStats>(response);
+}
+
+export interface AdminSettings {
+  app_name: string;
+  app_version: string;
+  admin_email: string;
+  rate_limit_per_minute: number;
+  vector_store: string;
+  embedding_provider: string;
+  llm_provider: string;
+  session_expires_in_seconds: number;
+}
+
+export async function fetchAdminSettings(signal?: AbortSignal): Promise<AdminSettings> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/settings`,
+    { headers: adminHeaders() },
+    signal
+  );
+  return parseJsonResponse<AdminSettings>(response);
+}
+
+export interface AuditLogEntry {
+  audit_id: string;
+  actor: string;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export async function fetchAuditLogs(
+  limit = 100,
+  signal?: AbortSignal
+): Promise<AuditLogEntry[]> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/audit-logs?limit=${limit}`,
+    { headers: adminHeaders() },
+    signal
+  );
+  return parseJsonResponse<AuditLogEntry[]>(response);
+}
+
+export async function signOut(): Promise<void> {
+  const session = getStoredSession();
+  if (!session) return;
+  try {
+    await fetch(`${API_URL}/auth/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+  } catch {
+    // Local cleanup below still runs when the API is unreachable.
+  }
+  clearStoredSession();
+}
+
+export interface DocumentSearchFilters {
+  q?: string;
+  regulation_type?: string;
+  year?: number;
+  legal_status?: string;
+}
+
+export async function searchDocuments(
+  filters: DocumentSearchFilters,
+  signal?: AbortSignal
+): Promise<DocumentSummary[]> {
+  const params = new URLSearchParams();
+  if (filters.q) params.set("q", filters.q);
+  if (filters.regulation_type) params.set("regulation_type", filters.regulation_type);
+  if (filters.year) params.set("year", String(filters.year));
+  if (filters.legal_status) params.set("legal_status", filters.legal_status);
+  const query = params.toString();
+  const response = await fetch(`${API_URL}/documents${query ? `?${query}` : ""}`, { signal });
+  const documents = await parseJsonResponse<DocumentSummary[]>(response);
+  return documents.map((document) => ({
+    ...document,
+    pdf_url: new URL(document.pdf_url, `${API_URL}/`).toString(),
+  }));
+}
+
+export async function fetchDocumentDetail(documentId: string): Promise<Record<string, unknown>> {
+  const response = await fetch(
+    `${API_URL}/documents/${encodeURIComponent(documentId)}`,
+    { cache: "no-store" }
+  );
+  return parseJsonResponse<Record<string, unknown>>(response);
 }
 
 export async function fetchAdminOverview(signal?: AbortSignal): Promise<AdminOverview> {
@@ -358,22 +476,95 @@ export async function fetchAdminFeedback(signal?: AbortSignal): Promise<Feedback
 
 export async function runRetrievalPlayground(
   question: string,
-  topK: number
+  topK: number,
+  regulationType?: string,
+  year?: number,
+  legalStatus?: string
 ): Promise<RetrievalPlaygroundResponse> {
   const response = await fetchWithAuthRetry(`${API_URL}/admin/retrieval/search`, {
     method: "POST",
     headers: adminHeaders(),
-    body: JSON.stringify({ question, top_k: topK }),
+    body: JSON.stringify({
+      question,
+      top_k: topK,
+      regulation_type: regulationType ?? null,
+      year: year ?? null,
+      legal_status: legalStatus ?? null,
+    }),
   });
   return parseJsonResponse<RetrievalPlaygroundResponse>(response);
 }
 
-export async function uploadAdminDocument(file: File, topic: string): Promise<void> {
+export interface AdminUploadResult {
+  upload_id: string;
+  document_id: string;
+  file_name: string;
+  topic: string;
+  status: string;
+  sha256: string;
+  storage_url: string;
+}
+
+export async function uploadAdminDocument(
+  file: File,
+  topic: string
+): Promise<AdminUploadResult> {
   const query = new URLSearchParams({ file_name: file.name, topic });
   const response = await fetchWithAuthRetry(`${API_URL}/admin/documents/upload?${query}`, {
     method: "POST",
     headers: adminHeaders(false),
     body: file,
   });
-  await parseJsonResponse(response);
+  return parseJsonResponse<AdminUploadResult>(response);
+}
+
+export async function fetchEvaluationDatasets(signal?: AbortSignal): Promise<EvaluationDataset[]> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/evaluation/datasets`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
+  return parseJsonResponse<EvaluationDataset[]>(response);
+}
+
+export async function seedEvaluationDataset(): Promise<EvaluationDataset> {
+  const response = await fetchWithAuthRetry(`${API_URL}/evaluation/datasets/seed`, {
+    method: "POST",
+    headers: adminHeaders(),
+  });
+  return parseJsonResponse<EvaluationDataset>(response);
+}
+
+export async function createEvaluationRun(payload: {
+  dataset_id: string;
+  experiment_modes: string[];
+  top_k: number;
+}): Promise<EvaluationRunDetail> {
+  const response = await fetchWithAuthRetry(`${API_URL}/evaluation/runs`, {
+    method: "POST",
+    headers: adminHeaders(),
+    body: JSON.stringify(payload),
+  });
+  return parseJsonResponse<EvaluationRunDetail>(response);
+}
+
+export async function fetchEvaluationRuns(signal?: AbortSignal): Promise<EvaluationRunSummary[]> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/evaluation/runs`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
+  return parseJsonResponse<EvaluationRunSummary[]>(response);
+}
+
+export async function fetchEvaluationRun(
+  runId: string,
+  signal?: AbortSignal
+): Promise<EvaluationRunDetail> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/evaluation/runs/${runId}`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
+  return parseJsonResponse<EvaluationRunDetail>(response);
 }

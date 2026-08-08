@@ -77,7 +77,13 @@ def make_document() -> RetrievalDocument:
     )
 
 
-def _mock_supabase_auth(monkeypatch, user_id=None, email="admin@example.com", roles=None):
+def _mock_supabase_auth(
+    monkeypatch,
+    user_id=None,
+    email="admin@example.com",
+    roles=None,
+    insert_profile: bool = True,
+):
     uid = user_id or f"test-user-{_TEST_COUNTER[0]}"
     mock_user = MagicMock()
     mock_user.id = uid
@@ -87,11 +93,17 @@ def _mock_supabase_auth(monkeypatch, user_id=None, email="admin@example.com", ro
     mock_client = MagicMock()
     mock_client.auth.sign_in_with_password.return_value = MagicMock(
         user=mock_user,
-        session=MagicMock(access_token="test-token"),
+        session=MagicMock(
+            access_token="test-token",
+            refresh_token="refresh-token",
+        ),
     )
     mock_client.auth.sign_up.return_value = MagicMock(
         user=mock_user,
-        session=MagicMock(access_token="test-token"),
+        session=MagicMock(
+            access_token="test-token",
+            refresh_token="refresh-token",
+        ),
     )
     mock_client.auth.get_user.return_value = MagicMock(user=mock_user)
     mock_client.auth.admin.sign_out.return_value = None
@@ -99,28 +111,16 @@ def _mock_supabase_auth(monkeypatch, user_id=None, email="admin@example.com", ro
     monkeypatch.setattr("app.services.supabase.get_supabase_anon", lambda: mock_client)
     monkeypatch.setattr("app.services.supabase.get_supabase", lambda: mock_client)
 
-    mock_profile = MagicMock()
-    mock_profile.user_id = uid
-    mock_profile.email = email
-    mock_profile.name = "Admin"
-    mock_profile.roles = roles or ["user"]
-
-    mock_query = MagicMock()
-    mock_query.filter.return_value.first.return_value = mock_profile
-
-    mock_session = MagicMock()
-    mock_session.__enter__.return_value = mock_session
-    mock_session.query.return_value = mock_query
-
-    monkeypatch.setattr("app.api.routes_auth.create_session", lambda: mock_session)
-
-    with create_session() as session:
-        existing = session.get(UserProfile, uid)
-        if existing is None:
-            session.add(
-                UserProfile(user_id=uid, email=email, name="Admin", roles=roles or ["user"])
-            )
-            session.commit()
+    if insert_profile:
+        with create_session() as session:
+            existing = session.get(UserProfile, uid)
+            if existing is None:
+                session.add(
+                    UserProfile(
+                        user_id=uid, email=email, name="Admin", roles=roles or ["user"]
+                    )
+                )
+                session.commit()
 
     if roles:
         monkeypatch.setattr(
@@ -182,7 +182,7 @@ def test_auth_requires_registration_for_regular_users(client: TestClient, monkey
 
 
 def test_auth_registers_and_logs_in_regular_user(client: TestClient, monkeypatch) -> None:
-    _mock_supabase_auth(monkeypatch, email="budi@example.com")
+    _mock_supabase_auth(monkeypatch, email="budi@example.com", insert_profile=False)
     registered = client.post(
         "/auth/register",
         json={
@@ -208,7 +208,10 @@ def test_auth_rejects_duplicate_registration(client: TestClient, monkeypatch) ->
         user=MagicMock(
             id="uid-1", email="budi@example.com", user_metadata={"name": "Budi Pekerja"}
         ),
-        session=MagicMock(access_token="token-1"),
+        session=MagicMock(
+            access_token="token-1",
+            refresh_token="refresh-1",
+        ),
     ), Exception("Duplicate")]
     monkeypatch.setattr("app.services.supabase.get_supabase_anon", lambda: mock_client)
     monkeypatch.setattr(
@@ -253,6 +256,37 @@ def test_chat_ask_returns_structured_answer(
     assert payload["retrieval_score"] is not None
 
 
+def test_follow_up_question_uses_conversation_memory(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes_chat.load_artifact_documents",
+        lambda _: [make_document()],
+    )
+    first = client.post(
+        "/chat/ask",
+        json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
+    )
+    assert first.status_code == 200
+    assert first.json()["answer"]["debug"]["memory"]["used"] is False
+    conversation_id = first.json()["conversation_id"]
+
+    second = client.post(
+        "/chat/ask",
+        json={
+            "conversation_id": conversation_id,
+            "question": "berapa besar kompensasinya?",
+            "top_k": 1,
+        },
+    )
+    assert second.status_code == 200
+    memory = second.json()["answer"]["debug"]["memory"]
+    assert memory["used"] is True
+    assert memory["source_turns"] == 1
+    assert "Pertanyaan lanjutan" in memory["retrieval_query"]
+
+
 def test_guest_conversations_are_isolated_by_guest_id(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -292,7 +326,7 @@ def test_authenticated_user_conversation_is_saved_to_history(
         "app.api.routes_chat.load_artifact_documents",
         lambda _: [make_document()],
     )
-    _mock_supabase_auth(monkeypatch, email="pekerja@example.com")
+    _mock_supabase_auth(monkeypatch, email="pekerja@example.com", insert_profile=False)
 
     login = client.post(
         "/auth/register",
@@ -549,6 +583,56 @@ def test_feedback_listing_is_admin_only(
     assert authorized.json()[0]["rating"] == "helpful"
 
 
+def test_feedback_resolves_real_answer_id_and_stores_details(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes_chat.load_artifact_documents",
+        lambda _: [make_document()],
+    )
+    created = client.post(
+        "/chat/ask",
+        json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
+    )
+    conversation_id = created.json()["conversation_id"]
+
+    sent = client.post(
+        "/feedback",
+        json={
+            "question": "Apakah pekerja PKWT memperoleh kompensasi?",
+            "conversation_id": conversation_id,
+            "rating": "not_helpful",
+            "issue_category": "citation_incorrect",
+            "comment": "Pasal yang ditampilkan tidak membahas kasus saya.",
+        },
+    )
+    assert sent.status_code == 200
+    body = sent.json()
+    assert body["conversation_id"] == conversation_id
+    assert body["answer_id"].startswith("msg_")
+
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    listed = client.get("/feedback", headers=admin_headers(client))
+    assert listed.status_code == 200
+    latest = listed.json()[0]
+    assert latest["issue_category"] == "citation_incorrect"
+    assert latest["conversation_id"] == conversation_id
+    assert latest["answer_id"].startswith("msg_")
+
+
+def test_feedback_rejects_unknown_issue_category(client: TestClient) -> None:
+    response = client.post(
+        "/feedback",
+        json={
+            "question": "Apakah jawaban ini benar?",
+            "rating": "not_helpful",
+            "issue_category": "citation",
+        },
+    )
+    assert response.status_code == 422
+
+
 def test_evaluation_dataset_and_experiment_run(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -592,3 +676,235 @@ def test_evaluation_dataset_and_experiment_run(
     assert run.status_code == 200
     assert set(run.json()["metrics"]) == {"baseline", "dense", "hybrid", "rerank"}
     assert run.json()["metrics"]["rerank"]["recall_at_5"] == 1.0
+
+
+def test_upload_document_registers_upload_manifest(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tempfile
+    from pathlib import Path
+
+    from app.services.ingestion.uploads import load_uploads_manifest
+
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    headers = admin_headers(client)
+
+    storage_root = Path(tempfile.mkdtemp()) / "storage" / "ingestion"
+    monkeypatch.setattr("app.api.routes_admin.storage_root", lambda: storage_root)
+    monkeypatch.setattr(
+        "app.api.routes_admin.upload_bytes",
+        lambda content, storage_path: f"https://storage.example/{storage_path}",
+    )
+
+    response = client.post(
+        "/admin/documents/upload?file_name=PP Nomor 51 Tahun 2023.pdf&topic=pengupahan",
+        headers=headers,
+        content=b"%PDF-1.7\n%%EOF\n",
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["document_id"] == "PP-NOMOR-51-TAHUN-2023"
+    assert payload["manifest_ready"] is True
+    assert payload["sha256"] == "1e7313ace78f0fb481a486939b4885902663102818090805515553d84e0bbfd3"
+
+    documents = load_uploads_manifest(storage_root)
+    assert [document.document_id for document in documents] == ["PP-NOMOR-51-TAHUN-2023"]
+    assert (storage_root / "uploads" / "PP-NOMOR-51-TAHUN-2023" / "source.pdf").exists()
+    assert documents[0].source_url.startswith("https://storage.example/")
+    assert documents[0].topics == ["pengupahan", "thr"]
+
+
+def test_admin_documents_lists_uploaded_documents(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tempfile
+    from pathlib import Path
+
+    from app.services.ingestion.uploads import register_upload
+
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    headers = admin_headers(client)
+
+    storage_root = Path(tempfile.mkdtemp()) / "storage" / "ingestion"
+    register_upload(
+        storage_root,
+        document_id="PP-51-2023",
+        file_name="PP Nomor 51 Tahun 2023.pdf",
+        topic="pengupahan",
+        content=b"%PDF-1.7\n%%EOF\n",
+        source_url="https://storage.example/PP-51-2023.pdf",
+    )
+    monkeypatch.setattr("app.api.routes_admin.storage_root", lambda: storage_root)
+
+    response = client.get("/admin/documents", headers=headers)
+
+    assert response.status_code == 200
+    document_ids = [item["document_id"] for item in response.json()["documents"]]
+    assert "PP-51-2023" in document_ids
+    uploaded = next(
+        item for item in response.json()["documents"] if item["document_id"] == "PP-51-2023"
+    )
+    assert uploaded["source_name"] == "Upload Admin"
+    assert uploaded["ingestion_status"] == "needs_review"
+
+
+def test_create_ingestion_job_for_uploaded_document_passes_extra_manifest(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tempfile
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from app.services.ingestion.uploads import register_upload
+
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    headers = admin_headers(client)
+
+    storage_root = Path(tempfile.mkdtemp()) / "storage" / "ingestion"
+    register_upload(
+        storage_root,
+        document_id="PP-2023",
+        file_name="PP Nomor 51 Tahun 2023.pdf",
+        topic="pengupahan",
+        content=b"%PDF-1.7\n%%EOF\n",
+        source_url="https://storage.example/PP-2023.pdf",
+    )
+    monkeypatch.setattr("app.api.routes_ingestion.storage_root", lambda: storage_root)
+
+    calls = {}
+
+    def fake_ingest_document(**kwargs) -> SimpleNamespace:
+        calls["extra_manifest_path"] = kwargs["extra_manifest_path"]
+        return SimpleNamespace(status="completed", warnings=[], ocr_required_pages=[])
+
+    monkeypatch.setattr(
+        "app.api.routes_ingestion.ingest_document",
+        fake_ingest_document,
+    )
+
+    response = client.post(
+        "/ingestion/jobs",
+        headers=headers,
+        json={"document_id": "PP-2023", "persist_db": False},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert calls["extra_manifest_path"] == storage_root / "uploads" / "manifest.json"
+
+
+def test_patch_document_persists_to_dataset_manifest(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import json
+
+    from app.api.utils import dataset_metadata_path
+
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    headers = admin_headers(client)
+
+    response = client.patch(
+        "/admin/documents/PP-35-2021",
+        headers=headers,
+        json={"legal_status": "active", "verification_status": "verified", "topics": ["pkwt"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["applied_changes"]["legal_status"] == "active"
+
+    data = json.loads(dataset_metadata_path().read_text(encoding="utf-8"))
+    target = next(item for item in data["documents"] if item["document_id"] == "PP-35-2021")
+    assert target["legal_status"] == "active"
+    assert target["verification_status"] == "verified"
+    assert target["topics"] == ["pkwt"]
+
+
+def test_patch_document_rejects_unknown_document(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    headers = admin_headers(client)
+
+    response = client.patch(
+        "/admin/documents/UNKNOWN-9999",
+        headers=headers,
+        json={"legal_status": "active"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_public_document_search_filters_by_type_year_and_status(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+
+    all_docs = client.get("/documents")
+    assert all_docs.status_code == 200
+
+    pps = client.get("/documents?regulation_type=PP")
+    assert pps.status_code == 200
+    assert all(item["regulation_type"] == "PP" for item in pps.json())
+
+    year = client.get("/documents?year=2021")
+    assert year.status_code == 200
+    assert all(item["year"] == 2021 for item in year.json())
+
+    status = client.get("/documents?legal_status=needs_verification")
+    assert status.status_code == 200
+    assert all(item["legal_status"] == "needs_verification" for item in status.json())
+
+    query = client.get("/documents?q=PKWT")
+    assert query.status_code == 200
+    matched = [item["document_id"] for item in query.json()]
+    assert "PP-35-2021" in matched
+
+
+def test_admin_audit_logs_record_admin_actions(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    headers = admin_headers(client)
+
+    client.patch(
+        "/admin/documents/PP-35-2021",
+        headers=headers,
+        json={"legal_status": "active"},
+    )
+    client.post(
+        "/admin/documents/PP-35-2021/publication",
+        headers=headers,
+        json={"action": "publish"},
+    )
+
+    logs = client.get("/admin/audit-logs", headers=headers)
+
+    assert logs.status_code == 200
+    actions = [item["action"] for item in logs.json()]
+    assert "document.metadata_updated" in actions
+    assert "document.published" in actions
+    assert any(item["target_id"] == "PP-35-2021" for item in logs.json())
+
+
+def test_admin_settings_returns_sanitized_config(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    headers = admin_headers(client)
+
+    response = client.get("/admin/settings", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["app_name"]
+    assert payload["admin_email"]
+    assert payload["rate_limit_per_minute"] > 0

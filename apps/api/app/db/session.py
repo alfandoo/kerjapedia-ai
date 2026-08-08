@@ -16,3 +16,11 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 def create_session() -> Session:
     return SessionLocal()
+
+
+def ensure_schema() -> None:
+    from app.db.base import Base
+    from app.models import business as _business_models  # noqa: F401
+    from app.models import ingestion as _ingestion_models  # noqa: F401
+
+    Base.metadata.create_all(bind=engine)

@@ -12,6 +12,9 @@ export function RegulationSearch() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [query, setQuery] = useState("");
   const [topic, setTopic] = useState("all");
+  const [regulationType, setRegulationType] = useState("all");
+  const [year, setYear] = useState("");
+  const [status, setStatus] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,21 +41,50 @@ export function RegulationSearch() {
     [documents]
   );
 
+  const regulationTypes = useMemo(
+    () => ["all", ...Array.from(new Set(documents.map((document) => document.regulation_type))).sort()],
+    [documents]
+  );
+
+  const years = useMemo(
+    () =>
+      ["all", ...Array.from(new Set(documents.map((document) => document.year))).sort().reverse()],
+    [documents]
+  );
+
   const filtered = useMemo(() => {
     const normalized = query.toLowerCase().trim();
     return documents.filter((document) => {
       const matchesTopic = topic === "all" || document.topics.includes(topic);
+      const matchesType =
+        regulationType === "all" || document.regulation_type === regulationType;
+      const matchesYear = year === "" || String(document.year) === year;
+      const matchesStatus = status === "all" || document.legal_status === status;
       const searchable =
         `${document.title} ${document.short_title} ${document.topics.join(" ")}`.toLowerCase();
-      return matchesTopic && (!normalized || searchable.includes(normalized));
+      return (
+        matchesTopic &&
+        matchesType &&
+        matchesYear &&
+        matchesStatus &&
+        (!normalized || searchable.includes(normalized))
+      );
     });
-  }, [documents, query, topic]);
+  }, [documents, query, topic, regulationType, year, status]);
 
-  const hasFilters = query.trim().length > 0 || topic !== "all";
+  const hasFilters =
+    query.trim().length > 0 ||
+    topic !== "all" ||
+    regulationType !== "all" ||
+    year !== "" ||
+    status !== "all";
 
   function resetSearch() {
     setQuery("");
     setTopic("all");
+    setRegulationType("all");
+    setYear("");
+    setStatus("all");
   }
 
   function formatStatus(status: string) {
@@ -90,6 +122,46 @@ export function RegulationSearch() {
                 {item === "all" ? "Semua topik" : item.replaceAll("_", " ")}
               </option>
             ))}
+          </select>
+        </label>
+        <label className="select-field" htmlFor="type-filter">
+          Jenis
+          <select
+            id="type-filter"
+            value={regulationType}
+            onChange={(event) => setRegulationType(event.target.value)}
+          >
+            {regulationTypes.map((item) => (
+              <option key={item} value={item}>
+                {item === "all" ? "Semua jenis" : item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="select-field" htmlFor="year-filter">
+          Tahun
+          <select
+            id="year-filter"
+            value={year}
+            onChange={(event) => setYear(event.target.value)}
+          >
+            {years.map((item) => (
+              <option key={item} value={item}>
+                {item === "all" ? "Semua tahun" : item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="select-field" htmlFor="status-filter">
+          Status
+          <select
+            id="status-filter"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
+            <option value="all">Semua status</option>
+            <option value="active">Berlaku</option>
+            <option value="needs_verification">Perlu verifikasi</option>
           </select>
         </label>
       </div>

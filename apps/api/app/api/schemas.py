@@ -120,6 +120,9 @@ class PublicationRequest(ApiModel):
 class RetrievalPlaygroundRequest(ApiModel):
     question: str = Field(min_length=4, max_length=2000)
     top_k: int = Field(default=5, ge=1, le=10)
+    regulation_type: str | None = Field(default=None, max_length=40)
+    year: int | None = Field(default=None, ge=1945, le=2100)
+    legal_status: str | None = Field(default=None, max_length=40)
 
 
 class IngestionJobRequest(ApiModel):
@@ -130,8 +133,14 @@ class IngestionJobRequest(ApiModel):
 class FeedbackRequest(ApiModel):
     question: str = Field(min_length=4, max_length=2000)
     answer_id: str | None = Field(default=None, max_length=120)
+    conversation_id: str | None = Field(default=None, max_length=80)
     rating: Literal["helpful", "not_helpful"]
-    issue_category: str | None = Field(default=None, max_length=80)
+    issue_category: Literal[
+        "citation_incorrect",
+        "answer_incomplete",
+        "outdated_regulation",
+        "other",
+    ] | None = Field(default=None, max_length=80)
     comment: str | None = Field(default=None, max_length=1000)
 
 
