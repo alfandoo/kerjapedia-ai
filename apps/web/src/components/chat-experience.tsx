@@ -185,51 +185,75 @@ export function ChatExperience() {
       onConversationSelect={(id) => void handleConversationSelect(id)}
       onNewConversation={handleNewConversation}
     >
-      <section className="chat-workspace">
-        <div className="chat-heading">
-          <span className="heading-mark">
+      <section className="mx-auto flex w-full max-w-[860px] flex-1 flex-col gap-3 px-6 pt-16 pb-10 max-[760px]:px-4 max-[760px]:pt-10">
+        <div className="flex items-start gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-javanese/10 text-javanese">
             <ChatIcon className="icon" />
           </span>
           <div>
-            <span className="eyebrow">Asisten regulasi ketenagakerjaan</span>
-            <h1>Tanyakan hak kerja Anda dengan sumber yang jelas</h1>
-            <p>Jawaban dirangkum dari dokumen resmi dan selalu dapat Anda periksa kembali.</p>
+            <span className="text-[10px] font-bold tracking-[0.18em] text-forest uppercase">
+              Asisten regulasi ketenagakerjaan
+            </span>
+            <h1 className="mt-1 font-display text-[26px] leading-tight font-semibold text-tinta">
+              Tanyakan hak kerja Anda dengan sumber yang jelas
+            </h1>
+            <p className="mt-1.5 text-sm leading-[1.6] text-muted-text">
+              Jawaban dirangkum dari dokumen resmi dan selalu dapat Anda periksa kembali.
+            </p>
           </div>
         </div>
 
         {messages.length === 0 ? (
-          <div className="empty-state">
-            <div className="trust-banner">
-              <strong>Jawaban berbasis dokumen, bukan tebakan.</strong>
-              <span>KerjaPedia akan menolak jika sumber yang tersedia tidak cukup.</span>
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <div className="inline-flex items-center gap-2.5 rounded-full border border-[#dce4df] bg-[#f6faf9] px-4 py-2.5 text-xs text-[#26312b]">
+              <strong className="font-semibold text-javanese">
+                Jawaban berbasis dokumen, bukan tebakan.
+              </strong>
+              <span className="text-muted-text">
+                KerjaPedia akan menolak jika sumber yang tersedia tidak cukup.
+              </span>
             </div>
-            <p>Mulai dengan salah satu pertanyaan berikut:</p>
-            <div className="suggestion-list">
+            <p className="text-sm text-muted-text">Mulai dengan salah satu pertanyaan berikut:</p>
+            <div className="grid w-full max-w-[520px] gap-2.5">
               {suggestions.map((item) => (
-                <button key={item} type="button" onClick={() => void handleSubmit(item)}>
-                  <ChatIcon className="icon" />
+                <button
+                  key={item}
+                  type="button"
+                  className="flex min-h-[46px] cursor-pointer items-center gap-2.5 rounded-lg border border-[#dce4df] bg-white px-3.5 text-left text-[13px] text-[#26312b] transition hover:border-[#9adbd5] hover:bg-[#f6faf9] hover:text-javanese"
+                  onClick={() => void handleSubmit(item)}
+                >
+                  <ChatIcon className="icon shrink-0 text-javanese" />
                   <span>{item}</span>
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          <div className="message-list" aria-live="polite" aria-label="Percakapan">
+          <div className="flex flex-col gap-5" aria-live="polite" aria-label="Percakapan">
             {messages.map((message) =>
               message.role === "user" ? (
-                <div className="message-row user" key={message.id}>
-                  <p>{message.content}</p>
+                <div className="flex justify-end" key={message.id}>
+                  <p className="max-w-[min(78%,560px)] rounded-[18px_18px_4px_18px] bg-[#eef4f0] px-4 py-[11px] text-[13px] leading-[1.55] text-[#29332d]">
+                    {message.content}
+                  </p>
                 </div>
               ) : (
-                <article className="answer-card" key={message.id}>
-                  <div className="answer-kicker">
-                    <span className="answer-mark">KP</span>
-                    <span>Jawaban KerjaPedia</span>
+                <article
+                  className="rounded-xl border border-[#f1e3c0] border-l-[3px] border-l-emas bg-white p-5"
+                  key={message.id}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="grid size-7 place-items-center rounded-full bg-javanese text-[10px] font-bold text-white">
+                      KP
+                    </span>
+                    <span className="text-xs font-semibold text-tinta">Jawaban KerjaPedia</span>
                   </div>
-                  <p className="answer-text">{message.content}</p>
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-[1.8] text-tinta">
+                    {message.content}
+                  </p>
                   {message.answer?.citations.length ? (
                     <button
-                      className="sources-trigger"
+                      className="mt-3 inline-flex min-h-[34px] cursor-pointer items-center gap-2 text-xs font-semibold text-javanese transition hover:text-forest"
                       type="button"
                       onClick={() => showSources(message.answer as AnswerPayload)}
                     >
@@ -238,25 +262,29 @@ export function ChatExperience() {
                     </button>
                   ) : null}
                   {message.answer?.refusal_reason ? (
-                    <div className="state-strip muted">
-                      <AlertIcon className="icon" />
+                    <div className="mt-3 flex items-start gap-2 rounded-lg border-l-[3px] border-[#bd8a2e] bg-[#fffaf0] p-3 text-xs leading-[1.55] text-[#88540d]">
+                      <AlertIcon className="icon shrink-0" />
                       <span>
                         Dasar dokumen belum cukup untuk menjawab pertanyaan ini dengan aman.
                       </span>
                     </div>
                   ) : null}
                   {message.answer?.clarification_question ? (
-                    <div className="state-strip muted">
-                      <AlertIcon className="icon" />
+                    <div className="mt-3 flex items-start gap-2 rounded-lg border-l-[3px] border-[#bd8a2e] bg-[#fffaf0] p-3 text-xs leading-[1.55] text-[#88540d]">
+                      <AlertIcon className="icon shrink-0" />
                       <span>{message.answer.clarification_question}</span>
                     </div>
                   ) : null}
-                  <div className="answer-footer">
-                    <span>Apakah jawaban ini membantu?</span>
-                    <div className="answer-actions">
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#edf1ee] pt-2.5">
+                    <span className="text-[11px] text-muted-text">Apakah jawaban ini membantu?</span>
+                    <div className="flex gap-1">
                       <button
                         type="button"
-                        className={feedback[message.id] === "helpful" ? "active" : ""}
+                        className={`grid size-8 place-items-center rounded-lg border transition ${
+                          feedback[message.id] === "helpful"
+                            ? "border-[#afc9bb] bg-[#f5f8f6] text-javanese"
+                            : "border-transparent text-[#68736c] hover:bg-[#eef2ef] hover:text-[#26312b]"
+                        }`}
                         aria-label="Tandai jawaban membantu"
                         aria-pressed={feedback[message.id] === "helpful"}
                         onClick={() => void handleFeedback(message, "helpful")}
@@ -265,7 +293,11 @@ export function ChatExperience() {
                       </button>
                       <button
                         type="button"
-                        className={feedback[message.id] === "not_helpful" ? "active" : ""}
+                        className={`grid size-8 place-items-center rounded-lg border transition ${
+                          feedback[message.id] === "not_helpful"
+                            ? "border-[#afc9bb] bg-[#f5f8f6] text-javanese"
+                            : "border-transparent text-[#68736c] hover:bg-[#eef2ef] hover:text-[#26312b]"
+                        }`}
                         aria-label="Tandai jawaban tidak membantu"
                         aria-pressed={feedback[message.id] === "not_helpful"}
                         onClick={() => void handleFeedback(message, "not_helpful")}
@@ -281,30 +313,46 @@ export function ChatExperience() {
         )}
 
         {isLoading ? (
-          <div className="answer-skeleton" role="status" aria-live="polite">
-            <span className="spinner" />
-            <div>
-              <strong>Menelusuri regulasi yang relevan…</strong>
-              <span>Memeriksa pasal, status, dan sumber pendukung.</span>
+          <div
+            className="flex items-center gap-3 rounded-xl border border-[#e8eee8] bg-[#fafbfa] p-4"
+            role="status"
+            aria-live="polite"
+          >
+            <span
+              className="size-5 shrink-0 rounded-full border-2 border-[#c9d3cb] border-t-javanese [animation:spin_0.9s_linear_infinite]"
+              aria-hidden="true"
+            />
+            <div className="flex flex-col gap-0.5">
+              <strong className="text-xs font-semibold text-[#26312b]">
+                Menelusuri regulasi yang relevan…
+              </strong>
+              <span className="text-[11px] text-muted-text">
+                Memeriksa pasal, status, dan sumber pendukung.
+              </span>
             </div>
           </div>
         ) : null}
         {error ? (
-          <div className="state-strip error" role="alert">
-            <AlertIcon className="icon" />
+          <div
+            className="flex items-start gap-2 rounded-lg border-l-[3px] border-[#c0563f] bg-[#fdf3f1] p-3 text-xs leading-[1.55] text-[#8c3a27]"
+            role="alert"
+          >
+            <AlertIcon className="icon shrink-0" />
             <span>{error}</span>
           </div>
         ) : null}
         <div ref={conversationEndRef} />
 
         <form
-          className="question-box"
+          className="relative rounded-2xl border border-[#dce4df] bg-white p-4 shadow-sm"
           onSubmit={(event) => {
             event.preventDefault();
             void handleSubmit();
           }}
         >
-          <label htmlFor="question-input">Ketik pertanyaan Anda</label>
+          <label htmlFor="question-input" className="sr-only">
+            Ketik pertanyaan Anda
+          </label>
           <textarea
             ref={inputRef}
             id="question-input"
@@ -320,23 +368,34 @@ export function ChatExperience() {
             maxLength={2000}
             rows={2}
             disabled={isLoading}
+            className="w-full resize-none rounded-xl bg-transparent text-sm leading-[1.65] text-tinta outline-none placeholder:text-[#8a928d] disabled:cursor-not-allowed"
           />
-          <span>Ctrl + Enter untuk kirim · {question.length}/2000</span>
-          <div className="composer-actions">
+          <span className="pointer-events-none text-[10px] font-medium tracking-wide text-[#8a928d]">
+            Ctrl + Enter untuk kirim · {question.length}/2000
+          </span>
+          <div className="mt-3 flex justify-end gap-2">
             {isLoading ? (
-              <button className="stop-button" type="button" onClick={stopRequest}>
+              <button
+                className="grid h-[38px] cursor-pointer items-center gap-1.5 rounded-xl border border-[#dce4df] bg-white px-3.5 text-xs font-semibold text-[#68736c] transition hover:bg-[#f2f5f2] hover:text-[#26312b]"
+                type="button"
+                onClick={stopRequest}
+              >
                 <StopIcon className="icon" />
                 <span>Batalkan</span>
               </button>
             ) : (
-              <button className="send-button" type="submit" disabled={!question.trim()}>
+              <button
+                className="grid h-[38px] cursor-pointer items-center gap-1.5 rounded-xl bg-javanese px-3.5 text-xs font-semibold text-white transition hover:bg-forest disabled:cursor-not-allowed disabled:bg-[#c9d3cb]"
+                type="submit"
+                disabled={!question.trim()}
+              >
                 <SendIcon className="icon" />
                 <span>Kirim pertanyaan</span>
               </button>
             )}
           </div>
         </form>
-        <p className="chat-disclaimer">
+        <p className="mt-1.5 text-center text-[11px] leading-[1.6] text-muted-text">
           Informasi bersifat edukatif. Selalu periksa sumber resmi sebelum mengambil keputusan.
         </p>
       </section>

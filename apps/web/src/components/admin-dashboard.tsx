@@ -72,11 +72,11 @@ const ingestionLabels: Record<AdminDocument["ingestion_status"], string> = {
 };
 
 const ingestionBadgeClasses: Record<AdminDocument["ingestion_status"], string> = {
-  completed: "bg-teal-soft text-teal",
-  needs_review: "bg-amber-soft text-amber",
-  failed: "bg-red-soft text-red",
-  running: "bg-muted text-muted-foreground",
-  queued: "bg-muted text-muted-foreground",
+  completed: "bg-[#e7f3ec] text-forest",
+  needs_review: "bg-[#faf3e0] text-[#b8860b]",
+  failed: "bg-[#fbeaea] text-[#a94442]",
+  running: "bg-[#f1f0ec] text-slate-600",
+  queued: "bg-[#f1f0ec] text-slate-600",
 };
 
 function formatDate(value: string) {
@@ -238,11 +238,11 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
   return (
     <>
       <SheetHeader className="border-b pb-4">
-        <SheetDescription className="text-xs font-medium tracking-[0.16em] text-teal uppercase">
+        <SheetDescription className="text-xs font-medium tracking-[0.16em] text-forest uppercase">
           Dokumen terpilih
         </SheetDescription>
         <SheetTitle className="text-lg">{document.short_title}</SheetTitle>
-        <p className="font-mono text-xs text-muted-foreground">{document.document_id}</p>
+        <p className="font-mono text-xs text-muted-text">{document.document_id}</p>
       </SheetHeader>
 
       <div className="flex-1 overflow-y-auto px-4">
@@ -299,7 +299,7 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
                 rows={3}
               />
             </div>
-            <Button className="w-full bg-teal text-white hover:bg-teal-strong" onClick={() => void saveMetadata()}>
+            <Button className="w-full bg-javanese text-white hover:bg-forest" onClick={() => void saveMetadata()}>
               Simpan perubahan
             </Button>
             {!isVerified ? (
@@ -309,14 +309,14 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
                   className="w-full"
                   onClick={() => void markVerified()}
                 >
-                  <BadgeCheck className="text-teal" /> Tandai terverifikasi
+                  <BadgeCheck className="text-forest" /> Tandai terverifikasi
                 </Button>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-text">
                   Tetapkan sekaligus sebagai Berlaku + Terverifikasi.
                 </p>
               </div>
             ) : (
-              <p className="flex items-center gap-1.5 text-xs text-teal">
+              <p className="flex items-center gap-1.5 text-xs text-forest">
                 <BadgeCheck className="size-3.5" /> Dokumen sudah terverifikasi
               </p>
             )}
@@ -328,13 +328,13 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
                 {document.relationships.map((relationship) => (
                   <li
                     key={`${relationship.relationship_type}-${relationship.to_document_id}`}
-                    className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-[#e8e6e1] px-3 py-2.5"
                   >
                     <div className="min-w-0">
                       <Badge variant="secondary" className="mb-1">
                         {relationship.relationship_type.replaceAll("_", " ")}
                       </Badge>
-                      <p className="truncate font-mono text-xs text-muted-foreground">
+                      <p className="truncate font-mono text-xs text-muted-text">
                         {relationship.to_document_id}
                       </p>
                     </div>
@@ -345,13 +345,13 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
                       aria-label={`Hapus relasi ${relationship.to_document_id}`}
                       onClick={() => void removeRelationship(relationship)}
                     >
-                      <Trash2 className="text-red" />
+                      <Trash2 className="text-[#a94442]" />
                     </Button>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="rounded-lg bg-muted/50 px-3 py-4 text-sm text-muted-foreground">
+              <p className="rounded-lg bg-[#f1f0ec]/50 px-3 py-4 text-sm text-muted-text">
                 Belum ada relasi hukum untuk dokumen ini.
               </p>
             )}
@@ -382,19 +382,19 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
               {document.versions.map((version) => (
                 <li
                   key={`${version.version}-${version.created_at}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-[#e8e6e1] px-3 py-2.5"
                 >
                   <span className="font-mono text-sm font-semibold">v{version.version}</span>
                   <span className="flex-1">
                     <strong className="block text-sm">
                       {version.status === "published" ? "Terbit" : "Draft"}
                     </strong>
-                    <small className="text-xs text-muted-foreground">
+                    <small className="text-xs text-muted-text">
                       {formatDate(version.created_at)} oleh {version.created_by}
                     </small>
                   </span>
                   {version.version === document.version ? (
-                    <Badge className="bg-teal-soft text-teal">Aktif</Badge>
+                    <Badge className="bg-[#e7f3ec] text-forest">Aktif</Badge>
                   ) : null}
                 </li>
               ))}
@@ -405,19 +405,19 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
         <div
           className={cn(
             "mt-4 flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm",
-            document.last_error ? "border-amber/30 bg-amber-soft/60" : "border-teal/30 bg-teal-soft/60"
+            document.last_error ? "border-[#b8860b]/30 bg-[#faf3e0]/60" : "border-forest/30 bg-[#e7f3ec]/60"
           )}
         >
           {document.last_error ? (
-            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber" />
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[#b8860b]" />
           ) : (
-            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-teal" />
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" />
           )}
           <span>
             <strong className="block">
               {document.last_error ? "Log parsing perlu ditinjau" : "Parsing tanpa error"}
             </strong>
-            <small className="text-xs text-muted-foreground">
+            <small className="text-xs text-muted-text">
               {document.last_error ?? `${document.chunk_count} chunk siap digunakan.`}
             </small>
           </span>
@@ -430,7 +430,7 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
             <RefreshCw /> Re-ingest
           </Button>
           <Button
-            className="bg-teal text-white hover:bg-teal-strong"
+            className="bg-javanese text-white hover:bg-forest"
             onClick={() => void changePublication()}
           >
             {document.publication_status === "published" ? "Batalkan terbit" : "Terbitkan"}
@@ -497,10 +497,10 @@ export function AdminDashboard() {
   }
 
   const summaryCells = [
-    { label: "Dokumen", value: summary.documents, note: "Total regulasi", tone: "text-teal" },
-    { label: "Terbit", value: summary.published, note: "Sudah dipublikasikan", tone: "text-teal" },
-    { label: "Review", value: summary.needsReview, note: "Perlu ditinjau", tone: "text-amber" },
-    { label: "Gagal", value: summary.failed, note: "Ingestion error", tone: "text-red" },
+    { label: "Dokumen", value: summary.documents, note: "Total regulasi", tone: "text-forest" },
+    { label: "Terbit", value: summary.published, note: "Sudah dipublikasikan", tone: "text-forest" },
+    { label: "Review", value: summary.needsReview, note: "Perlu ditinjau", tone: "text-[#b8860b]" },
+    { label: "Gagal", value: summary.failed, note: "Ingestion error", tone: "text-[#a94442]" },
   ];
 
   return (
@@ -509,13 +509,13 @@ export function AdminDashboard() {
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
-          <p className="text-xs font-medium tracking-[0.18em] text-teal uppercase">
+          <p className="text-xs font-medium tracking-[0.18em] text-forest uppercase">
             Regulasi ketenagakerjaan
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
-          <p className="text-sm text-muted-foreground">{loadStatus}</p>
+          <p className="text-sm text-muted-text">{loadStatus}</p>
         </div>
-        <Button asChild className="bg-teal text-white hover:bg-teal-strong">
+        <Button asChild className="bg-javanese text-white hover:bg-forest">
           <Link href="/admin/upload">
             <Upload /> Upload dokumen
           </Link>
@@ -530,7 +530,7 @@ export function AdminDashboard() {
                 {cell.value}
               </p>
               <p className="text-sm font-medium">{cell.label}</p>
-              <p className="text-xs text-muted-foreground">{cell.note}</p>
+              <p className="text-xs text-muted-text">{cell.note}</p>
             </div>
           ))}
         </CardContent>
@@ -546,7 +546,7 @@ export function AdminDashboard() {
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-48">
-              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-text" />
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -594,7 +594,7 @@ export function AdminDashboard() {
                 <TableRow key={document.document_id} className="cursor-pointer" onClick={() => setSelectedId(document.document_id)}>
                   <TableCell className="max-w-64">
                     <span className="block truncate text-sm font-medium">{document.short_title}</span>
-                    <span className="block text-xs text-muted-foreground">
+                    <span className="block text-xs text-muted-text">
                       {document.regulation_type} · {document.year}
                     </span>
                   </TableCell>
@@ -602,7 +602,7 @@ export function AdminDashboard() {
                     {document.topics[0] ? (
                       <Badge variant="secondary">{document.topics[0].replaceAll("_", " ")}</Badge>
                     ) : (
-                      <span className="text-xs text-muted-foreground">-</span>
+                      <span className="text-xs text-muted-text">-</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -612,15 +612,15 @@ export function AdminDashboard() {
                   </TableCell>
                   <TableCell>
                     {document.publication_status === "published" ? (
-                      <Badge className="bg-teal-soft text-teal">Terbit</Badge>
+                      <Badge className="bg-[#e7f3ec] text-forest">Terbit</Badge>
                     ) : (
                       <Badge variant="secondary">Draft</Badge>
                     )}
                   </TableCell>
                   <TableCell className="font-mono text-xs">v{document.version}</TableCell>
                   <TableCell className="text-xs">
-                    <span className="block text-muted-foreground">{formatDate(document.updated_at)}</span>
-                    <span className="block text-muted-foreground">oleh {document.updated_by}</span>
+                    <span className="block text-muted-text">{formatDate(document.updated_at)}</span>
+                    <span className="block text-muted-text">oleh {document.updated_by}</span>
                   </TableCell>
                   <TableCell>
                     <Button
@@ -639,11 +639,11 @@ export function AdminDashboard() {
                 <TableRow>
                   <TableCell colSpan={7}>
                     <div className="flex flex-col items-center gap-2 py-10 text-center">
-                      <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                      <span className="flex size-10 items-center justify-center rounded-full bg-[#f1f0ec] text-slate-600">
                         <FileText className="size-5" />
                       </span>
                       <p className="text-sm font-medium">Tidak ada dokumen yang cocok</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-muted-text">
                         Ubah kata kunci atau filter untuk melihat hasil lain.
                       </p>
                     </div>

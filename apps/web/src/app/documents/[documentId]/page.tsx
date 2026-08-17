@@ -74,68 +74,87 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
 
   return (
     <AppShell>
-      <section className="document-detail">
-        <Link href="/search" className="back-link">
+      <section className="mx-auto w-full max-w-[1080px]">
+        <Link
+          href="/search"
+          className="mb-5 inline-flex min-h-11 items-center gap-2.5 text-sm font-bold text-javanese transition hover:text-forest"
+        >
           Kembali ke pencarian
         </Link>
-        <div className="page-heading">
-          <h1>{document.title}</h1>
-          <p>
+        <div className="mb-6">
+          <h1 className="font-display text-[clamp(36px,4vw,50px)] font-medium leading-[1.12] tracking-[-0.035em] text-javanese">
+            {document.title}
+          </h1>
+          <p className="mt-1.5 text-sm leading-[1.75] text-muted-text">
             {document.regulation_type} Nomor {document.number} Tahun {document.year}
           </p>
         </div>
         {fromFallback ? (
-          <p className="search-fallback-note" role="status">
+          <p
+            className="-mt-2 mb-6 flex items-center gap-2.5 border-l-[3px] border-[#bc8121] bg-[#fffaf0] px-3.5 py-2.5 text-[11px] text-[#6e531c]"
+            role="status"
+          >
             API detail belum tersedia. Menampilkan data katalog referensi lokal sementara.
           </p>
         ) : null}
-        <div className="detail-grid">
-          <article className="detail-panel">
-            <h2>Metadata</h2>
-            <dl className="source-meta">
-              <div>
-                <dt>Status hukum</dt>
-                <dd>{formatStatus(document.legal_status)}</dd>
+        <div className="grid grid-cols-1 gap-4 min-[840px]:grid-cols-[320px_minmax(0,1fr)]">
+          <article className="border-t border-[#dce4df] py-[22px]">
+            <h2 className="mb-3 text-base font-bold text-tinta">Metadata</h2>
+            <dl className="my-4 grid gap-2.5">
+              <div className="grid grid-cols-1 gap-0.5 min-[840px]:grid-cols-[88px_minmax(0,1fr)]">
+                <dt className="text-xs font-bold text-muted-text">Status hukum</dt>
+                <dd className="text-[13px] text-tinta">{formatStatus(document.legal_status)}</dd>
               </div>
-              <div>
-                <dt>Topik</dt>
-                <dd>{document.topics.map((item) => item.replaceAll("_", " ")).join(", ")}</dd>
+              <div className="grid grid-cols-1 gap-0.5 min-[840px]:grid-cols-[88px_minmax(0,1fr)]">
+                <dt className="text-xs font-bold text-muted-text">Topik</dt>
+                <dd className="text-[13px] text-tinta">
+                  {document.topics.map((item) => item.replaceAll("_", " ")).join(", ")}
+                </dd>
               </div>
-              <div>
-                <dt>Sumber</dt>
-                <dd>
-                  <a href={document.source_url || documentPdfUrl(document.document_id)} target="_blank" rel="noreferrer">
+              <div className="grid grid-cols-1 gap-0.5 min-[840px]:grid-cols-[88px_minmax(0,1fr)]">
+                <dt className="text-xs font-bold text-muted-text">Sumber</dt>
+                <dd className="text-[13px] text-tinta">
+                  <a
+                    href={document.source_url || documentPdfUrl(document.document_id)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     {document.source_name || "Buka sumber resmi"}
-                    <ExternalIcon className="icon inline-icon" />
+                    <ExternalIcon className="icon ml-1 inline-block align-[-3px]" />
                   </a>
                 </dd>
               </div>
-              <div>
-                <dt>Berkas asli</dt>
-                <dd>
+              <div className="grid grid-cols-1 gap-0.5 min-[840px]:grid-cols-[88px_minmax(0,1fr)]">
+                <dt className="text-xs font-bold text-muted-text">Berkas asli</dt>
+                <dd className="text-[13px] text-tinta">
                   <a href={documentPdfUrl(document.document_id)} target="_blank" rel="noreferrer">
                     {document.file_name || "Buka PDF dataset"}
-                    <ExternalIcon className="icon inline-icon" />
+                    <ExternalIcon className="icon ml-1 inline-block align-[-3px]" />
                   </a>
                 </dd>
               </div>
               {document.chunk_count > 0 ? (
-                <div>
-                  <dt>Chunk terindeks</dt>
-                  <dd>{document.chunk_count} segmen siap di-retrieval</dd>
+                <div className="grid grid-cols-1 gap-0.5 min-[840px]:grid-cols-[88px_minmax(0,1fr)]">
+                  <dt className="text-xs font-bold text-muted-text">Chunk terindeks</dt>
+                  <dd className="text-[13px] text-tinta">
+                    {document.chunk_count} segmen siap di-retrieval
+                  </dd>
                 </div>
               ) : null}
             </dl>
           </article>
-          <article className="detail-panel source-viewer">
-            <h2>Source viewer</h2>
+          <article className="border-t border-[#dce4df] py-[22px]">
+            <h2 className="mb-3 text-base font-bold text-tinta">Source viewer</h2>
             {document.available_chunks?.length ? (
-              <ul className="viewer-chunk-list">
+              <ul className="m-0 grid list-none gap-2.5 p-0">
                 {document.available_chunks.map((chunk) => (
-                  <li key={chunk.chunk_id} className="viewer-page">
-                    <FileIcon className="icon" />
-                    <strong>{chunk.article}</strong>
-                    <small>
+                  <li
+                    key={chunk.chunk_id}
+                    className="rounded-md border border-[#dce4df] bg-[linear-gradient(#fff,#fbfdfd)] p-5"
+                  >
+                    <FileIcon className="icon mb-2.5 text-javanese" />
+                    <strong className="block text-[13px] text-tinta">{chunk.article}</strong>
+                    <small className="block text-xs text-muted-text">
                       {chunk.paragraph ? `${chunk.paragraph} · ` : ""}
                       Halaman {chunk.page_start}
                       {chunk.page_end !== chunk.page_start ? `-${chunk.page_end}` : ""}
@@ -144,9 +163,11 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
                 ))}
               </ul>
             ) : (
-              <div className="viewer-page">
-                <FileIcon className="icon" />
-                <p>Dokumen belum terindeks — jalankan ingestion dari panel admin.</p>
+              <div className="rounded-md border border-[#dce4df] bg-[linear-gradient(#fff,#fbfdfd)] p-7">
+                <FileIcon className="icon mb-5 size-7 text-javanese" />
+                <p className="m-0 leading-[1.8] text-tinta">
+                  Dokumen belum terindeks — jalankan ingestion dari panel admin.
+                </p>
               </div>
             )}
           </article>

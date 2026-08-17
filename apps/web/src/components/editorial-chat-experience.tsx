@@ -299,17 +299,32 @@ export function EditorialChatExperience() {
       onConversationRename={handleConversationRename}
       onConversationDelete={handleConversationDelete}
     >
-      <section className={messages.length === 0 ? "editorial-chat is-empty" : "editorial-chat"}>
-        <div className="editorial-conversation-scroll">
+      <section
+        className={`relative flex h-full min-h-0 flex-col ${
+          messages.length === 0 ? "is-empty" : ""
+        }`}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto px-[clamp(24px,7vw,100px)] pb-[122px] pt-[36px] [scroll-padding-bottom:20px] [@media(max-height:680px)]:min-[761px]:pt-5 max-[760px]:px-4 max-[760px]:pb-[112px] max-[760px]:pt-[22px]">
           {messages.length === 0 ? (
-            <div className="editorial-empty-state">
-              <h1>Apa yang ingin Anda pahami?</h1>
-              <p>Tanyakan regulasi ketenagakerjaan dan periksa dasar hukumnya.</p>
-              <div className="editorial-suggestions">
+            <div className="mx-auto mt-[clamp(32px,8vh,88px)] flex max-w-[720px] flex-col items-center text-center max-[760px]:mt-[clamp(38px,9vh,72px)]">
+              <h1 className="font-display text-[clamp(26px,3vw,34px)] font-semibold leading-[1.15] tracking-[-0.03em] text-tinta max-[760px]:text-[26px]">
+                Apa yang ingin Anda pahami?
+              </h1>
+              <p className="mb-6 mt-2 text-[13px] leading-[1.6] text-muted-text max-[760px]:mb-[18px] max-[760px]:mt-1.5">
+                Tanyakan regulasi ketenagakerjaan dan periksa dasar hukumnya.
+              </p>
+              <div className="grid w-full grid-cols-3 gap-2.5 max-[760px]:grid-cols-1 max-[760px]:gap-2">
                 {suggestions.map((item) => (
-                  <button key={item} type="button" onClick={() => void handleSubmit(item)}>
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => void handleSubmit(item)}
+                    className="flex min-h-[82px] w-full items-start justify-between gap-5 rounded-[11px] border border-[#dce4df] bg-white px-[15px] py-[14px] text-left text-[13px] leading-[1.45] text-[#303b35] transition hover:bg-[#f5f8f6] max-[760px]:min-h-[52px]"
+                  >
                     {item}
-                    <span aria-hidden="true">→</span>
+                    <span aria-hidden="true" className="text-[18px] text-forest">
+                      →
+                    </span>
                   </button>
                 ))}
               </div>
@@ -327,17 +342,26 @@ export function EditorialChatExperience() {
             />
           )}
           {isLoading && !messages.some((message) => message.streaming) ? (
-            <div className="editorial-loading" role="status" aria-live="polite">
-              <span className="spinner" />
+            <div
+              className="mx-auto mb-[18px] flex max-w-[760px] items-start gap-[11px] py-[14px] text-xs leading-[1.55] text-tinta"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="mt-0.5 size-4 shrink-0 animate-spin rounded-full border-2 border-[rgba(33,92,168,0.2)] border-t-[#215ca8]" />
               <div>
-                <strong>Menelusuri regulasi yang relevan…</strong>
-                <span>Memeriksa pasal, status, dan sumber pendukung.</span>
+                <strong className="block font-semibold">Menelusuri regulasi yang relevan…</strong>
+                <span className="mt-[3px] block text-muted-text">
+                  Memeriksa pasal, status, dan sumber pendukung.
+                </span>
               </div>
             </div>
           ) : null}
           {error ? (
-            <div className="editorial-error" role="alert">
-              <AlertIcon className="icon" />
+            <div
+              className="mx-auto mb-[18px] flex max-w-[760px] items-start gap-[11px] border-l-[3px] border-[#b14b3d] bg-[#fff7f5] p-3 text-xs leading-[1.55] text-[#753328]"
+              role="alert"
+            >
+              <AlertIcon className="icon mt-0.5 size-4 shrink-0" />
               <span>{error}</span>
             </div>
           ) : null}
@@ -352,11 +376,30 @@ export function EditorialChatExperience() {
           onCancel={stopRequest}
         />
         {messages.length === 0 ? (
-          <p className="guest-legal-note">
+          <p className="absolute inset-x-6 bottom-[max(15px,env(safe-area-inset-bottom))] z-[3] mx-auto max-w-[680px] text-center text-[10px] leading-[1.5] text-[#7c8580] max-[760px]:inset-x-[18px] max-[760px]:bottom-[max(12px,env(safe-area-inset-bottom))] max-[760px]:text-[9px]">
             KerjaPedia dapat membuat kekeliruan. Periksa selalu sumber resmi. Dengan menggunakan
-            layanan ini, Anda menyetujui <Link href="/legal/terms">Ketentuan</Link>,{" "}
-            <Link href="/legal/privacy">Privasi</Link>, dan{" "}
-            <Link href="/legal/disclaimer">Disclaimer</Link>.
+            layanan ini, Anda menyetujui{" "}
+            <Link
+              href="/legal/terms"
+              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-forest"
+            >
+              Ketentuan
+            </Link>
+            ,{" "}
+            <Link
+              href="/legal/privacy"
+              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-forest"
+            >
+              Privasi
+            </Link>
+            , dan{" "}
+            <Link
+              href="/legal/disclaimer"
+              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-forest"
+            >
+              Disclaimer
+            </Link>
+            .
           </p>
         ) : null}
       </section>

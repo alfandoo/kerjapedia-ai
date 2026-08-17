@@ -53,30 +53,38 @@ export function SourceSheet({ open, citations, question, onClose }: SourceSheetP
   }
 
   return (
-    <div className="source-sheet-layer">
+    <div className="fixed inset-0 z-[110]">
       <button
         type="button"
-        className="source-sheet-backdrop"
+        className="absolute inset-0 w-full border-0 bg-[rgba(10,28,25,0.5)]"
         aria-label="Tutup panel sumber"
         onClick={onClose}
       />
       <section
         ref={dialogRef}
-        className="source-sheet"
         role="dialog"
         aria-modal="true"
         aria-labelledby="source-sheet-title"
         onKeyDown={keepFocusInside}
+        className="absolute inset-x-0 bottom-0 max-h-[min(82vh,760px)] w-full overflow-y-auto rounded-t-[20px] bg-white p-5 shadow-[0_-24px_70px_rgba(10,28,25,0.2)] max-[760px]:max-h-[72svh] max-[760px]:rounded-t-[14px] max-[760px]:shadow-[0_-12px_32px_rgba(18,42,31,0.14)] max-[560px]:max-h-[88vh] max-[560px]:p-4"
       >
-        <span className="source-sheet-handle" aria-hidden="true" />
-        <div className="source-sheet-heading">
+        <span
+          className="mx-auto mb-0.5 mt-1 hidden h-1 w-[42px] rounded-[10px] bg-[#c5cec9] max-[760px]:block"
+          aria-hidden="true"
+        />
+        <div className="mb-3 flex items-center justify-between border-b border-[#dce4df] pb-3.5">
           <div>
-            <h2 id="source-sheet-title">Sumber dan kutipan</h2>
+            <h2
+              id="source-sheet-title"
+              className="m-0 font-display text-xl font-semibold text-tinta"
+            >
+              Sumber dan kutipan
+            </h2>
           </div>
           <button
             ref={closeButtonRef}
             type="button"
-            className="source-sheet-close"
+            className="grid size-[42px] place-items-center rounded-full border border-[#dce4df] bg-[#f6faf9] text-2xl leading-none text-tinta transition hover:border-javanese hover:text-javanese"
             onClick={onClose}
             aria-label="Tutup sumber dan kutipan"
           >

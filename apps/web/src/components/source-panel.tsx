@@ -25,8 +25,12 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
   }
 
   return (
-    <section className="source-panel">
-      <div className="source-tabs" role="tablist" aria-label="Detail sumber">
+    <section className="flex h-full flex-col gap-3.5 bg-white">
+      <div
+        className="sticky top-0 z-10 flex h-[58px] shrink-0 border-b border-[#dce4df] bg-white"
+        role="tablist"
+        aria-label="Detail sumber"
+      >
         {(["sumber", "pasal", "kutipan"] as const).map((tab) => (
           <button
             key={tab}
@@ -35,7 +39,11 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
             id={`source-tab-${tab}`}
             aria-controls={`source-content-${tab}`}
             aria-selected={activeTab === tab}
-            className={activeTab === tab ? "source-tab active" : "source-tab"}
+            className={`relative min-h-12 flex-1 cursor-pointer border-0 bg-transparent text-xs font-medium text-[#68736c] transition hover:text-tinta ${
+              activeTab === tab
+                ? "font-semibold text-javanese after:absolute after:inset-x-[18px] after:bottom-[-1px] after:h-0.5 after:rounded-t after:bg-javanese"
+                : ""
+            }`}
             onClick={() => setActiveTab(tab)}
           >
             {tab === "sumber" ? "Sumber" : tab === "pasal" ? "Pasal" : "Kutipan"}
@@ -43,53 +51,59 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
         ))}
       </div>
       <div
-        className="source-list"
+        className="block"
         id={`source-content-${activeTab}`}
         role="tabpanel"
         aria-labelledby={`source-tab-${activeTab}`}
       >
         {activeCitations.length === 0 ? (
-          <div className="source-empty">
-            <FileIcon className="icon" />
-            <h3>Belum ada sumber</h3>
-            <p>Sumber resmi akan muncul setelah KerjaPedia menjawab pertanyaan Anda.</p>
+          <div className="flex flex-col items-center rounded-xl border border-dashed border-[#bfd2ce] p-[34px_18px] text-center">
+            <FileIcon className="icon size-6 text-javanese" />
+            <h3 className="mt-3 text-sm font-semibold text-tinta">Belum ada sumber</h3>
+            <p className="text-xs leading-[1.55] text-muted-text">
+              Sumber resmi akan muncul setelah KerjaPedia menjawab pertanyaan Anda.
+            </p>
           </div>
         ) : null}
         {activeCitations.map((citation, index) => (
-          <article className="source-card" key={citation.citation_id}>
-            <div className="source-title">
-              <span className="source-index">{index + 1}</span>
-              <h3>{citation.document_title}</h3>
+          <article className="border-b border-[#dce4df] py-[22px]" key={citation.citation_id}>
+            <div className="flex items-start gap-2.5">
+              <span className="grid size-6 shrink-0 place-items-center rounded-md bg-[#eaf2ed] text-[10px] font-semibold text-javanese">
+                {index + 1}
+              </span>
+              <h3 className="mt-0.5 font-display text-sm font-semibold leading-snug text-tinta">
+                {citation.document_title}
+              </h3>
             </div>
             {activeTab !== "kutipan" ? (
-              <dl className="source-meta">
-                <div>
-                  <dt>Pasal</dt>
-                  <dd>
+              <dl className="ml-[34px] mt-4 divide-y divide-[#edf1ee] border-t border-[#edf1ee]">
+                <div className="grid min-h-10 grid-cols-[82px_minmax(0,1fr)] items-center py-[7px]">
+                  <dt className="text-[11px] font-medium text-[#78837c]">Pasal</dt>
+                  <dd className="text-xs leading-normal text-tinta">
                     {[citation.article, citation.paragraph].filter(Boolean).join(" · ") || "-"}
                   </dd>
                 </div>
-                <div>
-                  <dt>Halaman</dt>
-                  <dd>
+                <div className="grid min-h-10 grid-cols-[82px_minmax(0,1fr)] items-center py-[7px]">
+                  <dt className="text-[11px] font-medium text-[#78837c]">Halaman</dt>
+                  <dd className="text-xs leading-normal text-tinta">
                     {citation.page_start}-{citation.page_end}
                   </dd>
                 </div>
                 {activeTab === "pasal" && citation.section ? (
-                  <div>
-                    <dt>Bagian</dt>
-                    <dd>{citation.section}</dd>
+                  <div className="grid min-h-10 grid-cols-[82px_minmax(0,1fr)] items-center py-[7px]">
+                    <dt className="text-[11px] font-medium text-[#78837c]">Bagian</dt>
+                    <dd className="text-xs leading-normal text-tinta">{citation.section}</dd>
                   </div>
                 ) : null}
                 {activeTab === "sumber" ? (
-                  <div>
-                    <dt>Status</dt>
+                  <div className="grid min-h-10 grid-cols-[82px_minmax(0,1fr)] items-center py-[7px]">
+                    <dt className="text-[11px] font-medium text-[#78837c]">Status</dt>
                     <dd>
                       <span
                         className={
                           citation.legal_status === "active"
-                            ? "legal-status verified"
-                            : "legal-status warning"
+                            ? "inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#236b48] before:size-[7px] before:rounded-full before:bg-current"
+                            : "inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#88540d] before:size-[7px] before:rounded-full before:bg-current"
                         }
                       >
                         {citation.legal_status === "active"
@@ -104,9 +118,11 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
               </dl>
             ) : null}
             {activeTab === "kutipan" ? (
-              <div className="quote-box">
-                <FileIcon className="icon" />
-                <p>{citation.quote}</p>
+              <div className="ml-[34px] mt-4 flex items-start gap-2.5 rounded-r-lg border-l-[3px] border-javanese bg-[#f3f7f4] p-[14px_15px]">
+                <FileIcon className="size-4 shrink-0 text-javanese" />
+                <p className="m-0 font-display text-xs leading-[1.7] text-[#344139]">
+                  {citation.quote}
+                </p>
               </div>
             ) : null}
             <a
@@ -115,17 +131,21 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
               }`}
               target="_blank"
               rel="noreferrer"
-              className="source-link"
+              className="ml-[34px] mt-2.5 inline-flex min-h-[38px] items-center gap-2 text-[11px] font-semibold text-javanese transition hover:text-forest"
             >
               Buka PDF dokumen
-              <ExternalIcon className="icon" />
+              <ExternalIcon className="icon size-3.5" />
             </a>
-            <div className="source-feedback">
-              <p>Apakah sumber ini membantu?</p>
-              <div>
+            <div className="ml-[34px] mt-[18px] hidden last:block">
+              <p className="mb-2 text-xs text-muted-text">Apakah sumber ini membantu?</p>
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  className={feedback === "helpful" ? "tiny-button active" : "tiny-button"}
+                  className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition hover:border-javanese hover:text-javanese ${
+                    feedback === "helpful"
+                      ? "border-[#9adbd5] bg-[#dff4f1] text-[#00645c]"
+                      : "border-[#dce4df] bg-white text-tinta"
+                  }`}
                   onClick={() => void handleFeedback("helpful")}
                 >
                   <ThumbsUpIcon className="icon" />
@@ -133,7 +153,11 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
                 </button>
                 <button
                   type="button"
-                  className={feedback === "not_helpful" ? "tiny-button active" : "tiny-button"}
+                  className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition hover:border-javanese hover:text-javanese ${
+                    feedback === "not_helpful"
+                      ? "border-[#9adbd5] bg-[#dff4f1] text-[#00645c]"
+                      : "border-[#dce4df] bg-white text-tinta"
+                  }`}
                   onClick={() => void handleFeedback("not_helpful")}
                 >
                   <ThumbsDownIcon className="icon" />
@@ -145,9 +169,14 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
         ))}
       </div>
       {activeCitations.length > 0 ? (
-        <p className="source-note">Periksa status dan versi regulasi sebelum digunakan.</p>
+        <p className="ml-[34px] text-xs text-muted-text">
+          Periksa status dan versi regulasi sebelum digunakan.
+        </p>
       ) : null}
-      <Link href="/legal/disclaimer" className="source-disclaimer">
+      <Link
+        href="/legal/disclaimer"
+        className="ml-[34px] mt-2 inline-flex items-center gap-[7px] text-xs font-semibold text-javanese transition hover:underline"
+      >
         <FileIcon className="icon" />
         Baca disclaimer hukum
       </Link>

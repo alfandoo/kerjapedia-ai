@@ -1,43 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  CheckCircle2,
-  Database,
-  FileCheck2,
-  FileText,
-  FlaskConical,
-  MessageSquare,
-  RefreshCw,
-  ThumbsDown,
-  ThumbsUp,
-  Upload,
-  Users,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+  AlertIcon,
+  CheckIcon,
+  ChatIcon,
+  DatabaseIcon,
+  FileIcon,
+  RefreshIcon,
+  UploadIcon,
+  UserIcon,
+} from "./icons";
 import { clearStoredSession, fetchAdminStats } from "@/lib/api";
 import type { AdminStats } from "@/lib/types";
 
@@ -49,12 +25,12 @@ const ingestionStatusLabel: Record<string, string> = {
   queued: "Antre",
 };
 
-const ingestionStatusBadge: Record<string, string> = {
-  completed: "bg-teal-soft text-teal",
-  needs_review: "bg-amber-soft text-amber",
-  failed: "bg-red-soft text-red",
-  running: "bg-muted text-muted-foreground",
-  queued: "bg-muted text-muted-foreground",
+const ingestionBadgeClass: Record<string, string> = {
+  completed: "bg-[#e7f3ec] text-forest",
+  needs_review: "bg-[#faf3e0] text-[#b8860b]",
+  failed: "bg-[#fbeaea] text-[#a94442]",
+  running: "bg-[#eaf2ee] text-javanese",
+  queued: "bg-[#f1f0ec] text-slate-600",
 };
 
 function formatDate(value: string) {
@@ -67,77 +43,17 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  note,
-  dotClass,
-}: {
-  icon: typeof FileText;
-  label: string;
-  value: number;
-  note: string;
-  dotClass: string;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardDescription>{label}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex items-end justify-between gap-4">
-        <p className="font-mono text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal-soft text-teal">
-          <Icon className="size-4" />
-        </span>
-      </CardContent>
-      <div className="flex items-center gap-1.5 border-t px-(--card-spacing) py-3">
-        <span className={cn("size-1.5 rounded-full", dotClass)} />
-        <span className="text-xs text-muted-foreground">{note}</span>
-      </div>
-    </Card>
-  );
-}
-
-function SatisfactionRing({ percent }: { percent: number }) {
-  const radius = 26;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - Math.min(Math.max(percent, 0), 100) / 100);
-
-  return (
-    <div className="relative flex size-28 shrink-0 items-center justify-center">
-      <svg viewBox="0 0 64 64" className="size-28 -rotate-90">
-        <circle
-          cx="32"
-          cy="32"
-          r={radius}
-          fill="none"
-          strokeWidth="8"
-          className="stroke-muted"
-        />
-        <circle
-          cx="32"
-          cy="32"
-          r={radius}
-          fill="none"
-          strokeWidth="8"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className="stroke-teal transition-all duration-700"
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <p className="font-mono text-xl font-semibold tabular-nums">{percent}%</p>
-        <p className="text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-          Kepuasan
-        </p>
-      </div>
-    </div>
-  );
-}
+const kpiCards = [
+  { key: "documents", label: "Total dokumen", icon: FileIcon, tint: "bg-[#eaf2ee] text-javanese" },
+  { key: "published", label: "Dokumen aktif", icon: CheckIcon, tint: "bg-[#e7f3ec] text-forest" },
+  { key: "users", label: "Pengguna terdaftar", icon: UserIcon, tint: "bg-[#faf3e0] text-[#b8860b]" },
+  { key: "messages", label: "Total pesan", icon: ChatIcon, tint: "bg-[#fbeaea] text-[#a94442]" },
+] as const;
 
 export function AdminDashboardPage() {
+  const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -154,7 +70,7 @@ export function AdminDashboardPage() {
         const message = (err as Error).message || "Gagal memuat data dashboard.";
         if (message === "Invalid or expired token." || message === "Missing bearer token.") {
           clearStoredSession();
-          window.location.assign("/login-admin");
+          routerRef.current.push("/login-admin");
           return;
         }
         setError(message);
@@ -165,302 +81,278 @@ export function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-16 w-full" />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
-        </div>
-        <div className="grid gap-4 lg:grid-cols-5">
-          <Skeleton className="h-64 lg:col-span-3" />
-          <Skeleton className="h-64 lg:col-span-2" />
-        </div>
-        <Skeleton className="h-56 w-full" />
+      <div className="flex h-64 flex-col items-center justify-center gap-3 text-muted-text">
+        <RefreshIcon className="icon size-6 animate-spin" />
+        <span className="text-sm">Memuat data...</span>
       </div>
     );
   }
 
   if (error || !stats) {
     return (
-      <Card className="mx-auto mt-16 max-w-md">
-        <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
-          <span className="flex size-10 items-center justify-center rounded-full bg-red-soft text-red">
-            <AlertTriangle className="size-5" />
-          </span>
-          <div className="space-y-1">
-            <p className="font-medium">{error ?? "Data tidak tersedia."}</p>
-            <p className="text-sm text-muted-foreground">
-              Tidak dapat memuat statistik dashboard.
-            </p>
-          </div>
-          <Button variant="outline" onClick={() => window.location.reload()}>
-            <RefreshCw /> Muat ulang
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex h-64 flex-col items-center justify-center gap-3 text-muted-text">
+        <AlertIcon className="icon size-6 text-[#a94442]" />
+        <span className="text-sm">{error ?? "Data tidak tersedia."}</span>
+        <button
+          type="button"
+          className="mt-1 h-10 rounded-xl border border-[#e8e6e1] bg-white px-5 text-sm font-semibold text-forest transition hover:border-emas hover:text-emas"
+          onClick={() => window.location.reload()}
+        >
+          Muat ulang
+        </button>
+      </div>
     );
   }
 
-  const { documents } = stats;
   const docPercent =
-    documents.total > 0 ? Math.round((documents.published / documents.total) * 100) : 0;
+    stats.documents.total > 0
+      ? Math.round((stats.documents.published / stats.documents.total) * 100)
+      : 0;
+
+  const kpiValues: Record<string, number> = {
+    documents: stats.documents.total,
+    published: stats.documents.published,
+    users: stats.users,
+    messages: stats.messages,
+  };
+  const kpiFooters: Record<string, string> = {
+    documents: `${docPercent}% telah diterbitkan`,
+    published: `${stats.documents.needs_review} menunggu review`,
+    users: `${stats.conversations} percakapan aktif`,
+    messages: `${stats.feedback.total} feedback masuk`,
+  };
+
+  const doneDocs =
+    stats.documents.total - stats.documents.needs_review - stats.documents.failed;
+
+  const progress = [
+    {
+      label: "Selesai",
+      value: doneDocs,
+      fill: "bg-forest",
+      pct:
+        stats.documents.total > 0 ? (doneDocs / stats.documents.total) * 100 : 0,
+    },
+    {
+      label: "Perlu review",
+      value: stats.documents.needs_review,
+      fill: "bg-[#c9a227]",
+      pct:
+        stats.documents.total > 0
+          ? (stats.documents.needs_review / stats.documents.total) * 100
+          : 0,
+    },
+    {
+      label: "Gagal",
+      value: stats.documents.failed,
+      fill: "bg-[#a94442]",
+      pct:
+        stats.documents.total > 0
+          ? (stats.documents.failed / stats.documents.total) * 100
+          : 0,
+    },
+  ];
+
   const satisfaction =
     stats.feedback.total > 0
       ? Math.round((stats.feedback.helpful / stats.feedback.total) * 100)
       : 0;
 
-  const pipeline = [
-    {
-      name: "Selesai",
-      count: Math.max(documents.total - documents.needs_review - documents.failed, 0),
-      barClass: "bg-teal",
-      dotClass: "bg-teal",
-    },
-    {
-      name: "Perlu review",
-      count: documents.needs_review,
-      barClass: "bg-amber",
-      dotClass: "bg-amber",
-    },
-    {
-      name: "Gagal",
-      count: documents.failed,
-      barClass: "bg-red",
-      dotClass: "bg-red",
-    },
-  ];
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-xs font-medium tracking-[0.18em] text-teal uppercase">
-            Ringkasan knowledge base
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Status dokumen, percakapan, dan feedback pengguna
+    <div className="mx-auto max-w-7xl">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-javanese">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-text">
+            Ringkasan knowledge base, percakapan, dan feedback pengguna
           </p>
         </div>
-        <Button asChild className="bg-teal text-white hover:bg-teal-strong">
-          <Link href="/admin/upload">
-            <Upload /> Upload dokumen
-          </Link>
-        </Button>
+        <Link
+          href="/admin/upload"
+          className="inline-flex h-11 items-center gap-2 rounded-xl bg-javanese px-5 text-sm font-semibold text-white transition hover:bg-forest"
+        >
+          <UploadIcon className="icon size-4" /> Upload dokumen
+        </Link>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          icon={FileText}
-          label="Total dokumen"
-          value={documents.total}
-          note={`${docPercent}% telah diterbitkan`}
-          dotClass="bg-teal"
-        />
-        <StatCard
-          icon={FileCheck2}
-          label="Dokumen aktif"
-          value={documents.published}
-          note={`${documents.needs_review} menunggu review`}
-          dotClass="bg-amber"
-        />
-        <StatCard
-          icon={Users}
-          label="Pengguna terdaftar"
-          value={stats.users}
-          note={`${stats.conversations} percakapan aktif`}
-          dotClass="bg-teal"
-        />
-        <StatCard
-          icon={MessageSquare}
-          label="Total pesan"
-          value={stats.messages}
-          note={`${stats.feedback.total} feedback masuk`}
-          dotClass="bg-teal"
-        />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Proses dokumen</CardTitle>
-            <CardDescription>Status ingestion knowledge base</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-baseline gap-2">
-              <p className="font-mono text-4xl font-semibold tracking-tight tabular-nums">
-                {documents.total}
-              </p>
-              <p className="text-sm text-muted-foreground">dokumen keseluruhan</p>
-            </div>
-
-            <div className="flex h-2 overflow-hidden rounded-full bg-muted">
-              {pipeline.map((item) => (
-                <div
-                  key={item.name}
-                  className={item.barClass}
-                  style={{
-                    width: `${documents.total > 0 ? (item.count / documents.total) * 100 : 0}%`,
-                  }}
-                />
-              ))}
-            </div>
-
-            <ul className="space-y-3">
-              {pipeline.map((item) => (
-                <li key={item.name} className="flex items-center justify-between gap-4">
-                  <span className="flex items-center gap-2.5 text-sm">
-                    <span className={cn("size-2 rounded-full", item.dotClass)} />
-                    {item.name}
-                  </span>
-                  <span className="flex items-center gap-3 font-mono text-sm tabular-nums">
-                    <span className="font-semibold">{item.count}</span>
-                    <span className="w-10 text-right text-xs text-muted-foreground">
-                      {documents.total > 0 ? Math.round((item.count / documents.total) * 100) : 0}%
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Feedback pengguna</CardTitle>
-            <CardDescription>Penilaian atas jawaban asisten</CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-center gap-6">
-            <SatisfactionRing percent={satisfaction} />
-            <ul className="flex-1 space-y-4">
-              <li className="flex items-center gap-3">
-                <span className="flex size-8 items-center justify-center rounded-md bg-teal-soft text-teal">
-                  <ThumbsUp className="size-4" />
-                </span>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Membantu</p>
-                  <p className="text-xs text-muted-foreground">jawaban dinilai berguna</p>
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        {kpiCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={card.key}
+              className="relative flex flex-col gap-4 overflow-hidden rounded-xl border border-[#e8e6e1] bg-white pb-4 pl-7 pr-5 pt-5 transition hover:-translate-y-0.5 hover:border-[#d5d2c9] hover:shadow-[0_10px_30px_rgba(27,67,50,0.1)]"
+            >
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-0 left-0 w-[3px] bg-[repeating-linear-gradient(180deg,#c9a227_0px,#c9a227_4px,transparent_4px,transparent_8px)]"
+              />
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-3xl font-bold leading-none tracking-tight text-javanese">
+                    {kpiValues[card.key]}
+                  </p>
+                  <p className="mt-2 text-xs font-medium uppercase tracking-[0.05em] text-slate-500">
+                    {card.label}
+                  </p>
                 </div>
-                <p className="font-mono text-base font-semibold tabular-nums">
-                  {stats.feedback.helpful}
-                </p>
-              </li>
-              <li className="flex items-center gap-3">
-                <span className="flex size-8 items-center justify-center rounded-md bg-red-soft text-red">
-                  <ThumbsDown className="size-4" />
+                <span
+                  className={`flex size-10 shrink-0 items-center justify-center rounded-[10px] ${card.tint}`}
+                >
+                  <Icon className="icon size-[18px]" />
                 </span>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Tidak membantu</p>
-                  <p className="text-xs text-muted-foreground">jawaban dinilai kurang</p>
-                </div>
-                <p className="font-mono text-base font-semibold tabular-nums">
-                  {stats.feedback.not_helpful}
-                </p>
-              </li>
-            </ul>
-          </CardContent>
-        </Card>
+              </div>
+              <div className="mt-auto flex items-center gap-2 border-t border-[#efede7] pt-3">
+                <span className="size-1.5 shrink-0 rounded-full bg-emas" />
+                <span className="text-xs text-slate-400">{kpiFooters[card.key]}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Ingestion terbaru</CardTitle>
-          <CardDescription>Job pemrosesan dokumen terakhir</CardDescription>
-          <CardAction>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/admin/ingestion">
-                Lihat semua <ArrowUpRight />
-              </Link>
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="p-0">
-          {stats.ingestion_jobs.recent.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-12 text-center">
-              <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <Database className="size-5" />
-              </span>
-              <p className="text-sm font-medium">Belum ada job ingestion</p>
-              <p className="text-sm text-muted-foreground">
-                Upload dokumen untuk memulai proses ingestion.
-              </p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Dokumen</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Waktu</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stats.ingestion_jobs.recent.map((job) => (
-                  <TableRow key={job.job_id}>
-                    <TableCell className="font-mono text-xs font-medium">
-                      {job.document_id}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={
-                          ingestionStatusBadge[job.status] ?? "bg-muted text-muted-foreground"
-                        }
-                      >
-                        {job.status === "completed" && <CheckCircle2 />}
-                        {ingestionStatusLabel[job.status] ?? job.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs text-muted-foreground tabular-nums">
-                      {formatDate(job.created_at)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Aksi cepat</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            <Button asChild variant="outline" className="h-auto flex-col gap-1.5 py-4">
-              <Link href="/admin/upload">
-                <Upload className="size-5 text-teal" />
-                <span className="text-xs font-medium">Upload PDF</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto flex-col gap-1.5 py-4">
-              <Link href="/documents">
-                <FileText className="size-5 text-teal" />
-                <span className="text-xs font-medium">Kelola dokumen</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto flex-col gap-1.5 py-4">
-              <Link href="/admin/ingestion">
-                <Database className="size-5 text-teal" />
-                <span className="text-xs font-medium">Ingestion</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto flex-col gap-1.5 py-4">
-              <Link href="/admin/feedback">
-                <ThumbsUp className="size-5 text-teal" />
-                <span className="text-xs font-medium">Feedback</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-auto flex-col gap-1.5 py-4">
-              <Link href="/admin/retrieval">
-                <FlaskConical className="size-5 text-teal" />
-                <span className="text-xs font-medium">Retrieval lab</span>
-              </Link>
-            </Button>
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-[#e8e6e1] bg-white">
+          <div className="border-b border-[#e8e6e1] px-6 py-4">
+            <h2 className="text-sm font-semibold text-tinta">Proses dokumen</h2>
           </div>
-        </CardContent>
-      </Card>
+          <div className="space-y-5 px-6 py-5">
+            {progress.map((item) => (
+              <div key={item.label}>
+                <div className="mb-1.5 flex items-center justify-between text-sm">
+                  <span className="text-muted-text">{item.label}</span>
+                  <span className="font-mono font-medium text-tinta">{item.value}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-[#f1f0ec]">
+                  <div
+                    className={`h-full rounded-full ${item.fill}`}
+                    style={{ width: `${item.pct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-[#e8e6e1] bg-white">
+          <div className="border-b border-[#e8e6e1] px-6 py-4">
+            <h2 className="text-sm font-semibold text-tinta">Feedback pengguna</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-4 px-6 py-5">
+            <div className="rounded-xl bg-[#e7f3ec] p-4 text-center">
+              <CheckIcon className="icon mx-auto size-5 text-forest" />
+              <strong className="mt-2 block font-mono text-2xl text-javanese">
+                {stats.feedback.helpful}
+              </strong>
+              <span className="text-xs text-muted-text">Membantu</span>
+            </div>
+            <div className="rounded-xl bg-[#fbeaea] p-4 text-center">
+              <AlertIcon className="icon mx-auto size-5 text-[#a94442]" />
+              <strong className="mt-2 block font-mono text-2xl text-javanese">
+                {stats.feedback.not_helpful}
+              </strong>
+              <span className="text-xs text-muted-text">Tidak membantu</span>
+            </div>
+            <div className="rounded-xl bg-[#eaf2ee] p-4 text-center">
+              <ChatIcon className="icon mx-auto size-5 text-javanese" />
+              <strong className="mt-2 block font-mono text-2xl text-javanese">
+                {satisfaction}%
+              </strong>
+              <span className="text-xs text-muted-text">Tingkat kepuasan</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-[#e8e6e1] bg-white">
+        <div className="flex items-center justify-between border-b border-[#e8e6e1] px-6 py-4">
+          <h2 className="text-sm font-semibold text-tinta">Ingestion terbaru</h2>
+          <Link
+            href="/admin/ingestion"
+            className="text-xs font-semibold text-forest transition hover:text-emas"
+          >
+            Lihat semua
+          </Link>
+        </div>
+        {stats.ingestion_jobs.recent.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-muted-text">
+            <DatabaseIcon className="icon size-6" />
+            <p className="text-sm">Belum ada job ingestion</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-[#f1f0ec] text-xs uppercase tracking-wide text-slate-500">
+                  <th className="px-6 py-3 font-semibold">Dokumen</th>
+                  <th className="px-6 py-3 font-semibold">Status</th>
+                  <th className="px-6 py-3 font-semibold">Waktu</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.ingestion_jobs.recent.map((job) => (
+                  <tr key={job.job_id} className="border-b border-[#f7f6f2] last:border-0">
+                    <td className="px-6 py-3.5 font-medium text-tinta">{job.document_id}</td>
+                    <td className="px-6 py-3.5">
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${ingestionBadgeClass[job.status] ?? "bg-[#f1f0ec] text-slate-600"}`}
+                      >
+                        {ingestionStatusLabel[job.status] ?? job.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3.5 text-xs text-muted-text">
+                      {formatDate(job.created_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-xl border border-[#e8e6e1] bg-white">
+        <div className="border-b border-[#e8e6e1] px-6 py-4">
+          <h2 className="text-sm font-semibold text-tinta">Aksi cepat</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-3 px-6 py-5 sm:grid-cols-3 lg:grid-cols-5">
+          <Link
+            href="/admin/upload"
+            className="flex flex-col items-center gap-2 rounded-xl border border-[#e8e6e1] py-5 text-sm font-medium text-tinta transition hover:border-emas hover:text-emas"
+          >
+            <UploadIcon className="icon size-5" />
+            <span>Upload PDF</span>
+          </Link>
+          <Link
+            href="/documents"
+            className="flex flex-col items-center gap-2 rounded-xl border border-[#e8e6e1] py-5 text-sm font-medium text-tinta transition hover:border-emas hover:text-emas"
+          >
+            <FileIcon className="icon size-5" />
+            <span>Kelola dokumen</span>
+          </Link>
+          <Link
+            href="/admin/ingestion"
+            className="flex flex-col items-center gap-2 rounded-xl border border-[#e8e6e1] py-5 text-sm font-medium text-tinta transition hover:border-emas hover:text-emas"
+          >
+            <DatabaseIcon className="icon size-5" />
+            <span>Ingestion</span>
+          </Link>
+          <Link
+            href="/admin/feedback"
+            className="flex flex-col items-center gap-2 rounded-xl border border-[#e8e6e1] py-5 text-sm font-medium text-tinta transition hover:border-emas hover:text-emas"
+          >
+            <ChatIcon className="icon size-5" />
+            <span>Feedback</span>
+          </Link>
+          <Link
+            href="/admin/retrieval"
+            className="flex flex-col items-center gap-2 rounded-xl border border-[#e8e6e1] py-5 text-sm font-medium text-tinta transition hover:border-emas hover:text-emas"
+          >
+            <RefreshIcon className="icon size-5" />
+            <span>Retrieval lab</span>
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

@@ -30,13 +30,18 @@ export function ChatComposer({
 
   return (
     <form
-      className="editorial-composer"
+      className="relative z-10 mx-auto w-full max-w-[800px]"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();
       }}
     >
-      <label htmlFor="question-input">Ketik pertanyaan Anda</label>
+      <label
+        htmlFor="question-input"
+        className="sr-only"
+      >
+        Ketik pertanyaan Anda
+      </label>
       <textarea
         ref={inputRef}
         id="question-input"
@@ -47,20 +52,26 @@ export function ChatComposer({
         maxLength={2000}
         rows={2}
         disabled={loading}
+        className="w-full resize-none rounded-2xl border border-[#dce4df] bg-white p-4 pb-11 text-sm leading-[1.65] text-tinta shadow-sm outline-none transition placeholder:text-[#8a928d] focus:border-javanese focus:outline-2 focus:outline-offset-1 focus:outline-javanese/40 disabled:cursor-not-allowed disabled:bg-[#f5f7f5]"
       />
-      <span className="editorial-composer-hint legacy-composer-hint">
-        Ctrl + Enter untuk kirim · {question.length}/2000
-      </span>
-      <span className="editorial-composer-hint">
-        Enter untuk kirim · Shift + Enter untuk baris baru · {question.length}/2000
+      <span className="pointer-events-none absolute bottom-[14px] left-[18px] text-[10px] font-medium tracking-wide text-[#8a928d]">
+        {question.length}/2000
       </span>
       {loading ? (
-        <button className="editorial-cancel-button" type="button" onClick={onCancel}>
+        <button
+          className="absolute bottom-[10px] right-[12px] grid h-[38px] shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-white px-3.5 text-xs font-semibold text-[#68736c] transition hover:bg-[#f2f5f2] hover:text-[#26312b]"
+          type="button"
+          onClick={onCancel}
+        >
           <StopIcon className="icon" />
           Batalkan
         </button>
       ) : (
-        <button className="editorial-send-button" type="submit" disabled={!question.trim()}>
+        <button
+          className="absolute bottom-[10px] right-[12px] grid h-[38px] shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-javanese px-3.5 text-xs font-semibold whitespace-nowrap text-white transition hover:bg-forest disabled:cursor-not-allowed disabled:bg-[#c9d3cb]"
+          type="submit"
+          disabled={!question.trim()}
+        >
           <SendIcon className="icon" />
           Kirim
         </button>

@@ -34,11 +34,11 @@ const jobLabels: Record<IngestionJob["status"], string> = {
 };
 
 const jobBadgeClasses: Record<IngestionJob["status"], string> = {
-  completed: "bg-teal-soft text-teal",
-  needs_review: "bg-amber-soft text-amber",
-  failed: "bg-red-soft text-red",
-  running: "bg-muted text-muted-foreground",
-  queued: "bg-muted text-muted-foreground",
+  completed: "bg-[#e7f3ec] text-forest",
+  needs_review: "bg-[#faf3e0] text-[#b8860b]",
+  failed: "bg-[#fbeaea] text-[#a94442]",
+  running: "bg-[#f1f0ec] text-muted-text",
+  queued: "bg-[#f1f0ec] text-muted-text",
 };
 
 function formatDateTime(value: string) {
@@ -103,11 +103,11 @@ export function AdminIngestion() {
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
-          <p className="text-xs font-medium tracking-[0.18em] text-teal uppercase">
+          <p className="text-xs font-medium tracking-[0.18em] text-forest uppercase">
             Pipeline pemrosesan
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight">Ingestion</h1>
-          <p className="text-sm text-muted-foreground">{loadStatus}</p>
+          <h1 className="font-display text-2xl font-semibold text-javanese">Ingestion</h1>
+          <p className="text-sm text-muted-text">{loadStatus}</p>
         </div>
         <Select value={filter} onValueChange={setFilter}>
           <SelectTrigger aria-label="Filter job ingestion">
@@ -139,20 +139,20 @@ export function AdminIngestion() {
                     key={job.job_id}
                     className={cn(
                       "flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors",
-                      selected ? "bg-teal-soft/40" : "hover:bg-muted/50"
+                      selected ? "bg-[#e7f3ec]/40" : "hover:bg-[#f1f0ec]/50"
                     )}
                     onClick={() => setSelectedJobId(job.job_id)}
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{job.document_id}</p>
-                      <p className="truncate font-mono text-xs text-muted-foreground">
+                      <p className="truncate font-mono text-xs text-muted-text">
                         {job.job_id}
                       </p>
                     </div>
                     <Badge className={jobBadgeClasses[job.status]}>
                       {jobLabels[job.status]}
                     </Badge>
-                    <span className="text-xs text-muted-foreground tabular-nums">
+                    <span className="text-xs text-muted-text tabular-nums">
                       {formatDateTime(job.updated_at)}
                     </span>
                     <Button
@@ -172,11 +172,11 @@ export function AdminIngestion() {
               })}
               {filtered.length === 0 ? (
                 <li className="flex flex-col items-center gap-2 px-4 py-10 text-center">
-                  <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <span className="flex size-10 items-center justify-center rounded-full bg-[#f1f0ec] text-muted-text">
                     <Timer className="size-5" />
                   </span>
                   <p className="text-sm font-medium">Tidak ada job dengan filter ini</p>
-                  <p className="text-sm text-muted-foreground">Ubah filter untuk melihat hasil.</p>
+                  <p className="text-sm text-muted-text">Ubah filter untuk melihat hasil.</p>
                 </li>
               ) : null}
             </ul>
@@ -194,7 +194,7 @@ export function AdminIngestion() {
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
                   {detailRows.map((row) => (
                     <div key={row.dt} className="min-w-0">
-                      <dt className="text-xs text-muted-foreground">{row.dt}</dt>
+                      <dt className="text-xs text-muted-text">{row.dt}</dt>
                       <dd className="truncate font-mono text-sm font-medium tabular-nums">
                         {row.dd}
                       </dd>
@@ -206,20 +206,20 @@ export function AdminIngestion() {
                   className={cn(
                     "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm",
                     selectedJob.error
-                      ? "border-amber/30 bg-amber-soft/60"
-                      : "border-teal/30 bg-teal-soft/60"
+                      ? "border-[#b8860b]/30 bg-[#faf3e0]/60"
+                      : "border-[#2d6a4f]/30 bg-[#e7f3ec]/60"
                   )}
                 >
                   {selectedJob.error ? (
-                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber" />
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[#b8860b]" />
                   ) : (
-                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-teal" />
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" />
                   )}
                   <span>
                     <strong className="block">
                       {selectedJob.error ? "Perlu review manual" : "Tidak ada error parsing"}
                     </strong>
-                    <small className="text-xs text-muted-foreground">
+                    <small className="text-xs text-muted-text">
                       {selectedJob.error ?? "Semua tahapan pipeline selesai."}
                     </small>
                   </span>
@@ -235,10 +235,10 @@ export function AdminIngestion() {
               </>
             ) : (
               <div className="flex flex-col items-center gap-2 py-10 text-center">
-                <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <span className="flex size-10 items-center justify-center rounded-full bg-[#f1f0ec] text-muted-text">
                   <Timer className="size-5" />
                 </span>
-                <p className="text-sm text-muted-foreground">Pilih job untuk melihat log.</p>
+                <p className="text-sm text-muted-text">Pilih job untuk melihat log.</p>
               </div>
             )}
           </CardContent>

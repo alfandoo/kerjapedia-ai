@@ -118,11 +118,11 @@ export function AdminUpload() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
-          <p className="text-xs font-medium tracking-[0.18em] text-teal uppercase">
+          <p className="text-xs font-medium tracking-[0.18em] text-forest uppercase">
             Tambah regulasi
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight">Upload PDF</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="font-display text-2xl font-semibold text-javanese">Upload PDF</h1>
+          <p className="text-sm text-muted-text">
             Tambahkan dokumen resmi ke knowledge base untuk diproses oleh pipeline ingestion.
           </p>
         </div>
@@ -138,8 +138,8 @@ export function AdminUpload() {
           className={cn(
             "flex min-h-80 flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
             dragging
-              ? "border-teal bg-teal-soft"
-              : "border-border bg-card hover:border-teal/50 hover:bg-muted/30"
+              ? "border-forest bg-[#e7f3ec]"
+              : "border-[#e8e6e1] bg-white hover:border-forest/50 hover:bg-[#f1f0ec]/30"
           )}
           onDragEnter={(event) => {
             event.preventDefault();
@@ -157,7 +157,7 @@ export function AdminUpload() {
           <span
             className={cn(
               "flex size-14 items-center justify-center rounded-full transition-colors",
-              dragging ? "bg-white text-teal" : "bg-teal-soft text-teal"
+              dragging ? "bg-white text-forest" : "bg-[#e7f3ec] text-forest"
             )}
           >
             <Upload className="size-6" />
@@ -166,7 +166,7 @@ export function AdminUpload() {
             <p className="text-base font-medium">
               {dragging ? "Lepaskan file di sini" : "Tarik dan lepas file PDF di sini"}
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-text">
               atau pilih file dari komputer — maksimum 50 MB
             </p>
           </div>
@@ -189,13 +189,13 @@ export function AdminUpload() {
           </CardHeader>
           <CardContent className="space-y-4">
             {file ? (
-              <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-teal-soft text-teal">
+              <div className="flex items-center gap-3 rounded-lg border-[#e8e6e1] px-3 py-2.5">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[#e7f3ec] text-forest">
                   <FileText className="size-4" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <strong className="block truncate text-sm">{file.name}</strong>
-                  <small className="text-xs text-muted-foreground">{formatBytes(file.size)}</small>
+                  <small className="text-xs text-muted-text">{formatBytes(file.size)}</small>
                 </span>
                 <Button
                   type="button"
@@ -212,9 +212,9 @@ export function AdminUpload() {
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-3 py-8 text-center">
-                <FileText className="size-5 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Belum ada file dipilih.</p>
+              <div className="flex flex-col items-center gap-2 rounded-lg border-[#e8e6e1] border-dashed px-3 py-8 text-center">
+                <FileText className="size-5 text-muted-text" />
+                <p className="text-sm text-muted-text">Belum ada file dipilih.</p>
               </div>
             )}
 
@@ -235,22 +235,22 @@ export function AdminUpload() {
             </div>
 
             <ul className="space-y-2">
-              <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CheckCircle2 className="size-4 shrink-0 text-teal" />
+              <li className="flex items-center gap-2 text-sm text-muted-text">
+                <CheckCircle2 className="size-4 shrink-0 text-forest" />
                 Header file PDF akan divalidasi
               </li>
-              <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CheckCircle2 className="size-4 shrink-0 text-teal" />
+              <li className="flex items-center gap-2 text-sm text-muted-text">
+                <CheckCircle2 className="size-4 shrink-0 text-forest" />
                 Dokumen baru dibuat sebagai draft
               </li>
-              <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CheckCircle2 className="size-4 shrink-0 text-teal" />
+              <li className="flex items-center gap-2 text-sm text-muted-text">
+                <CheckCircle2 className="size-4 shrink-0 text-forest" />
                 Publikasi membutuhkan review admin
               </li>
             </ul>
 
             <Button
-              className="w-full bg-teal text-white hover:bg-teal-strong"
+              className="w-full bg-javanese text-white hover:bg-forest"
               disabled={submitting}
               onClick={() => void handleUpload()}
             >
@@ -263,33 +263,33 @@ export function AdminUpload() {
                 role="status"
                 className={cn(
                   "flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm",
-                  statusTone === "error" && "border-red/30 bg-red-soft text-red",
-                  statusTone === "success" && "border-teal/30 bg-teal-soft text-teal",
-                  statusTone === "info" && "border-border bg-muted text-muted-foreground"
+                  statusTone === "error" && "border-[#a94442]/30 bg-[#fbeaea] text-[#a94442]",
+                  statusTone === "success" && "border-[#2d6a4f]/30 bg-[#e7f3ec] text-forest",
+                  statusTone === "info" && "border-[#e8e6e1] bg-[#f1f0ec] text-muted-text"
                 )}
               >
                 {statusTone === "error" ? (
-                  <Badge className="bg-red-soft text-red">Gagal</Badge>
+                  <Badge className="bg-[#fbeaea] text-[#a94442]">Gagal</Badge>
                 ) : statusTone === "success" ? (
-                  <Badge className="bg-teal-soft text-teal">Berhasil</Badge>
+                  <Badge className="bg-[#e7f3ec] text-forest">Berhasil</Badge>
                 ) : null}
                 <span className="flex-1">{status}</span>
               </div>
             ) : null}
 
             {uploaded ? (
-              <div className="space-y-3 rounded-lg border border-teal/30 bg-teal-soft/40 p-3">
+              <div className="space-y-3 rounded-lg border-[#2d6a4f]/30 bg-[#e7f3ec]/40 p-3">
                 <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="size-4 shrink-0 text-teal" />
+                  <CheckCircle2 className="size-4 shrink-0 text-forest" />
                   <span className="min-w-0">
                     <strong className="block truncate">{uploaded.file_name}</strong>
-                    <small className="block font-mono text-xs text-muted-foreground">
+                    <small className="block font-mono text-xs text-muted-text">
                       {uploaded.document_id}
                     </small>
                   </span>
                 </div>
                 <Button
-                  className="w-full bg-teal text-white hover:bg-teal-strong"
+                  className="w-full bg-javanese text-white hover:bg-forest"
                   disabled={ingesting}
                   onClick={() => void handleIngest()}
                 >
@@ -300,7 +300,7 @@ export function AdminUpload() {
                   <p
                     className={cn(
                       "text-xs",
-                      ingestMessage.startsWith("Job selesai") ? "text-teal" : "text-red"
+                      ingestMessage.startsWith("Job selesai") ? "text-forest" : "text-[#a94442]"
                     )}
                   >
                     {ingestMessage}

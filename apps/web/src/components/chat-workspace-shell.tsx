@@ -34,42 +34,45 @@ type ChatWorkspaceShellProps = {
   onConversationDelete: (id: string) => Promise<void>;
 };
 
-function MenuIcon() {
+const iconStroke =
+  "fill-none stroke-current [stroke-width:1.7] [stroke-linecap:round] [stroke-linejoin:round]";
+
+function MenuIcon({ className = "" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${iconStroke} ${className}`}>
       <path d="M4 7h16M4 12h16M4 17h16" />
     </svg>
   );
 }
 
-function PanelIcon() {
+function PanelIcon({ className = "" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${iconStroke} ${className}`}>
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <path d="M9 4v16" />
     </svg>
   );
 }
 
-function PlusIcon() {
+function PlusIcon({ className = "" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${iconStroke} ${className}`}>
       <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }
 
-function CloseIcon() {
+function CloseIcon({ className = "" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${iconStroke} ${className}`}>
       <path d="m6 6 12 12M18 6 6 18" />
     </svg>
   );
 }
 
-function LogoutIcon() {
+function LogoutIcon({ className = "" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${iconStroke} ${className}`}>
       <path d="M10 5H5v14h5M14 8l4 4-4 4M9 12h9" />
     </svg>
   );
@@ -219,38 +222,56 @@ export function ChatWorkspaceShell({
     }
   }
 
-  const authenticatedSidebarContent = (
+  const historyWrapperClass = `min-h-0 flex-1 [&_aside]:flex [&_aside]:min-h-0 [&_aside]:flex-1 [&_aside]:overflow-y-auto [&_aside]:bg-transparent [&_aside]:border-0 [&_aside]:p-0 [&_aside>div]:mt-0 ${
+    session
+      ? "[&_h2]:mx-2.5 [&_h2]:mb-2 [&_h2]:font-sans [&_h2]:text-[10px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.04em] [&_h2]:text-[#718078]"
+      : "[&_h2]:hidden"
+  }`;
+
+  const sidebarBody = (
     <>
-      <div className="chatgpt-sidebar-heading">
-        <Link
-          href="/chat"
-          className="chatgpt-sidebar-mark chatgpt-sidebar-brand-full"
-          aria-label="KerjaPedia AI beranda"
-        >
-          <ScaleIcon />
-          <strong>KerjaPedia AI</strong>
-        </Link>
-        <div className="chatgpt-sidebar-heading-actions">
+      <div className="flex min-h-11 items-center justify-between pb-2.5">
+        {session ? (
+          <Link
+            href="/chat"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-1 text-tinta transition hover:bg-[#e9efeb]"
+            aria-label="KerjaPedia AI beranda"
+          >
+            <ScaleIcon className="size-[23px] fill-none stroke-current [stroke-width:1.85]" />
+            <strong className="whitespace-nowrap font-display text-sm font-semibold">
+              KerjaPedia AI
+            </strong>
+          </Link>
+        ) : (
+          <Link
+            href="/"
+            className="grid size-10 place-items-center rounded-[9px] text-tinta transition hover:bg-[#e9efeb]"
+            aria-label="KerjaPedia AI beranda"
+          >
+            <ScaleIcon className="size-[23px] fill-none stroke-current [stroke-width:1.85]" />
+          </Link>
+        )}
+        <div className="flex flex-none items-center gap-0.5">
           <button
             type="button"
-            className="chatgpt-icon-button"
+            className="grid size-[38px] place-items-center rounded-lg text-[#48534d] transition hover:bg-[#e9efeb]"
             aria-label="Cari chat"
             aria-expanded={chatSearchOpen}
             onClick={(event) => openChatSearch(event.currentTarget)}
           >
-            <SearchIcon />
+            <SearchIcon className="size-5 fill-none stroke-current" />
           </button>
           <button
             type="button"
-            className="chatgpt-icon-button desktop-only"
+            className="grid size-[38px] place-items-center rounded-lg text-[#48534d] transition hover:bg-[#e9efeb] max-[760px]:hidden"
             aria-label="Tutup sidebar"
             onClick={() => onSidebarExpandedChange(false)}
           >
-            <PanelIcon />
+            <PanelIcon className="size-5" />
           </button>
           <button
             type="button"
-            className="chatgpt-icon-button mobile-only"
+            className="grid size-[38px] place-items-center rounded-lg text-[#48534d] transition hover:bg-[#e9efeb] hidden max-[760px]:grid"
             ref={mobileCloseRef}
             aria-label="Tutup riwayat"
             onClick={() => {
@@ -258,14 +279,16 @@ export function ChatWorkspaceShell({
               window.setTimeout(() => mobileMenuRef.current?.focus(), 0);
             }}
           >
-            <CloseIcon />
+            <CloseIcon className="size-5" />
           </button>
         </div>
       </div>
       {chatSearchOpen ? (
-        <div className="sidebar-chat-search">
-          <SearchIcon />
-          <label htmlFor="sidebar-chat-search">Cari chat</label>
+        <div className="relative mb-2 mt-1 grid min-h-[42px] grid-cols-[20px_minmax(0,1fr)_34px] items-center gap-[7px] rounded-[9px] border border-[#bdc9c2] bg-white py-0 pl-2.5 pr-[3px]">
+          <SearchIcon className="size-[17px] fill-none stroke-current" />
+          <label htmlFor="sidebar-chat-search" className="sr-only">
+            Cari chat
+          </label>
           <input
             ref={chatSearchInputRef}
             id="sidebar-chat-search"
@@ -273,6 +296,7 @@ export function ChatWorkspaceShell({
             placeholder="Cari chat..."
             value={chatSearchQuery}
             onChange={(event) => setChatSearchQuery(event.target.value)}
+            className="min-w-0 bg-transparent text-[11px] text-tinta outline-none placeholder:text-[#8a928d]"
           />
           <button
             type="button"
@@ -281,241 +305,326 @@ export function ChatWorkspaceShell({
               setChatSearchOpen(false);
               setChatSearchQuery("");
             }}
+            className="grid size-[34px] place-items-center rounded-md text-[#637168] transition hover:bg-[#edf2ef]"
           >
-            <CloseIcon />
+            <CloseIcon className="size-4" />
           </button>
         </div>
       ) : null}
-      <nav className="guest-sidebar-primary" aria-label="Navigasi pengguna">
+      <nav
+        className={`grid gap-[3px] ${session ? "border-b border-[#dce4df] pb-3.5" : ""}`}
+        aria-label={session ? "Navigasi pengguna" : "Navigasi guest"}
+      >
         <button
           type="button"
-          className="guest-new-chat"
+          className="flex min-h-11 items-center gap-[11px] rounded-lg bg-[#e8eeea] px-2.5 text-left text-xs font-semibold text-tinta transition hover:bg-[#e3ebe6]"
           onClick={() => {
             onNewConversation();
             onMobileSidebarOpenChange(false);
           }}
         >
-          <PlusIcon />
+          <PlusIcon className="size-[18px]" />
           <span>Chat baru</span>
         </button>
-        <Link href="/search">
-          <SearchIcon className="icon" />
+        <Link
+          href="/search"
+          className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#e3ebe6]"
+        >
+          <SearchIcon className="size-[18px]" />
           <span>Cari Regulasi</span>
         </Link>
-        <Link href="/legal/disclaimer">
-          <FileIcon className="icon" />
+        <Link
+          href="/legal/disclaimer"
+          className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#e3ebe6]"
+        >
+          <FileIcon className="size-[18px]" />
           <span>Legal &amp; Bantuan</span>
         </Link>
       </nav>
-      <ConversationHistory
-        conversations={visibleConversations}
-        activeConversationId={activeConversationId}
-        loading={historyLoading}
-        onConversationSelect={(id) => {
-          onConversationSelect(id);
-          onMobileSidebarOpenChange(false);
-        }}
-        onNewConversation={() => {
-          onNewConversation();
-          onMobileSidebarOpenChange(false);
-        }}
-        onConversationRename={onConversationRename}
-        onConversationDelete={onConversationDelete}
-        historyEnabled={Boolean(session)}
-        showNewConversation={false}
-        emptyMessage={
-          chatSearchQuery.trim()
-            ? `Tidak ada chat yang cocok dengan “${chatSearchQuery.trim()}”.`
-            : undefined
-        }
-      />
-      <div className="chatgpt-account">
+      {!session ? <div className="min-h-7 flex-1" /> : null}
+      <div className={historyWrapperClass}>
+        <ConversationHistory
+          conversations={visibleConversations}
+          activeConversationId={activeConversationId}
+          loading={historyLoading}
+          onConversationSelect={(id) => {
+            onConversationSelect(id);
+            onMobileSidebarOpenChange(false);
+          }}
+          onNewConversation={() => {
+            onNewConversation();
+            onMobileSidebarOpenChange(false);
+          }}
+          onConversationRename={onConversationRename}
+          onConversationDelete={onConversationDelete}
+          historyEnabled={Boolean(session)}
+          showNewConversation={false}
+          emptyMessage={
+            chatSearchQuery.trim()
+              ? `Tidak ada chat yang cocok dengan “${chatSearchQuery.trim()}”.`
+              : undefined
+          }
+        />
+      </div>
+      <div className="mt-2 border-t border-[#dce4df] pt-2">
         <button
           ref={profileTriggerRef}
           type="button"
-          className="chatgpt-account-main"
+          className="flex min-h-11 w-full items-center gap-[11px] rounded-lg px-2.5 text-left text-xs text-tinta transition hover:bg-[#e7eeea]"
           aria-label={`Buka menu profil ${session?.user.name ?? "pengguna"}`}
           aria-haspopup="menu"
           aria-expanded={profileMenuOpen}
           onClick={() => setProfileMenuOpen((open) => !open)}
         >
-          <span className="chatgpt-account-avatar">
+          <span className="grid size-[30px] shrink-0 place-items-center rounded-full bg-javanese text-[10px] font-bold text-white">
             {session ? session.user.name.slice(0, 2).toUpperCase() : "TM"}
           </span>
-          <span className="chatgpt-account-identity">
-            <strong>{session ? session.user.name : "Tamu"}</strong>
-            <small>{session ? session.user.roles.join(", ") : "Belum masuk"}</small>
+          <span className="min-w-0 flex-1">
+            <strong className="block truncate text-xs font-medium">
+              {session ? session.user.name : "Tamu"}
+            </strong>
+            <small className="mt-0.5 block text-[9px] text-muted-text">
+              {session ? session.user.roles.join(", ") : "Belum masuk"}
+            </small>
           </span>
         </button>
       </div>
-    </>
-  );
-
-  const guestSidebarContent = (
-    <>
-      <div className="chatgpt-sidebar-heading">
-        <Link href="/" className="chatgpt-sidebar-mark" aria-label="KerjaPedia AI beranda">
-          <ScaleIcon />
-        </Link>
-        <div className="chatgpt-sidebar-heading-actions">
+      {!session ? (
+        <div className="border-t border-[#dce4df] p-[17px_10px_8px]">
+          <strong className="block text-xs font-semibold text-tinta">
+            Simpan percakapan Anda
+          </strong>
+          <p className="my-[7px] mb-3.5 text-[11px] leading-[1.55] text-muted-text">
+            Masuk agar riwayat dan jawaban tetap tersedia saat Anda kembali.
+          </p>
           <button
             type="button"
-            className="chatgpt-icon-button"
-            aria-label="Cari chat"
-            onClick={(event) => openChatSearch(event.currentTarget)}
+            className="flex min-h-10 w-full items-center justify-center rounded-full border border-[#bdc9c2] bg-white text-xs font-semibold text-tinta transition hover:border-javanese"
+            onClick={(event) => openAuthModal(event.currentTarget)}
           >
-            <SearchIcon />
-          </button>
-          <button
-            type="button"
-            className="chatgpt-icon-button desktop-only"
-            aria-label="Tutup sidebar"
-            onClick={() => onSidebarExpandedChange(false)}
-          >
-            <PanelIcon />
-          </button>
-          <button
-            type="button"
-            className="chatgpt-icon-button mobile-only"
-            ref={mobileCloseRef}
-            aria-label="Tutup menu"
-            onClick={() => {
-              onMobileSidebarOpenChange(false);
-              window.setTimeout(() => mobileMenuRef.current?.focus(), 0);
-            }}
-          >
-            <CloseIcon />
+            Masuk
           </button>
         </div>
-      </div>
-      <nav className="guest-sidebar-primary" aria-label="Navigasi guest">
-        <button
-          type="button"
-          className="guest-new-chat"
-          onClick={() => {
-            onNewConversation();
-            onMobileSidebarOpenChange(false);
-          }}
-        >
-          <PlusIcon />
-          <span>Chat baru</span>
-        </button>
-        <Link href="/search">
-          <SearchIcon className="icon" />
-          <span>Cari Regulasi</span>
-        </Link>
-        <Link href="/legal/disclaimer">
-          <FileIcon className="icon" />
-          <span>Legal &amp; Bantuan</span>
-        </Link>
-      </nav>
-      <div className="guest-sidebar-spacer" />
-      <div className="guest-sidebar-signin">
-        <strong>Simpan percakapan Anda</strong>
-        <p>Masuk agar riwayat dan jawaban tetap tersedia saat Anda kembali.</p>
-        <button type="button" onClick={(event) => openAuthModal(event.currentTarget)}>
-          Masuk
-        </button>
-      </div>
+      ) : null}
     </>
   );
 
-  const sidebarContent = session ? authenticatedSidebarContent : guestSidebarContent;
+  const profileMenu = session ? (
+    <div
+      ref={profileMenuRef}
+      role="menu"
+      aria-label="Menu profil pengguna"
+      className="fixed bottom-16 left-2.5 z-30 w-[min(248px,calc(100vw-24px))] rounded-[14px] border border-[#424743] bg-[#303330] p-2 text-[#f7f9f8] shadow-[0_18px_44px_rgba(16,24,19,0.22)]"
+    >
+      <div className="flex min-h-[50px] items-center gap-2.5 px-2 pb-2.5 pt-1">
+        <span className="grid size-[30px] shrink-0 place-items-center rounded-full bg-[#2cbf91] text-[9px] font-bold text-white">
+          {session.user.name.slice(0, 2).toUpperCase()}
+        </span>
+        <div>
+          <strong className="block text-xs font-semibold">{session.user.name}</strong>
+          <small className="mt-[3px] block text-[10px] capitalize text-[#b9c0bc]">
+            {session.user.roles.join(", ")}
+          </small>
+        </div>
+      </div>
+      <div className="grid gap-0.5 border-t border-[#4d524e] py-[7px]">
+        <button
+          type="button"
+          role="menuitem"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+          onClick={() => {
+            onSidebarExpandedChange(true);
+            setProfileMenuOpen(false);
+          }}
+        >
+          <UserIcon className="size-[18px]" />
+          <span>Profil &amp; riwayat</span>
+        </button>
+        <Link
+          href="/search"
+          role="menuitem"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+          onClick={() => setProfileMenuOpen(false)}
+        >
+          <SearchIcon className="size-[18px]" />
+          <span>Cari Regulasi</span>
+        </Link>
+        <Link
+          href="/legal/privacy"
+          role="menuitem"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+          onClick={() => setProfileMenuOpen(false)}
+        >
+          <SettingsIcon className="size-[18px]" />
+          <span>Privasi</span>
+        </Link>
+        {session.user.roles.includes("admin") ? (
+          <Link
+            href="/admin/settings"
+            role="menuitem"
+            className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+            onClick={() => setProfileMenuOpen(false)}
+          >
+            <SettingsIcon className="size-[18px]" />
+            <span>Pengaturan</span>
+          </Link>
+        ) : null}
+      </div>
+      <div className="grid gap-0.5 border-t border-[#4d524e] py-[7px]">
+        <Link
+          href="/legal/disclaimer"
+          role="menuitem"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+          onClick={() => setProfileMenuOpen(false)}
+        >
+          <FileIcon className="size-[18px]" />
+          <span>Bantuan</span>
+        </Link>
+        <button
+          type="button"
+          role="menuitem"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+          onClick={handleLogout}
+        >
+          <LogoutIcon className="size-[18px]" />
+          <span>Keluar</span>
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  const collapsedRail = (
+    <nav
+      className="flex min-h-0 flex-1 flex-col items-center gap-[3px]"
+      aria-label="Navigasi sidebar ringkas"
+    >
+      <Link
+        href="/"
+        className="mb-2 grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
+        aria-label="KerjaPedia AI beranda"
+      >
+        <ScaleIcon className="size-[21px] fill-none stroke-current [stroke-width:1.85]" />
+      </Link>
+      <button
+        type="button"
+        className="grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
+        aria-label="Percakapan baru"
+        onClick={onNewConversation}
+      >
+        <EditIcon className="size-[21px] fill-none stroke-current" />
+      </button>
+      <button
+        type="button"
+        className="grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
+        aria-label="Cari chat"
+        onClick={(event) => openChatSearch(event.currentTarget)}
+      >
+        <SearchIcon className="size-[21px] fill-none stroke-current" />
+      </button>
+      <Link
+        href="/legal/disclaimer"
+        className="grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
+        aria-label="Legal dan bantuan"
+      >
+        <FileIcon className="size-[21px] fill-none stroke-current" />
+      </Link>
+      <button
+        type="button"
+        className="mt-auto grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
+        aria-label={session ? "Buka profil pengguna" : "Masuk atau daftar"}
+        onClick={(event) => {
+          if (session) {
+            onSidebarExpandedChange(true);
+          } else {
+            openAuthModal(event.currentTarget);
+          }
+        }}
+      >
+        <UserIcon className="size-[21px] fill-none stroke-current" />
+      </button>
+    </nav>
+  );
+
+  const shellColumns = !sidebarExpanded
+    ? sourceDrawerOpen
+      ? "grid-cols-[64px_minmax(0,1fr)_minmax(340px,390px)] max-[1180px]:grid-cols-[64px_minmax(0,1fr)_340px]"
+      : "grid-cols-[64px_minmax(0,1fr)]"
+    : sourceDrawerOpen
+      ? "grid-cols-[268px_minmax(0,1fr)_minmax(340px,390px)] max-[1180px]:grid-cols-[220px_minmax(0,1fr)_340px]"
+      : "grid-cols-[268px_minmax(0,1fr)]";
+
+  const topbarColumns = session
+    ? "grid-cols-[44px_minmax(0,1fr)_44px] max-[760px]:grid-cols-[44px_34px_minmax(0,1fr)_44px]"
+    : "grid-cols-[44px_minmax(0,1fr)_auto] max-[760px]:grid-cols-[44px_34px_minmax(0,1fr)_auto]";
 
   return (
     <div
       className={[
-        "chatgpt-shell",
-        "guest-shell",
-        session ? "authenticated-shell" : "",
-        sidebarExpanded ? "sidebar-expanded" : "sidebar-collapsed",
-        sourceDrawerOpen ? "source-open" : "",
+        "grid h-svh w-full overflow-hidden bg-arsip text-tinta transition-[grid-template-columns] duration-200 max-[760px]:block max-[760px]:h-svh",
+        shellColumns,
+        session ? "authenticated-shell" : "guest-shell",
       ].join(" ")}
     >
-      <aside className="chatgpt-sidebar desktop-sidebar">
-        {sidebarContent}
-        <nav className="collapsed-sidebar-rail" aria-label="Navigasi sidebar ringkas">
-          <Link href="/" className="collapsed-sidebar-button" aria-label="KerjaPedia AI beranda">
-            <ScaleIcon />
-          </Link>
+      {sidebarExpanded ? (
+        <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#dce4df] bg-[#f6faf9] p-[14px_12px_12px] max-[760px]:hidden">
+          {sidebarBody}
+        </aside>
+      ) : (
+        <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#dce4df] bg-[#f6faf9] p-[14px_8px_12px] max-[760px]:hidden">
+          {collapsedRail}
+        </aside>
+      )}
+      <div className="relative flex min-h-0 min-w-0 flex-col bg-white max-[760px]:h-full">
+        <header
+          className={`relative z-[5] grid min-h-[58px] items-center gap-2 border-b border-[#dce4df] bg-white/95 px-3.5 py-1.5 backdrop-blur-xl ${topbarColumns}`}
+        >
           <button
             type="button"
-            className="collapsed-sidebar-button"
-            aria-label="Percakapan baru"
-            onClick={onNewConversation}
-          >
-            <EditIcon />
-          </button>
-          <button
-            type="button"
-            className="collapsed-sidebar-button"
-            aria-label="Cari chat"
-            onClick={(event) => openChatSearch(event.currentTarget)}
-          >
-            <SearchIcon />
-          </button>
-          <Link
-            href="/legal/disclaimer"
-            className="collapsed-sidebar-button"
-            aria-label="Legal dan bantuan"
-          >
-            <FileIcon />
-          </Link>
-          <button
-            type="button"
-            className="collapsed-sidebar-button collapsed-sidebar-profile"
-            aria-label={session ? "Buka profil pengguna" : "Masuk atau daftar"}
-            onClick={(event) => {
-              if (session) {
-                onSidebarExpandedChange(true);
-              } else {
-                openAuthModal(event.currentTarget);
-              }
-            }}
-          >
-            <UserIcon />
-          </button>
-        </nav>
-      </aside>
-      <div className="chatgpt-stage">
-        <header className="chatgpt-topbar">
-          <button
-            type="button"
-            className="chatgpt-icon-button chatgpt-topbar-sidebar-toggle desktop-only"
+            className={`grid size-11 place-items-center rounded-[9px] text-[#48534d] transition hover:bg-[#e9efeb] max-[760px]:hidden ${
+              sidebarExpanded ? "invisible pointer-events-none" : ""
+            }`}
             aria-label={sidebarExpanded ? "Tutup sidebar" : "Buka sidebar"}
             aria-expanded={sidebarExpanded}
             aria-hidden={sidebarExpanded}
             tabIndex={sidebarExpanded ? -1 : 0}
             onClick={() => onSidebarExpandedChange(!sidebarExpanded)}
           >
-            <PanelIcon />
+            <PanelIcon className="size-[21px]" />
           </button>
           <button
             ref={mobileMenuRef}
             type="button"
-            className="chatgpt-icon-button mobile-only"
+            className="hidden size-11 place-items-center rounded-[9px] text-[#48534d] transition hover:bg-[#e9efeb] max-[760px]:grid"
             aria-label={session ? "Buka riwayat" : "Buka menu"}
             aria-expanded={mobileSidebarOpen}
             onClick={() => onMobileSidebarOpenChange(true)}
           >
-            <MenuIcon />
+            <MenuIcon className="size-[21px]" />
           </button>
-          <div className="chatgpt-mobile-brand mobile-only">
-            <span>KP</span>
+          <div className="hidden max-[760px]:block">
+            <span className="grid size-[30px] place-items-center rounded-[7px] bg-javanese text-[9px] font-bold tracking-[0.04em] text-white">
+              KP
+            </span>
           </div>
-          <h1>KerjaPedia AI</h1>
+          <h1
+            className={`m-0 truncate text-[13px] font-medium text-tinta ${
+              session ? "" : "max-[760px]:hidden"
+            }`}
+          >
+            KerjaPedia AI
+          </h1>
           {!session ? (
-            <div className="guest-auth-actions">
+            <div className="flex items-center justify-self-end gap-2 max-[760px]:gap-1.5">
               <button
                 type="button"
-                className="guest-login-button"
+                className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-javanese bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
                 onClick={(event) => openAuthModal(event.currentTarget, "login")}
               >
                 Masuk
               </button>
               <button
                 type="button"
-                className="guest-signup-button"
+                className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-[#c8d2cc] bg-white px-4 text-xs font-semibold text-[#253029] transition hover:border-[#9dafa4] hover:bg-[#f7faf8] max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
                 onClick={(event) => openAuthModal(event.currentTarget, "signup")}
               >
                 Daftar gratis
@@ -523,103 +632,48 @@ export function ChatWorkspaceShell({
             </div>
           ) : null}
         </header>
-        {session && profileMenuOpen ? (
-          <div
-            ref={profileMenuRef}
-            className="profile-menu"
-            role="menu"
-            aria-label="Menu profil pengguna"
-          >
-            <div className="profile-menu-header">
-              <span>{session.user.name.slice(0, 2).toUpperCase()}</span>
-              <div>
-                <strong>{session.user.name}</strong>
-                <small>{session.user.roles.join(", ")}</small>
-              </div>
-            </div>
-            <div className="profile-menu-section">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  onSidebarExpandedChange(true);
-                  setProfileMenuOpen(false);
-                }}
-              >
-                <UserIcon />
-                <span>Profil &amp; riwayat</span>
-              </button>
-              <Link href="/search" role="menuitem" onClick={() => setProfileMenuOpen(false)}>
-                <SearchIcon />
-                <span>Cari Regulasi</span>
-              </Link>
-              <Link href="/legal/privacy" role="menuitem" onClick={() => setProfileMenuOpen(false)}>
-                <SettingsIcon />
-                <span>Privasi</span>
-              </Link>
-              {session.user.roles.includes("admin") ? (
-                <Link
-                  href="/admin/settings"
-                  role="menuitem"
-                  onClick={() => setProfileMenuOpen(false)}
-                >
-                  <SettingsIcon />
-                  <span>Pengaturan</span>
-                </Link>
-              ) : null}
-            </div>
-            <div className="profile-menu-section">
-              <Link
-                href="/legal/disclaimer"
-                role="menuitem"
-                onClick={() => setProfileMenuOpen(false)}
-              >
-                <FileIcon />
-                <span>Bantuan</span>
-              </Link>
-              <button type="button" role="menuitem" onClick={handleLogout}>
-                <LogoutIcon />
-                <span>Keluar</span>
-              </button>
-            </div>
-          </div>
-        ) : null}
-        <main className="chatgpt-main">{children}</main>
+        {session && profileMenuOpen ? profileMenu : null}
+        <main className="min-h-0 flex-1 overflow-hidden bg-white max-[760px]:h-full">
+          {children}
+        </main>
       </div>
       {sourceDrawerOpen && sourcePanel ? (
-        <aside className="chatgpt-source-drawer" aria-label="Sumber dan kutipan">
-          <header>
-            <h2>Sumber</h2>
+        <aside
+          className="min-h-0 min-w-0 overflow-auto border-l border-[#dce4df] bg-white max-[760px]:hidden"
+          aria-label="Sumber dan kutipan"
+        >
+          <header className="sticky top-0 z-[3] flex min-h-[58px] items-center justify-between border-b border-[#dce4df] bg-white py-1.5 pl-[26px] pr-[18px]">
+            <h2 className="m-0 text-[15px] font-semibold text-tinta">Sumber</h2>
             <button
               ref={sourceCloseRef}
               type="button"
-              className="chatgpt-icon-button"
+              className="grid size-[38px] place-items-center rounded-lg text-[#48534d] transition hover:bg-[#e9efeb]"
               aria-label="Tutup sumber"
               onClick={onSourceDrawerClose}
             >
-              <CloseIcon />
+              <CloseIcon className="size-5" />
             </button>
           </header>
           {sourcePanel}
         </aside>
       ) : null}
       {mobileSidebarOpen ? (
-        <div className="chatgpt-mobile-sidebar-layer">
+        <div className="fixed inset-0 z-[120]">
           <button
             type="button"
-            className="chatgpt-sidebar-backdrop"
+            className="absolute inset-0 w-full border-0 bg-[rgba(18,29,23,0.48)]"
             aria-label={session ? "Tutup riwayat" : "Tutup menu"}
             onClick={() => onMobileSidebarOpenChange(false)}
           />
           <aside
             ref={mobileSidebarRef}
-            className="chatgpt-sidebar mobile-sidebar"
             role="dialog"
             aria-modal="true"
             aria-label={session ? "Riwayat percakapan" : "Menu KerjaPedia"}
             onKeyDown={keepMobileFocusInside}
+            className="relative z-[1] flex h-full w-[min(86vw,320px)] flex-col overflow-hidden bg-[#f6faf9] p-[14px_12px_12px] shadow-[16px_0_40px_rgba(17,36,26,0.18)]"
           >
-            {sidebarContent}
+            {sidebarBody}
           </aside>
         </div>
       ) : null}
