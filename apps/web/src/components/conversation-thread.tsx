@@ -241,7 +241,7 @@ export function ConversationThread({
                   title="Edit pesan"
                   onClick={() => onEditMessage(message)}
                 >
-                  <EditIcon className="icon" />
+                  <EditIcon className="size-[18px] [stroke-width:1.8]" />
                 </button>
                 <button
                   type="button"
@@ -250,7 +250,7 @@ export function ConversationThread({
                   title="Salin pesan"
                   onClick={() => void copyText(message.id, message.content)}
                 >
-                  <CopyIcon className="icon" />
+                  <CopyIcon className="size-[18px] [stroke-width:1.8]" />
                 </button>
                 {actionStatus?.messageId === message.id ? (
                   <span className="mx-1 whitespace-nowrap text-[11px] text-muted-text" role="status">
@@ -293,14 +293,14 @@ export function ConversationThread({
                 type="button"
                 onClick={() => onShowSources(message.answer as AnswerPayload)}
               >
-                <FileIcon className="icon" />
+                <FileIcon className="size-[18px] [stroke-width:1.8]" />
                 Lihat {message.answer.citations.length} sumber resmi
                 <span aria-hidden="true">→</span>
               </button>
             ) : null}
             {message.answer?.refusal_reason ? (
               <div className="ml-[44px] mt-3 flex items-start gap-[11px] rounded border-l-[3px] border-[#bd8a2e] bg-[#fffaf0] p-3 text-xs leading-[1.55] text-[#88540d] max-[760px]:ml-0">
-                <AlertIcon className="icon shrink-0" />
+                <AlertIcon className="size-[18px] [stroke-width:1.8] shrink-0" />
                 <span>
                   {message.answer.refusal_reason === "out_of_scope_query"
                     ? "KerjaPedia AI hanya menjawab topik ketenagakerjaan Indonesia."
@@ -312,7 +312,7 @@ export function ConversationThread({
             ) : null}
             {message.answer?.clarification_question ? (
               <div className="ml-[44px] mt-3 flex items-start gap-[11px] rounded border-l-[3px] border-[#bd8a2e] bg-[#fffaf0] p-3 text-xs leading-[1.55] text-[#88540d] max-[760px]:ml-0">
-                <AlertIcon className="icon shrink-0" />
+                <AlertIcon className="size-[18px] [stroke-width:1.8] shrink-0" />
                 <span>{message.answer.clarification_question}</span>
               </div>
             ) : null}
@@ -326,7 +326,7 @@ export function ConversationThread({
                       className="ml-[44px] mt-3 flex items-start gap-[11px] rounded border-l-[3px] border-[#bd8a2e] bg-[#fffaf0] p-3 text-xs leading-[1.55] text-[#88540d] max-[760px]:ml-0"
                       key={code}
                     >
-                      <AlertIcon className="icon shrink-0" />
+                      <AlertIcon className="size-[18px] [stroke-width:1.8] shrink-0" />
                       <span>{label}</span>
                     </div>
                   );
@@ -343,7 +343,7 @@ export function ConversationThread({
                     title="Salin jawaban"
                     onClick={() => void copyText(message.id, message.content)}
                   >
-                    <CopyIcon className="icon" />
+                    <CopyIcon className="size-[18px] [stroke-width:1.8]" />
                   </button>
                   <button
                     type="button"
@@ -356,7 +356,7 @@ export function ConversationThread({
                     aria-pressed={feedback[message.id] === "helpful"}
                     onClick={() => onFeedback(message, "helpful")}
                   >
-                    <ThumbsUpIcon className="icon" />
+                    <ThumbsUpIcon className="size-[18px] [stroke-width:1.8]" />
                   </button>
                   <button
                     type="button"
@@ -377,7 +377,7 @@ export function ConversationThread({
                       }
                     }}
                   >
-                    <ThumbsDownIcon className="icon" />
+                    <ThumbsDownIcon className="size-[18px] [stroke-width:1.8]" />
                   </button>
                   <button
                     type="button"
@@ -386,7 +386,7 @@ export function ConversationThread({
                     title="Bagikan jawaban"
                     onClick={() => void shareAnswer(message)}
                   >
-                    <ShareIcon className="icon" />
+                    <ShareIcon className="size-[18px] [stroke-width:1.8]" />
                   </button>
                 </div>
                 {actionStatus?.messageId === message.id ? (

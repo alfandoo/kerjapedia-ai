@@ -40,7 +40,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_50%_0,#f4fbfa_0,#fff_32rem)] p-6">
       <div className="w-full max-w-[400px] rounded-2xl border border-[#dce4df] bg-white p-[44px_36px_36px] shadow-[0_16px_40px_rgba(21,32,31,0.08)]">
         <div className="mb-7 flex items-center gap-2.5">
-          <ScaleIcon className="icon size-[30px] text-javanese [stroke-width:2]" />
+          <ScaleIcon className="size-[30px] [stroke-width:2] text-javanese" />
           <span className="text-xl font-bold text-tinta">KerjaPedia AI</span>
         </div>
         <div className="mb-5 inline-flex items-center gap-1.5 rounded-lg bg-[linear-gradient(135deg,#dff4f1,#e8f7f5)] px-3 py-[5px] text-[11px] font-bold tracking-[0.04em] text-forest before:size-1.5 before:rounded-full before:bg-javanese before:content-['']">

@@ -117,7 +117,7 @@ export function RegulationSearch() {
           className="flex h-12 min-w-[260px] flex-1 items-center gap-3 rounded-xl border border-[#dce4df] bg-white px-4 transition focus-within:border-javanese focus-within:ring-2 focus-within:ring-javanese/10"
           htmlFor="regulation-search"
         >
-          <SearchIcon className="icon size-5 shrink-0 text-javanese" />
+          <SearchIcon className="size-5 [stroke-width:1.8] shrink-0 text-javanese" />
           <input
             id="regulation-search"
             aria-label="Cari judul, nomor, atau topik regulasi"
@@ -192,7 +192,7 @@ export function RegulationSearch() {
           className="mb-6 flex items-center gap-2.5 rounded-lg border-l-[3px] border-[#bc8121] bg-[#fffaf0] px-4 py-3 text-xs text-[#6e531c]"
           role="status"
         >
-          <AlertIcon className="icon size-4 shrink-0" />
+          <AlertIcon className="size-4 [stroke-width:1.8] shrink-0" />
           Katalog API belum tersedia. Menampilkan daftar referensi lokal sementara.
         </div>
       ) : null}
@@ -297,7 +297,7 @@ export function RegulationSearch() {
                 title="Buka PDF dari dataset"
                 className="inline-flex size-10 items-center justify-center rounded-lg border border-[#c7d4cd] text-forest transition hover:border-emas hover:text-emas"
               >
-                <ExternalIcon className="icon size-4" />
+                <ExternalIcon className="size-4 [stroke-width:1.8]" />
               </a>
             </div>
           </article>

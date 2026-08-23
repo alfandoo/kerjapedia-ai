@@ -361,7 +361,7 @@ export function EditorialChatExperience() {
               className="mx-auto mb-[18px] flex max-w-[760px] items-start gap-[11px] border-l-[3px] border-[#b14b3d] bg-[#fff7f5] p-3 text-xs leading-[1.55] text-[#753328]"
               role="alert"
             >
-              <AlertIcon className="icon mt-0.5 size-4 shrink-0" />
+              <AlertIcon className="mt-0.5 size-4 [stroke-width:1.8] shrink-0" />
               <span>{error}</span>
             </div>
           ) : null}

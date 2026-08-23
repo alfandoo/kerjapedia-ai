@@ -58,7 +58,7 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
       >
         {activeCitations.length === 0 ? (
           <div className="flex flex-col items-center rounded-xl border border-dashed border-[#bfd2ce] p-[34px_18px] text-center">
-            <FileIcon className="icon size-6 text-javanese" />
+            <FileIcon className="size-6 [stroke-width:1.8] text-javanese" />
             <h3 className="mt-3 text-sm font-semibold text-tinta">Belum ada sumber</h3>
             <p className="text-xs leading-[1.55] text-muted-text">
               Sumber resmi akan muncul setelah KerjaPedia menjawab pertanyaan Anda.
@@ -134,7 +134,7 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
               className="ml-[34px] mt-2.5 inline-flex min-h-[38px] items-center gap-2 text-[11px] font-semibold text-javanese transition hover:text-forest"
             >
               Buka PDF dokumen
-              <ExternalIcon className="icon size-3.5" />
+              <ExternalIcon className="size-3.5 [stroke-width:1.8]" />
             </a>
             <div className="ml-[34px] mt-[18px] hidden last:block">
               <p className="mb-2 text-xs text-muted-text">Apakah sumber ini membantu?</p>
@@ -148,7 +148,7 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
                   }`}
                   onClick={() => void handleFeedback("helpful")}
                 >
-                  <ThumbsUpIcon className="icon" />
+                  <ThumbsUpIcon className="size-[18px] [stroke-width:1.8]" />
                   Membantu
                 </button>
                 <button
@@ -160,7 +160,7 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
                   }`}
                   onClick={() => void handleFeedback("not_helpful")}
                 >
-                  <ThumbsDownIcon className="icon" />
+                  <ThumbsDownIcon className="size-[18px] [stroke-width:1.8]" />
                   Tidak membantu
                 </button>
               </div>
@@ -177,7 +177,7 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
         href="/legal/disclaimer"
         className="ml-[34px] mt-2 inline-flex items-center gap-[7px] text-xs font-semibold text-javanese transition hover:underline"
       >
-        <FileIcon className="icon" />
+        <FileIcon className="size-[18px] [stroke-width:1.8]" />
         Baca disclaimer hukum
       </Link>
     </section>

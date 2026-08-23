@@ -63,7 +63,7 @@ export function ChatComposer({
           type="button"
           onClick={onCancel}
         >
-          <StopIcon className="icon" />
+          <StopIcon className="size-[18px] [stroke-width:1.8]" />
           Batalkan
         </button>
       ) : (
@@ -72,7 +72,7 @@ export function ChatComposer({
           type="submit"
           disabled={!question.trim()}
         >
-          <SendIcon className="icon" />
+          <SendIcon className="size-[18px] [stroke-width:1.8]" />
           Kirim
         </button>
       )}

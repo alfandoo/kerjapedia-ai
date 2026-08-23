@@ -41,7 +41,7 @@ function RegisterPageContent() {
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_50%_0,#f4fbfa_0,#fff_32rem)] p-6">
       <div className="w-full max-w-[400px] rounded-2xl border border-[#dce4df] bg-white p-[44px_36px_36px] shadow-[0_16px_40px_rgba(21,32,31,0.08)]">
         <div className="mb-7 flex items-center gap-2.5">
-          <ScaleIcon className="icon size-[30px] text-javanese [stroke-width:2]" />
+          <ScaleIcon className="size-[30px] [stroke-width:2] text-javanese" />
           <span className="text-xl font-bold text-tinta">KerjaPedia AI</span>
         </div>
         <h1 className="mb-2 font-display text-2xl font-semibold text-javanese">

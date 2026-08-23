@@ -120,7 +120,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
                     rel="noreferrer"
                   >
                     {document.source_name || "Buka sumber resmi"}
-                    <ExternalIcon className="icon ml-1 inline-block align-[-3px]" />
+                    <ExternalIcon className="size-[18px] [stroke-width:1.8] ml-1 inline-block align-[-3px]" />
                   </a>
                 </dd>
               </div>
@@ -129,7 +129,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
                 <dd className="text-[13px] text-tinta">
                   <a href={documentPdfUrl(document.document_id)} target="_blank" rel="noreferrer">
                     {document.file_name || "Buka PDF dataset"}
-                    <ExternalIcon className="icon ml-1 inline-block align-[-3px]" />
+                    <ExternalIcon className="size-[18px] [stroke-width:1.8] ml-1 inline-block align-[-3px]" />
                   </a>
                 </dd>
               </div>
@@ -152,7 +152,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
                     key={chunk.chunk_id}
                     className="rounded-md border border-[#dce4df] bg-[linear-gradient(#fff,#fbfdfd)] p-5"
                   >
-                    <FileIcon className="icon mb-2.5 text-javanese" />
+                    <FileIcon className="size-[18px] [stroke-width:1.8] mb-2.5 text-javanese" />
                     <strong className="block text-[13px] text-tinta">{chunk.article}</strong>
                     <small className="block text-xs text-muted-text">
                       {chunk.paragraph ? `${chunk.paragraph} · ` : ""}
@@ -164,7 +164,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
               </ul>
             ) : (
               <div className="rounded-md border border-[#dce4df] bg-[linear-gradient(#fff,#fbfdfd)] p-7">
-                <FileIcon className="icon mb-5 size-7 text-javanese" />
+                <FileIcon className="mb-5 size-7 [stroke-width:1.8] text-javanese" />
                 <p className="m-0 leading-[1.8] text-tinta">
                   Dokumen belum terindeks — jalankan ingestion dari panel admin.
                 </p>

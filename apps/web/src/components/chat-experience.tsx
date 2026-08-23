@@ -188,7 +188,7 @@ export function ChatExperience() {
       <section className="mx-auto flex w-full max-w-[860px] flex-1 flex-col gap-3 px-6 pt-16 pb-10 max-[760px]:px-4 max-[760px]:pt-10">
         <div className="flex items-start gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-full bg-javanese/10 text-javanese">
-            <ChatIcon className="icon" />
+            <ChatIcon className="size-[18px] [stroke-width:1.8]" />
           </span>
           <div>
             <span className="text-[10px] font-bold tracking-[0.18em] text-forest uppercase">
@@ -222,7 +222,7 @@ export function ChatExperience() {
                   className="flex min-h-[46px] cursor-pointer items-center gap-2.5 rounded-lg border border-[#dce4df] bg-white px-3.5 text-left text-[13px] text-[#26312b] transition hover:border-[#9adbd5] hover:bg-[#f6faf9] hover:text-javanese"
                   onClick={() => void handleSubmit(item)}
                 >
-                  <ChatIcon className="icon shrink-0 text-javanese" />
+                  <ChatIcon className="size-[18px] [stroke-width:1.8] shrink-0 text-javanese" />
                   <span>{item}</span>
                 </button>
               ))}
@@ -263,7 +263,7 @@ export function ChatExperience() {
                   ) : null}
                   {message.answer?.refusal_reason ? (
                     <div className="mt-3 flex items-start gap-2 rounded-lg border-l-[3px] border-[#bd8a2e] bg-[#fffaf0] p-3 text-xs leading-[1.55] text-[#88540d]">
-                      <AlertIcon className="icon shrink-0" />
+                      <AlertIcon className="size-[18px] [stroke-width:1.8] shrink-0" />
                       <span>
                         Dasar dokumen belum cukup untuk menjawab pertanyaan ini dengan aman.
                       </span>
@@ -271,7 +271,7 @@ export function ChatExperience() {
                   ) : null}
                   {message.answer?.clarification_question ? (
                     <div className="mt-3 flex items-start gap-2 rounded-lg border-l-[3px] border-[#bd8a2e] bg-[#fffaf0] p-3 text-xs leading-[1.55] text-[#88540d]">
-                      <AlertIcon className="icon shrink-0" />
+                      <AlertIcon className="size-[18px] [stroke-width:1.8] shrink-0" />
                       <span>{message.answer.clarification_question}</span>
                     </div>
                   ) : null}
@@ -289,7 +289,7 @@ export function ChatExperience() {
                         aria-pressed={feedback[message.id] === "helpful"}
                         onClick={() => void handleFeedback(message, "helpful")}
                       >
-                        <ThumbsUpIcon className="icon" />
+                        <ThumbsUpIcon className="size-[18px] [stroke-width:1.8]" />
                       </button>
                       <button
                         type="button"
@@ -302,7 +302,7 @@ export function ChatExperience() {
                         aria-pressed={feedback[message.id] === "not_helpful"}
                         onClick={() => void handleFeedback(message, "not_helpful")}
                       >
-                        <ThumbsDownIcon className="icon" />
+                        <ThumbsDownIcon className="size-[18px] [stroke-width:1.8]" />
                       </button>
                     </div>
                   </div>
@@ -337,7 +337,7 @@ export function ChatExperience() {
             className="flex items-start gap-2 rounded-lg border-l-[3px] border-[#c0563f] bg-[#fdf3f1] p-3 text-xs leading-[1.55] text-[#8c3a27]"
             role="alert"
           >
-            <AlertIcon className="icon shrink-0" />
+            <AlertIcon className="size-[18px] [stroke-width:1.8] shrink-0" />
             <span>{error}</span>
           </div>
         ) : null}
@@ -380,7 +380,7 @@ export function ChatExperience() {
                 type="button"
                 onClick={stopRequest}
               >
-                <StopIcon className="icon" />
+                <StopIcon className="size-[18px] [stroke-width:1.8]" />
                 <span>Batalkan</span>
               </button>
             ) : (
@@ -389,7 +389,7 @@ export function ChatExperience() {
                 type="submit"
                 disabled={!question.trim()}
               >
-                <SendIcon className="icon" />
+                <SendIcon className="size-[18px] [stroke-width:1.8]" />
                 <span>Kirim pertanyaan</span>
               </button>
             )}

@@ -98,7 +98,7 @@ export function AppShell({
           aria-label="KerjaPedia AI beranda"
         >
           <span className="flex size-[42px] items-center justify-center rounded-[9px] bg-javanese text-emas max-[900px]:size-[38px]">
-            <ScaleIcon className="icon size-[22px] [stroke-width:1.6]" />
+            <ScaleIcon className="size-[22px] [stroke-width:1.6]" />
           </span>
           <span>KerjaPedia AI</span>
         </Link>
@@ -188,7 +188,7 @@ export function AppShell({
                 aria-current={item.conversation_id === activeConversationId ? "true" : undefined}
                 onClick={() => onConversationSelect?.(item.conversation_id)}
               >
-                <ChatIcon className="icon shrink-0" />
+                <ChatIcon className="size-[18px] shrink-0 [stroke-width:1.8]" />
                 <span className="min-w-0">
                   <strong className="block truncate text-[13px] font-bold">{item.title}</strong>
                   <small className="mt-1 block text-xs text-muted-text">
@@ -202,7 +202,7 @@ export function AppShell({
             href="/search"
             className="hidden items-center justify-center gap-2.5 rounded-[7px] border border-[#dce4df] bg-white text-sm font-semibold text-tinta transition hover:border-javanese hover:text-javanese lg:flex lg:h-11"
           >
-            <SearchIcon className="icon" />
+            <SearchIcon className="size-[18px] [stroke-width:1.8]" />
             Lihat semua regulasi
           </Link>
         </aside>
