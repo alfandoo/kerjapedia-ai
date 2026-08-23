@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRef, useState, useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import {
   ChartIcon,
   ChatIcon,
+  ChevronLeftIcon,
   DatabaseIcon,
   FileIcon,
   GaugeIcon,
@@ -20,18 +21,37 @@ import {
 } from "./icons";
 import { useStoredSession } from "@/hooks/use-stored-session";
 import { signOut } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type AdminShellProps = { children: ReactNode };
 
-const adminNavigation = [
-  { href: "/admin/dashboard", label: "Dashboard", icon: ChartIcon },
-  { href: "/documents", label: "Dokumen", icon: FileIcon },
-  { href: "/admin/upload", label: "Upload PDF", icon: UploadIcon },
-  { href: "/admin/ingestion", label: "Ingestion", icon: DatabaseIcon },
-  { href: "/admin/feedback", label: "Feedback", icon: ChatIcon },
-  { href: "/admin/retrieval", label: "Retrieval Playground", icon: PlayIcon },
-  { href: "/admin/evaluation", label: "Evaluasi RAG", icon: GaugeIcon },
+const adminNavGroups: {
+  label: string;
+  items: { href: string; label: string; icon: typeof ChartIcon }[];
+}[] = [
+  {
+    label: "Ikhtisar",
+    items: [{ href: "/admin/dashboard", label: "Dashboard", icon: ChartIcon }],
+  },
+  {
+    label: "Pengelolaan",
+    items: [
+      { href: "/documents", label: "Dokumen", icon: FileIcon },
+      { href: "/admin/upload", label: "Upload PDF", icon: UploadIcon },
+      { href: "/admin/ingestion", label: "Ingestion", icon: DatabaseIcon },
+    ],
+  },
+  {
+    label: "Evaluasi",
+    items: [
+      { href: "/admin/feedback", label: "Feedback", icon: ChatIcon },
+      { href: "/admin/retrieval", label: "Retrieval Playground", icon: PlayIcon },
+      { href: "/admin/evaluation", label: "Evaluasi RAG", icon: GaugeIcon },
+    ],
+  },
 ];
+
+const allNavItems = adminNavGroups.flatMap((group) => group.items);
 
 function useIsClient() {
   return useSyncExternalStore(
@@ -45,18 +65,44 @@ export function AdminShell({ children }: AdminShellProps) {
   const isClient = useIsClient();
   const pathname = usePathname();
   const session = useStoredSession();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.localStorage.getItem("kp-admin-sidebar") === "collapsed"
+  );
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  function toggleCollapsed(next: boolean) {
+    setSidebarCollapsed(next);
+    window.localStorage.setItem("kp-admin-sidebar", next ? "collapsed" : "expanded");
+  }
+
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setDropdownOpen(false);
+      setMobileOpen(false);
+    }
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setDropdownOpen(false);
       }
     }
+    document.addEventListener("keydown", handleKeydown);
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("keydown", handleKeydown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
   if (!isClient) {
@@ -66,9 +112,9 @@ export function AdminShell({ children }: AdminShellProps) {
   if (!session || !session.user.roles.includes("admin")) {
     return (
       <div className="flex min-h-[100svh] items-center justify-center bg-arsip px-4">
-        <div className="w-full max-w-md rounded-2xl border border-[#e8e6e1] bg-white p-10 text-center shadow-[0_16px_40px_rgba(27,67,50,0.08)]">
+        <div className="w-full max-w-md rounded-2xl border border-line bg-white p-10 text-center shadow-[0_16px_40px_rgba(27,67,50,0.08)]">
           <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-javanese text-emas">
-            <ScaleIcon className="icon size-7" />
+            <ScaleIcon className="size-7" />
           </span>
           <h1 className="mt-6 font-display text-2xl font-semibold text-javanese">
             Akses admin diperlukan
@@ -95,6 +141,8 @@ export function AdminShell({ children }: AdminShellProps) {
 
   const isActive = (href: string) =>
     href === "/documents" ? pathname === "/documents" : pathname.startsWith(href);
+  const currentSection =
+    [...allNavItems].reverse().find((item) => isActive(item.href))?.label ?? "Admin";
 
   async function handleLogout() {
     try {
@@ -106,109 +154,196 @@ export function AdminShell({ children }: AdminShellProps) {
 
   return (
     <div className="flex min-h-[100svh]">
+      {mobileOpen ? (
+        <button
+          type="button"
+          aria-label="Tutup menu navigasi"
+          className="fixed inset-0 z-40 bg-tinta/40 lg:hidden motion-reduce:transition-none"
+          onClick={() => setMobileOpen(false)}
+        />
+      ) : null}
+
       <aside
-        className={`flex shrink-0 flex-col border-r border-[#e8ede9] bg-[#174f3a] transition-[width] duration-200 ${
-          sidebarCollapsed ? "w-[72px]" : "w-[248px]"
-        }`}
         aria-label="Navigasi admin"
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-[264px] shrink-0 flex-col bg-javanese transition-transform duration-200 motion-reduce:transition-none lg:sticky lg:top-0 lg:h-[100svh] lg:self-start lg:bottom-auto lg:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+          sidebarCollapsed ? "lg:w-[76px]" : "lg:w-[248px]"
+        )}
       >
-        <div className="flex flex-1 flex-col overflow-y-auto">
-          <div className="flex h-16 items-center gap-3 border-b border-white/10 px-4">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-emas">
-              <ScaleIcon />
-            </span>
-            {!sidebarCollapsed && (
-              <>
-                <span className="font-display text-base font-semibold tracking-wide text-white">
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/10 px-4">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-emas">
+            <ScaleIcon className="size-5" />
+          </span>
+          {!sidebarCollapsed && (
+            <>
+              <div className="min-w-0 leading-tight">
+                <p className="truncate font-display text-base font-semibold tracking-wide text-white">
                   KerjaPedia AI
-                </span>
-                <button
-                  type="button"
-                  className="ml-auto flex size-8 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white"
-                  aria-label="Tutup sidebar"
-                  onClick={() => setSidebarCollapsed(true)}
-                >
-                  <PanelLeftIcon className="icon size-4" />
-                </button>
-              </>
-            )}
-          </div>
-          <nav className="flex flex-1 flex-col gap-1 p-3">
-            {adminNavigation.map((item) => {
-              const Icon = item.icon;
-              const active = isActive(item.href);
-              return (
-                <Link
-                  href={item.href}
-                  key={item.href}
-                  className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm transition ${
-                    active
-                      ? "bg-white/10 font-semibold text-white"
-                      : "text-white/60 hover:bg-white/5 hover:text-white"
-                  } ${sidebarCollapsed ? "justify-center px-0" : ""}`}
-                  title={sidebarCollapsed ? item.label : undefined}
-                >
-                  <Icon className="icon size-5 shrink-0" />
-                  {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
-                </Link>
-              );
-            })}
-          </nav>
+                </p>
+                <p className="font-mono text-[10px] tracking-[0.22em] text-emas/90 uppercase">
+                  Konsol admin
+                </p>
+              </div>
+              <button
+                type="button"
+                className="ml-auto flex size-8 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white max-lg:hidden"
+                aria-label="Ciutkan sidebar"
+                onClick={() => toggleCollapsed(true)}
+              >
+                <PanelLeftIcon className="size-4" />
+              </button>
+              <button
+                type="button"
+                className="ml-auto flex size-8 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white lg:hidden"
+                aria-label="Tutup menu"
+                onClick={() => setMobileOpen(false)}
+              >
+                <ChevronLeftIcon className="size-5" />
+              </button>
+            </>
+          )}
+          {sidebarCollapsed && (
+            <button
+              type="button"
+              className="mx-auto flex size-8 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white"
+              aria-label="Perluas sidebar"
+              onClick={() => toggleCollapsed(false)}
+            >
+              <PanelLeftIcon className="size-4" />
+            </button>
+          )}
         </div>
+
+        <nav
+          className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4"
+          aria-label="Menu admin"
+        >
+          {adminNavGroups.map((group) => (
+            <div key={group.label} className="space-y-1">
+              {!sidebarCollapsed && (
+                <p className="px-3 pb-1 font-mono text-[10px] font-semibold tracking-[0.2em] text-white/35 uppercase">
+                  {group.label}
+                </p>
+              )}
+              {sidebarCollapsed && <div className="mx-auto mb-1 h-px w-8 bg-white/15" />}
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.href);
+                return (
+                  <Link
+                    href={item.href}
+                    key={item.href}
+                    aria-current={active ? "page" : undefined}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      "relative flex h-11 items-center gap-3 rounded-lg pr-3 text-sm transition",
+                      sidebarCollapsed && "lg:justify-center lg:px-0",
+                      active
+                        ? "bg-white/10 font-semibold text-white"
+                        : "text-white/60 hover:bg-white/5 hover:text-white"
+                    )}
+                  >
+                    {active ? (
+                      <span
+                        aria-hidden="true"
+                        className="absolute top-1/2 left-0 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-emas"
+                      />
+                    ) : null}
+                    <Icon className="size-5 shrink-0" />
+                    {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        {!sidebarCollapsed && (
+          <p className="border-t border-white/10 px-5 py-3.5 font-mono text-[10px] tracking-wider text-white/35 uppercase">
+            Knowledge base MVP
+          </p>
+        )}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col bg-arsip">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-[#e8ede9] bg-white px-6">
-          <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-line bg-white px-4 lg:px-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              className="-ml-1 flex size-9 items-center justify-center rounded-lg text-javanese transition hover:bg-surface-soft lg:hidden"
+              aria-label="Buka menu navigasi"
+              aria-expanded={mobileOpen}
+              onClick={() => setMobileOpen(true)}
+            >
+              <PanelLeftIcon className="size-5 rotate-180" />
+            </button>
             {sidebarCollapsed && (
               <button
                 type="button"
-                className="flex size-8 items-center justify-center rounded-lg text-javanese transition hover:bg-arsip"
+                className="hidden size-9 items-center justify-center rounded-lg text-javanese transition hover:bg-surface-soft lg:flex"
                 aria-label="Buka sidebar"
-                onClick={() => setSidebarCollapsed(false)}
+                onClick={() => toggleCollapsed(false)}
               >
-                <PanelLeftIcon className="icon size-4" />
+                <PanelLeftIcon className="size-4" />
               </button>
             )}
-            <span className="text-sm font-semibold text-tinta">Dashboard</span>
+            <nav aria-label="Lokasi halaman" className="flex min-w-0 items-center gap-2 text-sm">
+              <span className="hidden font-mono text-[11px] tracking-[0.18em] text-muted-text uppercase sm:inline">
+                Admin
+              </span>
+              <span aria-hidden="true" className="hidden text-muted-text/50 sm:inline">
+                /
+              </span>
+              <span className="truncate font-semibold text-tinta">{currentSection}</span>
+            </nav>
           </div>
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative shrink-0" ref={dropdownRef}>
             <button
               type="button"
-              className="flex h-10 items-center gap-2.5 rounded-xl border border-[#e8e6e1] bg-white px-3 transition hover:border-[#c9d5ce]"
+              className="flex h-10 items-center gap-2.5 rounded-xl border border-line bg-white px-2.5 transition hover:border-javanese/30"
               onClick={() => setDropdownOpen(!dropdownOpen)}
               aria-expanded={dropdownOpen}
+              aria-haspopup="menu"
             >
               <span className="flex size-7 items-center justify-center rounded-lg bg-javanese text-white">
-                <UserIcon className="icon size-4" />
+                <UserIcon className="size-4" />
               </span>
               <span className="max-w-40 truncate text-sm font-medium text-tinta">
                 {session.user.name}
               </span>
             </button>
             {dropdownOpen && (
-              <div className="absolute right-0 top-12 w-52 overflow-hidden rounded-xl border border-[#e8e6e1] bg-white shadow-[0_12px_32px_rgba(27,67,50,0.12)]">
+              <div
+                role="menu"
+                className="absolute right-0 top-12 w-52 overflow-hidden rounded-xl border border-line bg-white shadow-[0_12px_32px_rgba(27,67,50,0.12)]"
+              >
                 <Link
                   href="/admin/settings"
-                  className="flex h-11 items-center gap-2.5 px-4 text-sm text-tinta transition hover:bg-arsip"
+                  role="menuitem"
+                  className="flex h-11 items-center gap-2.5 px-4 text-sm text-tinta transition hover:bg-surface-soft"
                   onClick={() => setDropdownOpen(false)}
                 >
-                  <SettingIcon className="icon size-4 text-muted-text" />
+                  <SettingIcon className="size-4 text-muted-text" />
                   <span>Pengaturan</span>
                 </Link>
                 <button
                   type="button"
-                  className="flex h-11 w-full items-center gap-2.5 px-4 text-sm text-tinta transition hover:bg-arsip"
+                  role="menuitem"
+                  className="flex h-11 w-full items-center gap-2.5 px-4 text-sm text-tinta transition hover:bg-surface-soft"
                   onClick={handleLogout}
                 >
-                  <LogoutIcon className="icon size-4 text-muted-text" />
+                  <LogoutIcon className="size-4 text-muted-text" />
                   <span>Logout</span>
                 </button>
               </div>
             )}
           </div>
         </header>
-        <main className="flex-1 px-6 py-8 lg:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          {children}
+        </main>
       </div>
     </div>
   );

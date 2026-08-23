@@ -2,15 +2,7 @@
 
 import Link from "next/link";
 import { type DragEvent, useRef, useState } from "react";
-import {
-  ArrowLeft,
-  CheckCircle2,
-  FileText,
-  Loader2,
-  PlayCircle,
-  Upload,
-  X,
-} from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileText, Loader2, PlayCircle, Upload, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/admin/primitives";
 import { cn } from "@/lib/utils";
 import { createIngestionJob, uploadAdminDocument, type AdminUploadResult } from "@/lib/api";
 
@@ -116,22 +109,18 @@ export function AdminUpload() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-xs font-medium tracking-[0.18em] text-forest uppercase">
-            Tambah regulasi
-          </p>
-          <h1 className="font-display text-2xl font-semibold text-javanese">Upload PDF</h1>
-          <p className="text-sm text-muted-text">
-            Tambahkan dokumen resmi ke knowledge base untuk diproses oleh pipeline ingestion.
-          </p>
-        </div>
-        <Button asChild variant="outline">
-          <Link href="/documents">
-            <ArrowLeft /> Kembali ke dokumen
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        eyebrow="Tambah regulasi"
+        title="Upload PDF"
+        description="Tambahkan dokumen resmi ke knowledge base untuk diproses oleh pipeline ingestion."
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/documents">
+              <ArrowLeft /> Kembali ke dokumen
+            </Link>
+          </Button>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-5">
         <div
@@ -157,7 +146,7 @@ export function AdminUpload() {
           <span
             className={cn(
               "flex size-14 items-center justify-center rounded-full transition-colors",
-              dragging ? "bg-white text-forest" : "bg-[#e7f3ec] text-forest"
+              dragging ? "bg-white text-forest" : "bg-teal-soft text-forest"
             )}
           >
             <Upload className="size-6" />
@@ -189,8 +178,8 @@ export function AdminUpload() {
           </CardHeader>
           <CardContent className="space-y-4">
             {file ? (
-              <div className="flex items-center gap-3 rounded-lg border-[#e8e6e1] px-3 py-2.5">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[#e7f3ec] text-forest">
+              <div className="flex items-center gap-3 rounded-lg border border-line px-3 py-2.5">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-teal-soft text-forest">
                   <FileText className="size-4" />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -212,7 +201,7 @@ export function AdminUpload() {
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2 rounded-lg border-[#e8e6e1] border-dashed px-3 py-8 text-center">
+              <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-line px-3 py-8 text-center">
                 <FileText className="size-5 text-muted-text" />
                 <p className="text-sm text-muted-text">Belum ada file dipilih.</p>
               </div>
@@ -263,22 +252,24 @@ export function AdminUpload() {
                 role="status"
                 className={cn(
                   "flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm",
-                  statusTone === "error" && "border-[#a94442]/30 bg-[#fbeaea] text-[#a94442]",
-                  statusTone === "success" && "border-[#2d6a4f]/30 bg-[#e7f3ec] text-forest",
-                  statusTone === "info" && "border-[#e8e6e1] bg-[#f1f0ec] text-muted-text"
+                  statusTone === "error" && "border-red/25 bg-red-soft text-red",
+                  statusTone === "success" && "border-forest/25 bg-teal-soft/60 text-forest",
+                  statusTone === "info" && "border-line bg-surface-soft text-muted-text"
                 )}
               >
                 {statusTone === "error" ? (
-                  <Badge className="bg-[#fbeaea] text-[#a94442]">Gagal</Badge>
+                  <Badge className="border border-red/25 bg-red-soft text-red">Gagal</Badge>
                 ) : statusTone === "success" ? (
-                  <Badge className="bg-[#e7f3ec] text-forest">Berhasil</Badge>
+                  <Badge className="border border-forest/20 bg-teal-soft/70 text-forest">
+                    Berhasil
+                  </Badge>
                 ) : null}
                 <span className="flex-1">{status}</span>
               </div>
             ) : null}
 
             {uploaded ? (
-              <div className="space-y-3 rounded-lg border-[#2d6a4f]/30 bg-[#e7f3ec]/40 p-3">
+              <div className="space-y-3 rounded-lg border border-forest/25 bg-teal-soft/30 p-3">
                 <div className="flex items-center gap-2 text-sm">
                   <CheckCircle2 className="size-4 shrink-0 text-forest" />
                   <span className="min-w-0">

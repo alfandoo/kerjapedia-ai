@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/admin/primitives";
 import { cn } from "@/lib/utils";
 import { runRetrievalPlayground } from "@/lib/api";
 import { fallbackRetrievalResults } from "@/lib/sample-data";
@@ -57,9 +58,7 @@ function RetrievalQuote({
         {metrics.map((metric) => (
           <div key={metric.label} className="min-w-0">
             <dt className="text-xs text-muted-foreground">{metric.label}</dt>
-            <dd className="truncate font-mono text-sm font-medium tabular-nums">
-              {metric.value}
-            </dd>
+            <dd className="truncate font-mono text-sm font-medium tabular-nums">{metric.value}</dd>
           </div>
         ))}
       </dl>
@@ -124,15 +123,11 @@ export function AdminRetrieval() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <p className="text-xs font-medium tracking-[0.18em] text-teal uppercase">
-          Pengujian retrieval
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight">Retrieval Playground</h1>
-        <p className="text-sm text-muted-foreground">
-          Uji retrieval sebelum perubahan dipublikasikan.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Pengujian retrieval"
+        title="Retrieval Playground"
+        description="Uji retrieval sebelum perubahan dipublikasikan."
+      />
 
       <div className="grid gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-2">

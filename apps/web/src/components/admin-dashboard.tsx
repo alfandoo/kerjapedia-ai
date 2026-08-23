@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle,
   BadgeCheck,
-  CheckCircle2,
   ChevronRight,
   FileText,
   Plus,
@@ -18,13 +16,7 @@ import { Toaster, toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -52,6 +44,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { Callout, EmptyState, PageHeader, StatusBadge } from "@/components/admin/primitives";
 import { cn } from "@/lib/utils";
 import {
   createIngestionJob,
@@ -71,12 +64,14 @@ const ingestionLabels: Record<AdminDocument["ingestion_status"], string> = {
   queued: "Antre",
 };
 
-const ingestionBadgeClasses: Record<AdminDocument["ingestion_status"], string> = {
-  completed: "bg-[#e7f3ec] text-forest",
-  needs_review: "bg-[#faf3e0] text-[#b8860b]",
-  failed: "bg-[#fbeaea] text-[#a94442]",
-  running: "bg-[#f1f0ec] text-slate-600",
-  queued: "bg-[#f1f0ec] text-slate-600",
+type BadgeTone = "success" | "warning" | "danger" | "info" | "neutral";
+
+const ingestionTone: Record<AdminDocument["ingestion_status"], BadgeTone> = {
+  completed: "success",
+  needs_review: "warning",
+  failed: "danger",
+  running: "info",
+  queued: "neutral",
 };
 
 function formatDate(value: string) {
@@ -228,7 +223,9 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
     try {
       const job = await createIngestionJob(document.document_id);
       onChange({ ...document, ingestion_status: job.status });
-      toast.success(`Re-ingest selesai dengan status ${ingestionLabels[job.status] ?? job.status}.`);
+      toast.success(
+        `Re-ingest selesai dengan status ${ingestionLabels[job.status] ?? job.status}.`
+      );
     } catch {
       onChange({ ...document, ingestion_status: "queued" });
       toast.info("API belum tersedia — re-ingest masuk antrean lokal.");
@@ -299,16 +296,15 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
                 rows={3}
               />
             </div>
-            <Button className="w-full bg-javanese text-white hover:bg-forest" onClick={() => void saveMetadata()}>
+            <Button
+              className="w-full bg-javanese text-white hover:bg-forest"
+              onClick={() => void saveMetadata()}
+            >
               Simpan perubahan
             </Button>
             {!isVerified ? (
               <div className="space-y-1.5">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => void markVerified()}
-                >
+                <Button variant="outline" className="w-full" onClick={() => void markVerified()}>
                   <BadgeCheck className="text-forest" /> Tandai terverifikasi
                 </Button>
                 <p className="text-xs text-muted-text">
@@ -328,7 +324,7 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
                 {document.relationships.map((relationship) => (
                   <li
                     key={`${relationship.relationship_type}-${relationship.to_document_id}`}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-[#e8e6e1] px-3 py-2.5"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2.5"
                   >
                     <div className="min-w-0">
                       <Badge variant="secondary" className="mb-1">
@@ -351,7 +347,7 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
                 ))}
               </ul>
             ) : (
-              <p className="rounded-lg bg-[#f1f0ec]/50 px-3 py-4 text-sm text-muted-text">
+              <p className="rounded-lg bg-surface-soft px-3 py-4 text-sm text-muted-text">
                 Belum ada relasi hukum untuk dokumen ini.
               </p>
             )}
@@ -382,7 +378,7 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
               {document.versions.map((version) => (
                 <li
                   key={`${version.version}-${version.created_at}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-[#e8e6e1] px-3 py-2.5"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2.5"
                 >
                   <span className="font-mono text-sm font-semibold">v{version.version}</span>
                   <span className="flex-1">
@@ -394,7 +390,7 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
                     </small>
                   </span>
                   {version.version === document.version ? (
-                    <Badge className="bg-[#e7f3ec] text-forest">Aktif</Badge>
+                    <StatusBadge tone="success">Aktif</StatusBadge>
                   ) : null}
                 </li>
               ))}
@@ -402,25 +398,16 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
           </TabsContent>
         </Tabs>
 
-        <div
-          className={cn(
-            "mt-4 flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm",
-            document.last_error ? "border-[#b8860b]/30 bg-[#faf3e0]/60" : "border-forest/30 bg-[#e7f3ec]/60"
-          )}
-        >
+        <div className="mt-4">
           {document.last_error ? (
-            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[#b8860b]" />
+            <Callout tone="warning" title="Log parsing perlu ditinjau">
+              {document.last_error}
+            </Callout>
           ) : (
-            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" />
+            <Callout tone="success" title="Parsing tanpa error">
+              {document.chunk_count} chunk siap digunakan.
+            </Callout>
           )}
-          <span>
-            <strong className="block">
-              {document.last_error ? "Log parsing perlu ditinjau" : "Parsing tanpa error"}
-            </strong>
-            <small className="text-xs text-muted-text">
-              {document.last_error ?? `${document.chunk_count} chunk siap digunakan.`}
-            </small>
-          </span>
         </div>
       </div>
 
@@ -497,44 +484,65 @@ export function AdminDashboard() {
   }
 
   const summaryCells = [
-    { label: "Dokumen", value: summary.documents, note: "Total regulasi", tone: "text-forest" },
-    { label: "Terbit", value: summary.published, note: "Sudah dipublikasikan", tone: "text-forest" },
-    { label: "Review", value: summary.needsReview, note: "Perlu ditinjau", tone: "text-[#b8860b]" },
-    { label: "Gagal", value: summary.failed, note: "Ingestion error", tone: "text-[#a94442]" },
+    {
+      label: "Dokumen",
+      value: summary.documents,
+      note: "Total regulasi",
+      dot: "bg-javanese/50",
+      tone: "text-tinta",
+    },
+    {
+      label: "Terbit",
+      value: summary.published,
+      note: "Sudah dipublikasikan",
+      dot: "bg-forest",
+      tone: "text-tinta",
+    },
+    {
+      label: "Review",
+      value: summary.needsReview,
+      note: "Perlu ditinjau",
+      dot: "bg-amber",
+      tone: "text-amber",
+    },
+    {
+      label: "Gagal",
+      value: summary.failed,
+      note: "Ingestion error",
+      dot: "bg-red",
+      tone: "text-red",
+    },
   ];
 
   return (
     <div className="space-y-6">
       <Toaster position="bottom-right" richColors />
 
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-xs font-medium tracking-[0.18em] text-forest uppercase">
-            Regulasi ketenagakerjaan
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
-          <p className="text-sm text-muted-text">{loadStatus}</p>
-        </div>
-        <Button asChild className="bg-javanese text-white hover:bg-forest">
-          <Link href="/admin/upload">
-            <Upload /> Upload dokumen
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        eyebrow="Regulasi ketenagakerjaan"
+        title="Knowledge Base"
+        description={loadStatus}
+        actions={
+          <Button asChild className="bg-javanese text-white hover:bg-forest">
+            <Link href="/admin/upload">
+              <Upload /> Upload dokumen
+            </Link>
+          </Button>
+        }
+      />
 
-      <Card>
-        <CardContent className="grid grid-cols-2 divide-x divide-y lg:grid-cols-4 lg:divide-y-0">
-          {summaryCells.map((cell) => (
-            <div key={cell.label} className="px-(--card-spacing) py-4">
-              <p className={cn("font-mono text-2xl font-semibold tabular-nums", cell.tone)}>
-                {cell.value}
-              </p>
-              <p className="text-sm font-medium">{cell.label}</p>
-              <p className="text-xs text-muted-text">{cell.note}</p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4">
+        {summaryCells.map((cell) => (
+          <div key={cell.label} className="flex flex-col gap-0.5 bg-white px-5 py-4">
+            <p className="flex items-center gap-1.5 font-mono text-xl font-bold text-tinta tabular-nums">
+              <span aria-hidden="true" className={cn("size-1.5 rounded-full", cell.dot)} />
+              <span className={cell.tone}>{cell.value}</span>
+            </p>
+            <p className="text-sm font-medium">{cell.label}</p>
+            <p className="text-xs text-muted-text">{cell.note}</p>
+          </div>
+        ))}
+      </div>
 
       <Card>
         <CardHeader>
@@ -591,9 +599,15 @@ export function AdminDashboard() {
             </TableHeader>
             <TableBody>
               {filteredDocuments.map((document) => (
-                <TableRow key={document.document_id} className="cursor-pointer" onClick={() => setSelectedId(document.document_id)}>
+                <TableRow
+                  key={document.document_id}
+                  className="cursor-pointer"
+                  onClick={() => setSelectedId(document.document_id)}
+                >
                   <TableCell className="max-w-64">
-                    <span className="block truncate text-sm font-medium">{document.short_title}</span>
+                    <span className="block truncate text-sm font-medium">
+                      {document.short_title}
+                    </span>
                     <span className="block text-xs text-muted-text">
                       {document.regulation_type} · {document.year}
                     </span>
@@ -606,15 +620,18 @@ export function AdminDashboard() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge className={ingestionBadgeClasses[document.ingestion_status]}>
+                    <StatusBadge
+                      tone={ingestionTone[document.ingestion_status]}
+                      pulse={document.ingestion_status === "running"}
+                    >
                       {ingestionLabels[document.ingestion_status]}
-                    </Badge>
+                    </StatusBadge>
                   </TableCell>
                   <TableCell>
                     {document.publication_status === "published" ? (
-                      <Badge className="bg-[#e7f3ec] text-forest">Terbit</Badge>
+                      <StatusBadge tone="success">Terbit</StatusBadge>
                     ) : (
-                      <Badge variant="secondary">Draft</Badge>
+                      <StatusBadge tone="neutral">Draft</StatusBadge>
                     )}
                   </TableCell>
                   <TableCell className="font-mono text-xs">v{document.version}</TableCell>
@@ -638,15 +655,11 @@ export function AdminDashboard() {
               {filteredDocuments.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7}>
-                    <div className="flex flex-col items-center gap-2 py-10 text-center">
-                      <span className="flex size-10 items-center justify-center rounded-full bg-[#f1f0ec] text-slate-600">
-                        <FileText className="size-5" />
-                      </span>
-                      <p className="text-sm font-medium">Tidak ada dokumen yang cocok</p>
-                      <p className="text-sm text-muted-text">
-                        Ubah kata kunci atau filter untuk melihat hasil lain.
-                      </p>
-                    </div>
+                    <EmptyState
+                      icon={FileText}
+                      title="Tidak ada dokumen yang cocok"
+                      hint="Ubah kata kunci atau filter untuk melihat hasil lain."
+                    />
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -655,7 +668,12 @@ export function AdminDashboard() {
         </CardContent>
       </Card>
 
-      <Sheet open={selectedDocument !== null} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
+      <Sheet
+        open={selectedDocument !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedId(null);
+        }}
+      >
         <SheetContent side="right" className="w-full sm:max-w-md">
           {selectedDocument ? (
             <DocumentInspector

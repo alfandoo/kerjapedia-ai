@@ -15,13 +15,7 @@ import { Toaster, toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +40,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/admin/primitives";
 import { cn } from "@/lib/utils";
 import {
   createEvaluationRun,
@@ -151,9 +146,11 @@ function RunDetailDialog({
         <DialogHeader>
           <DialogTitle>Detail evaluasi</DialogTitle>
           <DialogDescription>
-            <span className="font-mono">{detail.run_id}</span> · {datasetName ?? detail.dataset_id} ·{" "}
-            {formatDateTime(detail.created_at)}
-            {detail.report ? ` · ${detail.report.question_count} pertanyaan, top_k=${detail.report.top_k}` : ""}
+            <span className="font-mono">{detail.run_id}</span> · {datasetName ?? detail.dataset_id}{" "}
+            · {formatDateTime(detail.created_at)}
+            {detail.report
+              ? ` · ${detail.report.question_count} pertanyaan, top_k=${detail.report.top_k}`
+              : ""}
           </DialogDescription>
         </DialogHeader>
 
@@ -183,7 +180,10 @@ function RunDetailDialog({
                   <TableRow key={topic}>
                     <TableCell className="font-medium">{topic.replaceAll("_", " ")}</TableCell>
                     {experiments.map((experiment) => (
-                      <TableCell key={experiment.mode} className="text-right font-mono tabular-nums">
+                      <TableCell
+                        key={experiment.mode}
+                        className="text-right font-mono tabular-nums"
+                      >
                         {pct(experiment.per_topic[topic]?.recall_at_5)}
                       </TableCell>
                     ))}
@@ -343,34 +343,32 @@ export function AdminEvaluation() {
     <div className="space-y-6">
       <Toaster position="bottom-right" richColors />
 
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-xs font-medium tracking-[0.18em] text-teal uppercase">
-            Benchmark kualitas
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">Evaluasi RAG</h1>
-          <p className="text-sm text-muted-foreground">{loadStatus}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled={seeding} onClick={() => void seed()}>
-            <RefreshCw className={seeding ? "animate-spin" : ""} /> Golden questions
-          </Button>
-          <Button
-            className="bg-teal text-white hover:bg-teal-strong"
-            onClick={() => setRunDialogOpen(true)}
-          >
-            <Play /> Jalankan evaluasi
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Benchmark kualitas"
+        title="Evaluasi RAG"
+        description={loadStatus}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" disabled={seeding} onClick={() => void seed()}>
+              <RefreshCw className={seeding ? "animate-spin" : ""} /> Golden questions
+            </Button>
+            <Button
+              className="bg-teal text-white hover:bg-teal-strong"
+              onClick={() => setRunDialogOpen(true)}
+            >
+              <Play /> Jalankan evaluasi
+            </Button>
+          </div>
+        }
+      />
 
       {latestRun ? (
         <Card>
           <CardHeader>
             <CardTitle>Perbandingan mode terakhir</CardTitle>
             <CardDescription>
-              {formatDateTime(latestRun.created_at)} ·{" "}
-              {datasetName(latestRun.dataset_id)} · {latestRun.run_id}
+              {formatDateTime(latestRun.created_at)} · {datasetName(latestRun.dataset_id)} ·{" "}
+              {latestRun.run_id}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -406,7 +404,11 @@ export function AdminEvaluation() {
                   ...Object.values(run.metrics).map((metrics) => metrics.recall_at_5)
                 );
                 return (
-                  <TableRow key={run.run_id} className="cursor-pointer" onClick={() => void openDetail(run)}>
+                  <TableRow
+                    key={run.run_id}
+                    className="cursor-pointer"
+                    onClick={() => void openDetail(run)}
+                  >
                     <TableCell className="text-xs text-muted-foreground tabular-nums">
                       {formatDateTime(run.created_at)}
                     </TableCell>

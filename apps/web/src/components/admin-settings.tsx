@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle2, Database, History, Shield } from "lucide-r
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, PageHeader } from "@/components/admin/primitives";
 import { cn } from "@/lib/utils";
 import {
   fetchAdminSettings,
@@ -52,15 +53,7 @@ export function AdminSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-xs font-medium tracking-[0.18em] text-teal uppercase">
-            Konfigurasi sistem
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">Pengaturan</h1>
-          <p className="text-sm text-muted-foreground">{status}</p>
-        </div>
-      </div>
+      <PageHeader eyebrow="Konfigurasi sistem" title="Pengaturan" description={status} />
 
       <div className="grid gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-2">
@@ -114,9 +107,7 @@ export function AdminSettings() {
             <CardTitle className="flex items-center gap-2">
               <History className="size-4 text-teal" /> Audit trail
             </CardTitle>
-            <CardDescription>
-              Aktivitas admin terbaru yang tercatat di log sistem
-            </CardDescription>
+            <CardDescription>Aktivitas admin terbaru yang tercatat di log sistem</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             {logs === null ? (
@@ -126,9 +117,11 @@ export function AdminSettings() {
                 ))}
               </div>
             ) : logs.length === 0 ? (
-              <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-                Belum ada aktivitas admin tercatat.
-              </p>
+              <EmptyState
+                icon={History}
+                title="Belum ada aktivitas admin tercatat"
+                hint="Perubahan dokumen, publikasi, dan metadata akan muncul di sini."
+              />
             ) : (
               <ul className="divide-y">
                 {logs.map((entry) => (

@@ -1,18 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, RefreshCw, Timer } from "lucide-react";
+import { RefreshCw, Timer } from "lucide-react";
 import { Toaster, toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -20,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Callout, EmptyState, PageHeader, StatusBadge } from "@/components/admin/primitives";
 import { cn } from "@/lib/utils";
 import { createIngestionJob, fetchIngestionJobs } from "@/lib/api";
 import { fallbackIngestionJobs } from "@/lib/sample-data";
@@ -33,12 +27,15 @@ const jobLabels: Record<IngestionJob["status"], string> = {
   queued: "Antre",
 };
 
-const jobBadgeClasses: Record<IngestionJob["status"], string> = {
-  completed: "bg-[#e7f3ec] text-forest",
-  needs_review: "bg-[#faf3e0] text-[#b8860b]",
-  failed: "bg-[#fbeaea] text-[#a94442]",
-  running: "bg-[#f1f0ec] text-muted-text",
-  queued: "bg-[#f1f0ec] text-muted-text",
+const jobTones: Record<
+  IngestionJob["status"],
+  "success" | "warning" | "danger" | "info" | "neutral"
+> = {
+  completed: "success",
+  needs_review: "warning",
+  failed: "danger",
+  running: "info",
+  queued: "neutral",
 };
 
 function formatDateTime(value: string) {
@@ -101,26 +98,24 @@ export function AdminIngestion() {
     <div className="space-y-6">
       <Toaster position="bottom-right" richColors />
 
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-xs font-medium tracking-[0.18em] text-forest uppercase">
-            Pipeline pemrosesan
-          </p>
-          <h1 className="font-display text-2xl font-semibold text-javanese">Ingestion</h1>
-          <p className="text-sm text-muted-text">{loadStatus}</p>
-        </div>
-        <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger aria-label="Filter job ingestion">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Semua status</SelectItem>
-            <SelectItem value="completed">Selesai</SelectItem>
-            <SelectItem value="needs_review">Perlu review</SelectItem>
-            <SelectItem value="failed">Gagal</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <PageHeader
+        eyebrow="Pipeline pemrosesan"
+        title="Ingestion"
+        description={loadStatus}
+        actions={
+          <Select value={filter} onValueChange={setFilter}>
+            <SelectTrigger aria-label="Filter job ingestion" className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua status</SelectItem>
+              <SelectItem value="completed">Selesai</SelectItem>
+              <SelectItem value="needs_review">Perlu review</SelectItem>
+              <SelectItem value="failed">Gagal</SelectItem>
+            </SelectContent>
+          </Select>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">
@@ -139,19 +134,19 @@ export function AdminIngestion() {
                     key={job.job_id}
                     className={cn(
                       "flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors",
-                      selected ? "bg-[#e7f3ec]/40" : "hover:bg-[#f1f0ec]/50"
+                      selected
+                        ? "bg-teal-soft/40 shadow-[inset_3px_0_0_var(--teal)]"
+                        : "hover:bg-surface-soft"
                     )}
                     onClick={() => setSelectedJobId(job.job_id)}
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{job.document_id}</p>
-                      <p className="truncate font-mono text-xs text-muted-text">
-                        {job.job_id}
-                      </p>
+                      <p className="truncate font-mono text-xs text-muted-text">{job.job_id}</p>
                     </div>
-                    <Badge className={jobBadgeClasses[job.status]}>
+                    <StatusBadge tone={jobTones[job.status]} pulse={job.status === "running"}>
                       {jobLabels[job.status]}
-                    </Badge>
+                    </StatusBadge>
                     <span className="text-xs text-muted-text tabular-nums">
                       {formatDateTime(job.updated_at)}
                     </span>
@@ -171,13 +166,11 @@ export function AdminIngestion() {
                 );
               })}
               {filtered.length === 0 ? (
-                <li className="flex flex-col items-center gap-2 px-4 py-10 text-center">
-                  <span className="flex size-10 items-center justify-center rounded-full bg-[#f1f0ec] text-muted-text">
-                    <Timer className="size-5" />
-                  </span>
-                  <p className="text-sm font-medium">Tidak ada job dengan filter ini</p>
-                  <p className="text-sm text-muted-text">Ubah filter untuk melihat hasil.</p>
-                </li>
+                <EmptyState
+                  icon={Timer}
+                  title="Tidak ada job dengan filter ini"
+                  hint="Ubah filter untuk melihat hasil lain."
+                />
               ) : null}
             </ul>
           </CardContent>
@@ -202,44 +195,32 @@ export function AdminIngestion() {
                   ))}
                 </dl>
 
-                <div
-                  className={cn(
-                    "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm",
-                    selectedJob.error
-                      ? "border-[#b8860b]/30 bg-[#faf3e0]/60"
-                      : "border-[#2d6a4f]/30 bg-[#e7f3ec]/60"
-                  )}
-                >
+                <div className="space-y-3">
                   {selectedJob.error ? (
-                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[#b8860b]" />
+                    <Callout tone="warning" title="Perlu review manual">
+                      {selectedJob.error}
+                    </Callout>
                   ) : (
-                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" />
+                    <Callout tone="success" title="Tidak ada error parsing">
+                      Semua tahapan pipeline selesai.
+                    </Callout>
                   )}
-                  <span>
-                    <strong className="block">
-                      {selectedJob.error ? "Perlu review manual" : "Tidak ada error parsing"}
-                    </strong>
-                    <small className="text-xs text-muted-text">
-                      {selectedJob.error ?? "Semua tahapan pipeline selesai."}
-                    </small>
-                  </span>
-                </div>
 
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => void rerun(selectedJob.document_id)}
-                >
-                  <RefreshCw /> Jalankan ulang
-                </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => void rerun(selectedJob.document_id)}
+                  >
+                    <RefreshCw /> Jalankan ulang
+                  </Button>
+                </div>
               </>
             ) : (
-              <div className="flex flex-col items-center gap-2 py-10 text-center">
-                <span className="flex size-10 items-center justify-center rounded-full bg-[#f1f0ec] text-muted-text">
-                  <Timer className="size-5" />
-                </span>
-                <p className="text-sm text-muted-text">Pilih job untuk melihat log.</p>
-              </div>
+              <EmptyState
+                icon={Timer}
+                title="Belum ada job dipilih"
+                hint="Pilih job di daftar kiri untuk melihat log parsing."
+              />
             )}
           </CardContent>
         </Card>

@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmptyState, PageHeader } from "@/components/admin/primitives";
 import { cn } from "@/lib/utils";
 import { fetchAdminFeedback } from "@/lib/api";
 import { fallbackFeedback } from "@/lib/sample-data";
@@ -57,13 +58,7 @@ export function AdminFeedback() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <p className="text-xs font-medium tracking-[0.18em] text-forest uppercase">
-          Umpan balik pengguna
-        </p>
-        <h1 className="font-display text-2xl font-semibold text-javanese">Feedback</h1>
-        <p className="text-sm text-muted-text">{message}</p>
-      </div>
+      <PageHeader eyebrow="Umpan balik pengguna" title="Feedback" description={message} />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-56">
@@ -103,7 +98,7 @@ export function AdminFeedback() {
                   <span
                     className={cn(
                       "flex size-9 shrink-0 items-center justify-center rounded-md",
-                      helpful ? "bg-[#e7f3ec] text-forest" : "bg-[#fbeaea] text-[#a94442]"
+                      helpful ? "bg-teal-soft text-forest" : "bg-red-soft text-red"
                     )}
                   >
                     {helpful ? <ThumbsUp className="size-4" /> : <ThumbsDown className="size-4" />}
@@ -129,7 +124,7 @@ export function AdminFeedback() {
                     variant="secondary"
                     className={cn(
                       "hidden shrink-0 sm:inline-flex",
-                      item.issue_category && "bg-[#faf3e0] text-[#b8860b]"
+                      item.issue_category && "border border-amber/25 bg-amber-soft text-amber"
                     )}
                   >
                     {item.issue_category?.replaceAll("_", " ") ??
@@ -139,15 +134,11 @@ export function AdminFeedback() {
               );
             })}
             {filtered.length === 0 ? (
-              <li className="flex flex-col items-center gap-2 px-4 py-12 text-center">
-                <span className="flex size-10 items-center justify-center rounded-full bg-[#f1f0ec] text-muted-text">
-                  <MessageSquareQuote className="size-5" />
-                </span>
-                <p className="text-sm font-medium">Tidak ada feedback yang cocok</p>
-                <p className="text-sm text-muted-text">
-                  Ubah kata kunci atau filter untuk melihat hasil lain.
-                </p>
-              </li>
+              <EmptyState
+                icon={MessageSquareQuote}
+                title="Tidak ada feedback yang cocok"
+                hint="Ubah kata kunci atau filter untuk melihat hasil lain."
+              />
             ) : null}
           </ul>
         </CardContent>
