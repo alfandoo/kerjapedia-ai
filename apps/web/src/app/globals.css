@@ -20,6 +20,7 @@
   --blue-soft: #eef5ff;
   --shadow: 0 16px 40px rgba(21, 32, 31, 0.08);
   --javanese-green: #1b4332;
+  --javanese-deep: #12352a;
   --teal-forest: #2d6a4f;
   --emas-keraton: #c9a227;
   --kertas-arsip: #fafaf5;
@@ -70,6 +71,7 @@
   --color-blue-soft: var(--blue-soft);
   --color-muted-text: var(--muted-text);
   --color-javanese: var(--javanese-green);
+  --color-javanese-deep: var(--javanese-deep);
   --color-forest: var(--teal-forest);
   --color-emas: var(--emas-keraton);
   --color-arsip: var(--kertas-arsip);

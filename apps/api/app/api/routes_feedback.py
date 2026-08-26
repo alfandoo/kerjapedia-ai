@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from uuid import uuid4
 
 from fastapi import APIRouter
@@ -11,6 +12,9 @@ from app.api.state import now_utc
 from app.models.business import Feedback, Message
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
+
+_feedback_cache: tuple[float, list[dict]] | None = None
+_FEEDBACK_CACHE_TTL = 30
 
 
 def _resolve_answer_id(
@@ -39,6 +43,7 @@ def create_feedback(
     session: DbSession,
     user: OptionalUser,
 ) -> dict:
+    global _feedback_cache
     answer_id = _resolve_answer_id(session, payload)
     feedback = Feedback(
         feedback_id=f"fb_{uuid4().hex}",
@@ -53,6 +58,12 @@ def create_feedback(
     )
     session.add(feedback)
     session.commit()
+    _feedback_cache = None
+    try:
+        from app.api.routes_admin import _stats_cache
+        _stats_cache.clear()
+    except Exception:
+        pass
     return {
         **payload.model_dump(),
         "feedback_id": feedback.feedback_id,
@@ -65,8 +76,11 @@ def create_feedback(
 
 @router.get("")
 def list_feedback(_: AdminUser, session: DbSession) -> list[dict]:
+    global _feedback_cache
+    if _feedback_cache and (time.time() - _feedback_cache[0]) < _FEEDBACK_CACHE_TTL:
+        return _feedback_cache[1]
     rows = session.query(Feedback).order_by(Feedback.created_at.desc()).all()
-    return [
+    result = [
         {
             "feedback_id": r.feedback_id,
             "user_id": r.user_id,
@@ -80,3 +94,5 @@ def list_feedback(_: AdminUser, session: DbSession) -> list[dict]:
         }
         for r in rows
     ]
+    _feedback_cache = (time.time(), result)
+    return result

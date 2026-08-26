@@ -465,6 +465,14 @@ export async function fetchIngestionJobs(signal?: AbortSignal): Promise<Ingestio
   return parseJsonResponse<IngestionJob[]>(response);
 }
 
+export async function fetchIngestionJob(jobId: string): Promise<IngestionJob> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/ingestion/jobs/${jobId}`,
+    { headers: adminHeaders() }
+  );
+  return parseJsonResponse<IngestionJob>(response);
+}
+
 export async function fetchAdminFeedback(signal?: AbortSignal): Promise<FeedbackItem[]> {
   const response = await fetchWithAuthRetry(
     `${API_URL}/feedback`,

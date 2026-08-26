@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  BarChart3,
   Check,
   CheckCircle2,
   FlaskConical,
@@ -10,12 +11,12 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  Trophy,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -32,15 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { PageHeader } from "@/components/admin/primitives";
+import { PageHeader, StatusBadge } from "@/components/admin/primitives";
 import { cn } from "@/lib/utils";
 import {
   createEvaluationRun,
@@ -71,18 +64,50 @@ function sortModes(metrics: Record<string, EvaluationMetricSet>): string[] {
 }
 
 function pct(value: number | null | undefined) {
-  if (value == null) return "-";
+  if (value == null) return "—";
   return `${Math.round(value * 100)}%`;
 }
 
+function safeDate(value: string) {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function formatDateTime(value: string) {
+  const d = safeDate(value);
+  if (!d) return "—";
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+  }).format(d);
+}
+
+function relativeTime(value: string) {
+  const d = safeDate(value);
+  if (!d) return "—";
+  const diff = Date.now() - d.getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "Baru saja";
+  if (minutes < 60) return `${minutes} menit lalu`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} jam lalu`;
+  const days = Math.floor(hours / 24);
+  return `${days} hari lalu`;
+}
+
+function scoreColor(value: number) {
+  if (value >= 0.8) return "text-forest";
+  if (value >= 0.5) return "text-amber";
+  return "text-red";
+}
+
+function barColor(value: number) {
+  if (value >= 0.8) return "bg-forest";
+  if (value >= 0.5) return "bg-amber";
+  return "bg-red";
 }
 
 function MetricBar({ label, value }: { label: string; value: number }) {
@@ -90,30 +115,48 @@ function MetricBar({ label, value }: { label: string; value: number }) {
   return (
     <div>
       <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="font-mono font-medium tabular-nums">{pct(value)}</span>
+        <span className="text-muted-text">{label}</span>
+        <span className={cn("font-mono font-medium tabular-nums", scoreColor(value))}>
+          {pct(value)}
+        </span>
       </div>
-      <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full bg-teal" style={{ width: `${width}%` }} />
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-soft">
+        <div
+          className={cn("h-full rounded-full transition-all", barColor(value))}
+          style={{ width: `${width}%` }}
+        />
       </div>
     </div>
   );
 }
 
 function ModeMetricsCard({ mode, metrics }: { mode: string; metrics: EvaluationMetricSet }) {
+  const bestMode = mode === "hybrid" || mode === "rerank";
   return (
-    <div className="rounded-lg border p-4">
-      <Badge variant="secondary">{modeLabel[mode] ?? mode}</Badge>
-      <p className="mt-3 font-mono text-3xl font-semibold tracking-tight tabular-nums">
-        {pct(metrics.recall_at_5)}
-      </p>
-      <p className="text-xs text-muted-foreground">recall@5</p>
+    <div
+      className={cn(
+        "rounded-xl border p-4 transition-all",
+        bestMode ? "border-forest/25 bg-teal-soft/20" : "border-line bg-white"
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <StatusBadge tone={bestMode ? "success" : "neutral"}>
+          {modeLabel[mode] ?? mode}
+        </StatusBadge>
+        {metrics.recall_at_5 >= 0.8 && <Trophy className="size-4 text-emas" />}
+      </div>
+      <div className="mt-3">
+        <p className={cn("font-mono text-3xl font-semibold tracking-tight tabular-nums", scoreColor(metrics.recall_at_5))}>
+          {pct(metrics.recall_at_5)}
+        </p>
+        <p className="text-xs text-muted-text">recall@5</p>
+      </div>
       <div className="mt-3 space-y-2">
         <MetricBar label="MRR" value={metrics.mean_reciprocal_rank} />
         <MetricBar label="Citation" value={metrics.citation_correctness} />
         <MetricBar label="Faithfulness" value={metrics.faithfulness} />
         <MetricBar label="Refusal acc." value={metrics.refusal_accuracy} />
-        <MetricBar label="Hard-neg recall" value={metrics.hard_negative_recall_at_5} />
+        <MetricBar label="Hard-neg" value={metrics.hard_negative_recall_at_5} />
       </div>
     </div>
   );
@@ -142,7 +185,7 @@ function RunDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Detail evaluasi</DialogTitle>
           <DialogDescription>
@@ -154,79 +197,99 @@ function RunDetailDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Mode cards */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {modes.map((mode) => (
             <ModeMetricsCard key={mode} mode={mode} metrics={detail.metrics[mode]} />
           ))}
         </div>
 
+        {/* Per-topic table */}
         {experiments.length > 0 && topics.length > 0 ? (
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium">Recall@5 per topik</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Topik</TableHead>
-                  {experiments.map((experiment) => (
-                    <TableHead key={experiment.mode} className="text-right">
-                      {modeLabel[experiment.mode] ?? experiment.mode}
-                    </TableHead>
-                  ))}
-                  <TableHead className="text-right">n</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {topics.map((topic) => (
-                  <TableRow key={topic}>
-                    <TableCell className="font-medium">{topic.replaceAll("_", " ")}</TableCell>
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-tinta">Recall per topik</h3>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-surface-soft">
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-text">
+                      Topik
+                    </th>
                     {experiments.map((experiment) => (
-                      <TableCell
+                      <th
                         key={experiment.mode}
-                        className="text-right font-mono tabular-nums"
+                        className="px-3 py-2.5 text-right text-xs font-semibold text-muted-text"
                       >
-                        {pct(experiment.per_topic[topic]?.recall_at_5)}
-                      </TableCell>
+                        {modeLabel[experiment.mode] ?? experiment.mode}
+                      </th>
                     ))}
-                    <TableCell className="text-right text-muted-foreground tabular-nums">
-                      {experiments[0]?.per_topic[topic]?.question_count ?? 0}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-text">
+                      n
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topics.map((topic) => (
+                    <tr key={topic} className="border-b last:border-0">
+                      <td className="px-3 py-2 font-medium">{topic.replaceAll("_", " ")}</td>
+                      {experiments.map((experiment) => {
+                        const val = experiment.per_topic[topic]?.recall_at_5;
+                        return (
+                          <td
+                            key={experiment.mode}
+                            className={cn(
+                              "px-3 py-2 text-right font-mono text-sm tabular-nums",
+                              val != null ? scoreColor(val) : "text-muted-text"
+                            )}
+                          >
+                            {pct(val)}
+                          </td>
+                        );
+                      })}
+                      <td className="px-3 py-2 text-right text-muted-text tabular-nums">
+                        {experiments[0]?.per_topic[topic]?.question_count ?? 0}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : null}
 
+        {/* Per-question results */}
         {experiments.length > 0 ? (
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium">Hasil per pertanyaan</h3>
-            <ul className="max-h-64 space-y-2 overflow-y-auto pr-1">
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-tinta">Hasil per pertanyaan</h3>
+            <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
               {experiments.flatMap((experiment) =>
                 experiment.results.map((result) => (
-                  <li
+                  <div
                     key={`${experiment.mode}-${result.question_id}`}
-                    className="flex items-center gap-3 rounded-lg border px-3 py-2"
+                    className="flex items-center gap-3 rounded-lg border border-line px-3 py-2"
                   >
-                    <Badge variant="secondary">{modeLabel[experiment.mode]}</Badge>
+                    <StatusBadge tone="neutral">
+                      {modeLabel[experiment.mode]}
+                    </StatusBadge>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{result.question_id}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-text">
                         {result.category.replaceAll("_", " ")} ·{" "}
                         {result.actual_refuse ? "refuse" : "answer"}
                       </p>
                     </div>
-                    <span className="font-mono text-sm tabular-nums">
+                    <span className={cn("font-mono text-sm tabular-nums", result.recall_at_5 != null ? scoreColor(result.recall_at_5) : "text-muted-text")}>
                       {pct(result.recall_at_5)}
                     </span>
                     {result.refusal_correct ? (
-                      <CheckCircle2 className="size-4 shrink-0 text-teal" />
+                      <CheckCircle2 className="size-4 shrink-0 text-forest" />
                     ) : (
                       <AlertTriangle className="size-4 shrink-0 text-amber" />
                     )}
-                  </li>
+                  </div>
                 ))
               )}
-            </ul>
+            </div>
           </div>
         ) : null}
       </DialogContent>
@@ -264,7 +327,7 @@ export function AdminEvaluation() {
       setLoadStatus(
         datasetItems.status === "fulfilled" && runItems.status === "fulfilled"
           ? "Data tersinkron dengan API."
-          : "Menampilkan data contoh karena API belum tersedia."
+          : "Menampilkan data contoh — API belum tersedia."
       );
     });
     return () => controller.abort();
@@ -350,10 +413,10 @@ export function AdminEvaluation() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" disabled={seeding} onClick={() => void seed()}>
-              <RefreshCw className={seeding ? "animate-spin" : ""} /> Golden questions
+              <RefreshCw className={seeding ? "animate-spin" : ""} /> Muat dataset
             </Button>
             <Button
-              className="bg-teal text-white hover:bg-teal-strong"
+              className="bg-javanese text-white hover:bg-forest"
               onClick={() => setRunDialogOpen(true)}
             >
               <Play /> Jalankan evaluasi
@@ -362,17 +425,17 @@ export function AdminEvaluation() {
         }
       />
 
+      {/* Latest run comparison */}
       {latestRun ? (
         <Card>
           <CardHeader>
-            <CardTitle>Perbandingan mode terakhir</CardTitle>
-            <CardDescription>
-              {formatDateTime(latestRun.created_at)} · {datasetName(latestRun.dataset_id)} ·{" "}
-              {latestRun.run_id}
-            </CardDescription>
+            <CardTitle className="flex items-center gap-3">
+              Perbandingan mode terakhir
+              <StatusBadge tone="info">{formatDateTime(latestRun.created_at)}</StatusBadge>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {latestModes.map((mode) => (
                 <ModeMetricsCard key={mode} mode={mode} metrics={latestRun.metrics[mode]} />
               ))}
@@ -381,103 +444,92 @@ export function AdminEvaluation() {
         </Card>
       ) : null}
 
+      {/* History */}
       <Card>
         <CardHeader>
-          <CardTitle>Riwayat evaluasi</CardTitle>
-          <CardDescription>{runs.length} run benchmark tercatat</CardDescription>
+          <CardTitle className="flex items-center gap-3">
+            Riwayat evaluasi
+            <StatusBadge tone="neutral">{runs.length} run</StatusBadge>
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Waktu</TableHead>
-                <TableHead>Dataset</TableHead>
-                <TableHead>Mode</TableHead>
-                <TableHead className="text-right">Recall@5 terbaik</TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          {runs.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-14 text-center">
+              <span className="flex size-12 items-center justify-center rounded-2xl bg-surface-soft text-muted-text">
+                <Gauge className="size-6" />
+              </span>
+              <p className="text-sm font-semibold text-tinta">Belum ada evaluasi</p>
+              <p className="max-w-xs text-sm text-muted-text">
+                Jalankan evaluasi untuk melihat metrik retrieval.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y">
               {runs.map((run) => {
                 const bestRecall = Math.max(
                   0,
-                  ...Object.values(run.metrics).map((metrics) => metrics.recall_at_5)
+                  ...Object.values(run.metrics).map((m) => m.recall_at_5)
                 );
+                const modes = sortModes(run.metrics);
                 return (
-                  <TableRow
+                  <button
                     key={run.run_id}
-                    className="cursor-pointer"
+                    type="button"
                     onClick={() => void openDetail(run)}
+                    className="flex w-full items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-surface-soft"
                   >
-                    <TableCell className="text-xs text-muted-foreground tabular-nums">
-                      {formatDateTime(run.created_at)}
-                    </TableCell>
-                    <TableCell className="max-w-56">
-                      <span className="block truncate text-sm font-medium">
+                    {/* Best score */}
+                    <div className="w-16 shrink-0 text-center">
+                      <p className={cn("font-mono text-xl font-semibold tabular-nums", scoreColor(bestRecall))}>
+                        {pct(bestRecall)}
+                      </p>
+                      <p className="text-[10px] text-muted-text">recall@5</p>
+                    </div>
+
+                    {/* Bar */}
+                    <div className="hidden w-20 shrink-0 sm:block">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-surface-soft">
+                        <div
+                          className={cn("h-full rounded-full", barColor(bestRecall))}
+                          style={{ width: `${Math.min(100, bestRecall * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Info */}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-tinta">
                         {datasetName(run.dataset_id)}
-                      </span>
-                      <span className="block font-mono text-xs text-muted-foreground">
-                        {run.run_id}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {sortModes(run.metrics).map((mode) => (
-                          <Badge key={mode} variant="secondary">
-                            {modeLabel[mode] ?? mode}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="font-mono text-sm font-semibold tabular-nums">
-                          {pct(bestRecall)}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-muted-text">
+                        <span title={formatDateTime(run.created_at)}>
+                          {relativeTime(run.created_at)}
                         </span>
-                        <div className="h-1 w-16 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full rounded-full bg-teal"
-                            style={{ width: `${Math.min(100, bestRecall * 100)}%` }}
-                          />
-                        </div>
+                        <span>·</span>
+                        <span className="font-mono">{run.run_id}</span>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void openDetail(run);
-                        }}
-                      >
-                        Detail
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                    </div>
+
+                    {/* Modes */}
+                    <div className="hidden flex-wrap gap-1 lg:flex">
+                      {modes.map((mode) => (
+                        <StatusBadge key={mode} tone="neutral">
+                          {modeLabel[mode] ?? mode}
+                        </StatusBadge>
+                      ))}
+                    </div>
+
+                    {/* Arrow */}
+                    <span className="text-xs text-muted-text/50">→</span>
+                  </button>
                 );
               })}
-              {runs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <div className="flex flex-col items-center gap-2 py-10 text-center">
-                      <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                        <Gauge className="size-5" />
-                      </span>
-                      <p className="text-sm font-medium">Belum ada run evaluasi</p>
-                      <p className="text-sm text-muted-foreground">
-                        Jalankan evaluasi untuk melihat metrik retrieval.
-                      </p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* Run dialog */}
       <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -514,16 +566,16 @@ export function AdminEvaluation() {
                       key={mode}
                       onClick={() => toggleMode(mode)}
                       className={cn(
-                        "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                        "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors",
                         selected
-                          ? "border-teal bg-teal-soft text-teal"
-                          : "border-border hover:bg-muted"
+                          ? "border-forest bg-teal-soft text-forest"
+                          : "border-line text-muted-text hover:bg-surface-soft"
                       )}
                     >
                       <span
                         className={cn(
-                          "flex size-4 shrink-0 items-center justify-center rounded border",
-                          selected ? "border-teal bg-teal text-white" : "border-muted-foreground/40"
+                          "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
+                          selected ? "border-forest bg-forest text-white" : "border-muted-text/30"
                         )}
                       >
                         {selected ? <Check className="size-3" /> : null}
@@ -549,18 +601,18 @@ export function AdminEvaluation() {
               </Select>
             </div>
 
-            {datasets.length === 0 ? (
-              <p className="rounded-lg bg-amber-soft px-3 py-2.5 text-sm text-amber">
+            {datasets.length === 0 && (
+              <div className="rounded-lg border border-amber/25 bg-amber-soft px-3 py-2.5 text-sm text-amber">
                 Belum ada dataset. Muat golden questions terlebih dahulu.
-              </p>
-            ) : null}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRunDialogOpen(false)}>
               Batal
             </Button>
             <Button
-              className="bg-teal text-white hover:bg-teal-strong"
+              className="bg-javanese text-white hover:bg-forest"
               disabled={running || runModes.length === 0 || !runDatasetId}
               onClick={() => void startRun()}
             >
@@ -571,6 +623,7 @@ export function AdminEvaluation() {
         </DialogContent>
       </Dialog>
 
+      {/* Detail dialog */}
       <RunDetailDialog
         detail={detail}
         open={detailOpen}

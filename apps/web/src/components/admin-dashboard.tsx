@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   BadgeCheck,
+  ChevronLeft,
   ChevronRight,
   FileText,
   Plus,
@@ -11,6 +13,7 @@ import {
   Search,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 
@@ -47,6 +50,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Callout, EmptyState, PageHeader, StatusBadge } from "@/components/admin/primitives";
 import { cn } from "@/lib/utils";
 import {
+  clearStoredSession,
   createIngestionJob,
   fetchAdminOverview,
   updateAdminDocument,
@@ -74,12 +78,28 @@ const ingestionTone: Record<AdminDocument["ingestion_status"], BadgeTone> = {
   queued: "neutral",
 };
 
+const PAGE_SIZE = 10;
+
+function isAuthError(err: unknown): boolean {
+  return /token|bearer/i.test((err as Error)?.message ?? "");
+}
+
+function describeError(err: unknown): string {
+  const message = (err as Error)?.message ?? "";
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return "API tidak dapat dihubungi.";
+  }
+  return message || "Terjadi kesalahan tak terduga.";
+}
+
 function formatDate(value: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(new Date(value));
+  }).format(d);
 }
 
 type InspectorProps = {
@@ -90,6 +110,7 @@ type InspectorProps = {
 };
 
 function DocumentInspector({ document, allDocuments, onChange, onClose }: InspectorProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"metadata" | "relasi" | "versi">("metadata");
   const [legalStatus, setLegalStatus] = useState(document.legal_status);
   const [verificationStatus, setVerificationStatus] = useState(document.verification_status);
@@ -97,6 +118,13 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
   const [relationshipTarget, setRelationshipTarget] = useState(
     allDocuments.find((item) => item.document_id !== document.document_id)?.document_id ?? ""
   );
+
+  function handleAuthFailure(err: unknown): boolean {
+    if (!isAuthError(err)) return false;
+    clearStoredSession();
+    router.push("/login-admin");
+    return true;
+  }
 
   async function saveMetadata() {
     const nextTopics = topics
@@ -117,8 +145,10 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
         topics: nextTopics,
       });
       toast.success("Metadata berhasil disimpan.");
-    } catch {
-      toast.info("API belum tersedia — metadata disimpan lokal.");
+    } catch (err) {
+      onChange(document);
+      if (handleAuthFailure(err)) return;
+      toast.error(`Metadata gagal disimpan: ${describeError(err)}`);
     }
   }
 
@@ -140,8 +170,12 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
         topics: Array.isArray(document.topics) ? document.topics : [],
       });
       toast.success("Dokumen ditandai terverifikasi.");
-    } catch {
-      toast.info("API belum tersedia — perubahan disimpan lokal.");
+    } catch (err) {
+      onChange(document);
+      setLegalStatus(document.legal_status);
+      setVerificationStatus(document.verification_status);
+      if (handleAuthFailure(err)) return;
+      toast.error(`Gagal menandai terverifikasi: ${describeError(err)}`);
     }
   }
 
@@ -167,8 +201,10 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
         }))
       );
       toast.success("Relasi berhasil diperbarui.");
-    } catch {
-      toast.info("API belum tersedia — relasi disimpan lokal.");
+    } catch (err) {
+      onChange(document);
+      if (handleAuthFailure(err)) return;
+      toast.error(`Relasi gagal ditambahkan: ${describeError(err)}`);
     }
   }
 
@@ -186,8 +222,10 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
         }))
       );
       toast.success("Relasi berhasil dihapus.");
-    } catch {
-      toast.info("API belum tersedia — relasi dihapus lokal.");
+    } catch (err) {
+      onChange(document);
+      if (handleAuthFailure(err)) return;
+      toast.error(`Relasi gagal dihapus: ${describeError(err)}`);
     }
   }
 
@@ -213,8 +251,11 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
     try {
       await updateAdminPublication(document.document_id, action);
       toast.success(action === "publish" ? "Dokumen diterbitkan." : "Penerbitan dibatalkan.");
-    } catch {
-      toast.info("API belum tersedia — status diperbarui lokal.");
+    } catch (err) {
+      onChange(document);
+      if (handleAuthFailure(err)) return;
+      const label = action === "publish" ? "Gagal menerbitkan dokumen" : "Gagal membatalkan penerbitan";
+      toast.error(`${label}: ${describeError(err)}`);
     }
   }
 
@@ -226,9 +267,10 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
       toast.success(
         `Re-ingest selesai dengan status ${ingestionLabels[job.status] ?? job.status}.`
       );
-    } catch {
-      onChange({ ...document, ingestion_status: "queued" });
-      toast.info("API belum tersedia — re-ingest masuk antrean lokal.");
+    } catch (err) {
+      onChange(document);
+      if (handleAuthFailure(err)) return;
+      toast.error(`Re-ingest gagal dijalankan: ${describeError(err)}`);
     }
   }
 
@@ -238,8 +280,19 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
         <SheetDescription className="text-xs font-medium tracking-[0.16em] text-forest uppercase">
           Dokumen terpilih
         </SheetDescription>
-        <SheetTitle className="text-lg">{document.short_title}</SheetTitle>
+        <SheetTitle className="text-lg leading-snug">{document.short_title}</SheetTitle>
         <p className="font-mono text-xs text-muted-text">{document.document_id}</p>
+        <div className="flex flex-wrap gap-1.5 pt-1.5">
+          <StatusBadge tone={ingestionTone[document.ingestion_status]}>
+            {ingestionLabels[document.ingestion_status]}
+          </StatusBadge>
+          {document.publication_status === "published" ? (
+            <StatusBadge tone="success">Terbit</StatusBadge>
+          ) : (
+            <StatusBadge tone="neutral">Draft</StatusBadge>
+          )}
+          <StatusBadge tone="neutral">v{document.version}</StatusBadge>
+        </div>
       </SheetHeader>
 
       <div className="flex-1 overflow-y-auto px-4">
@@ -341,7 +394,7 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
                       aria-label={`Hapus relasi ${relationship.to_document_id}`}
                       onClick={() => void removeRelationship(relationship)}
                     >
-                      <Trash2 className="text-[#a94442]" />
+                      <Trash2 className="text-red" />
                     </Button>
                   </li>
                 ))}
@@ -432,11 +485,13 @@ function DocumentInspector({ document, allDocuments, onChange, onClose }: Inspec
 }
 
 export function AdminDashboard() {
+  const router = useRouter();
   const [documents, setDocuments] = useState(fallbackAdminDocuments);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [publicationFilter, setPublicationFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [loadStatus, setLoadStatus] = useState("Memuat data admin...");
   const deferredSearch = useDeferredValue(search.toLowerCase());
 
@@ -447,9 +502,18 @@ export function AdminDashboard() {
         setDocuments(overview.documents);
         setLoadStatus("Data tersinkron dengan API.");
       })
-      .catch(() => setLoadStatus("Menampilkan data contoh karena API belum tersedia."));
+      .catch((err) => {
+        if ((err as Error).name === "AbortError") return;
+        const message = (err as Error).message || "";
+        if (/token|bearer/i.test(message)) {
+          clearStoredSession();
+          router.push("/login-admin");
+          return;
+        }
+        setLoadStatus("API tidak dapat dihubungi — menampilkan data contoh.");
+      });
     return () => controller.abort();
-  }, []);
+  }, [router]);
 
   const filteredDocuments = useMemo(
     () =>
@@ -476,6 +540,16 @@ export function AdminDashboard() {
     [documents]
   );
   const selectedDocument = documents.find((item) => item.document_id === selectedId) ?? null;
+
+  const totalPages = Math.max(1, Math.ceil(filteredDocuments.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedDocuments = filteredDocuments.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const rangeStart = filteredDocuments.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(safePage * PAGE_SIZE, filteredDocuments.length);
+
+  function goToPage(next: number) {
+    setPage(Math.min(Math.max(1, next), totalPages));
+  }
 
   function replaceDocument(next: AdminDocument) {
     setDocuments((current) =>
@@ -521,49 +595,88 @@ export function AdminDashboard() {
       <PageHeader
         eyebrow="Regulasi ketenagakerjaan"
         title="Knowledge Base"
-        description={loadStatus}
+        description="Kelola dokumen regulasi yang menjadi sumber jawaban KerjaPedia AI."
         actions={
-          <Button asChild className="bg-javanese text-white hover:bg-forest">
+          <Button
+            asChild
+            className="h-11 bg-javanese px-5 text-sm font-bold text-white shadow-[0_2px_12px_rgba(27,67,50,0.22)] hover:bg-javanese-deep"
+          >
             <Link href="/admin/upload">
-              <Upload /> Upload dokumen
+              <Upload strokeWidth={2} /> Upload dokumen
             </Link>
           </Button>
         }
       />
 
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4">
-        {summaryCells.map((cell) => (
-          <div key={cell.label} className="flex flex-col gap-0.5 bg-white px-5 py-4">
-            <p className="flex items-center gap-1.5 font-mono text-xl font-bold text-tinta tabular-nums">
-              <span aria-hidden="true" className={cn("size-1.5 rounded-full", cell.dot)} />
-              <span className={cell.tone}>{cell.value}</span>
-            </p>
-            <p className="text-sm font-medium">{cell.label}</p>
-            <p className="text-xs text-muted-text">{cell.note}</p>
-          </div>
-        ))}
+        {summaryCells.map((cell) => {
+          const actionable =
+            (cell.label === "Review" && summary.needsReview > 0) ||
+            (cell.label === "Gagal" && summary.failed > 0);
+          return (
+            <button
+              key={cell.label}
+              type="button"
+              disabled={!actionable}
+              onClick={() => {
+                setStatusFilter(cell.label === "Gagal" ? "failed" : "needs_review");
+                setPublicationFilter("all");
+                setPage(1);
+              }}
+              className={cn(
+                "flex flex-col items-start gap-0.5 bg-white px-5 py-4 text-left",
+                actionable ? "transition-colors hover:bg-surface-soft" : "cursor-default"
+              )}
+            >
+              <p className="flex items-center gap-1.5 font-mono text-xl font-bold text-tinta tabular-nums">
+                <span aria-hidden="true" className={cn("size-1.5 rounded-full", cell.dot)} />
+                <span className={cell.tone}>{cell.value}</span>
+              </p>
+              <p className="text-sm font-medium">{cell.label}</p>
+              <p className="text-xs text-muted-text">{cell.note}</p>
+            </button>
+          );
+        })}
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Daftar dokumen</CardTitle>
-          <CardDescription>
-            Menampilkan {filteredDocuments.length} dari {documents.length} dokumen
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0">
+          <div className="space-y-1.5">
+            <CardTitle>Daftar dokumen</CardTitle>
+            <CardDescription>
+              Menampilkan {filteredDocuments.length} dari {documents.length} dokumen
+            </CardDescription>
+          </div>
+          <StatusBadge
+            tone={loadStatus.startsWith("Data tersinkron") ? "info" : "neutral"}
+            pulse={!loadStatus.startsWith("Data tersinkron")}
+          >
+            {loadStatus}
+          </StatusBadge>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-48">
+            <div className="relative min-w-56 flex-1">
               <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-text" />
               <Input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Cari judul, topik..."
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Cari judul, nomor, topik..."
+                aria-label="Cari dokumen"
                 className="pl-8"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger aria-label="Filter status ingestion">
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => {
+                setStatusFilter(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger aria-label="Filter status ingestion" className="w-[150px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -573,8 +686,14 @@ export function AdminDashboard() {
                 <SelectItem value="failed">Gagal</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={publicationFilter} onValueChange={setPublicationFilter}>
-              <SelectTrigger aria-label="Filter publikasi">
+            <Select
+              value={publicationFilter}
+              onValueChange={(value) => {
+                setPublicationFilter(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger aria-label="Filter publikasi" className="w-[150px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -583,6 +702,21 @@ export function AdminDashboard() {
                 <SelectItem value="draft">Draft</SelectItem>
               </SelectContent>
             </Select>
+            {search || statusFilter !== "all" || publicationFilter !== "all" ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearch("");
+                  setStatusFilter("all");
+                  setPublicationFilter("all");
+                  setPage(1);
+                }}
+              >
+                <X /> Reset
+              </Button>
+            ) : null}
           </div>
 
           <Table>
@@ -598,23 +732,30 @@ export function AdminDashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredDocuments.map((document) => (
+              {pagedDocuments.map((document) => (
                 <TableRow
                   key={document.document_id}
-                  className="cursor-pointer"
+                  className="group cursor-pointer"
                   onClick={() => setSelectedId(document.document_id)}
                 >
                   <TableCell className="max-w-64">
-                    <span className="block truncate text-sm font-medium">
+                    <span className="block truncate text-sm font-medium group-hover:text-javanese">
                       {document.short_title}
                     </span>
-                    <span className="block text-xs text-muted-text">
+                    <span className="block font-mono text-xs text-muted-text">
                       {document.regulation_type} · {document.year}
                     </span>
                   </TableCell>
                   <TableCell>
                     {document.topics[0] ? (
-                      <Badge variant="secondary">{document.topics[0].replaceAll("_", " ")}</Badge>
+                      <span className="flex items-center gap-1.5">
+                        <Badge variant="secondary">{document.topics[0].replaceAll("_", " ")}</Badge>
+                        {document.topics.length > 1 ? (
+                          <span className="text-xs text-muted-text">
+                            +{document.topics.length - 1}
+                          </span>
+                        ) : null}
+                      </span>
                     ) : (
                       <span className="text-xs text-muted-text">-</span>
                     )}
@@ -645,7 +786,11 @@ export function AdminDashboard() {
                       variant="ghost"
                       size="icon-sm"
                       aria-label={`Edit ${document.short_title}`}
-                      onClick={() => setSelectedId(document.document_id)}
+                      className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedId(document.document_id);
+                      }}
                     >
                       <ChevronRight className="size-4" />
                     </Button>
@@ -659,12 +804,75 @@ export function AdminDashboard() {
                       icon={FileText}
                       title="Tidak ada dokumen yang cocok"
                       hint="Ubah kata kunci atau filter untuk melihat hasil lain."
+                      action={
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSearch("");
+                            setStatusFilter("all");
+                            setPublicationFilter("all");
+                            setPage(1);
+                          }}
+                        >
+                          <X /> Reset filter
+                        </Button>
+                      }
                     />
                   </TableCell>
                 </TableRow>
               ) : null}
             </TableBody>
           </Table>
+
+          {filteredDocuments.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+              <p className="text-xs text-muted-text tabular-nums">
+                Menampilkan {rangeStart}–{rangeEnd} dari {filteredDocuments.length} dokumen
+              </p>
+              {totalPages > 1 ? (
+                <nav aria-label="Navigasi halaman" className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    disabled={safePage === 1}
+                    aria-label="Halaman sebelumnya"
+                    onClick={() => goToPage(safePage - 1)}
+                  >
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                  {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                    <button
+                      key={pageNumber}
+                      type="button"
+                      aria-current={pageNumber === safePage ? "page" : undefined}
+                      onClick={() => goToPage(pageNumber)}
+                      className={cn(
+                        "flex size-8 items-center justify-center rounded-lg font-mono text-xs font-semibold transition-colors",
+                        pageNumber === safePage
+                          ? "bg-javanese text-white"
+                          : "text-muted-text hover:bg-surface-soft hover:text-tinta"
+                      )}
+                    >
+                      {pageNumber}
+                    </button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    disabled={safePage === totalPages}
+                    aria-label="Halaman berikutnya"
+                    onClick={() => goToPage(safePage + 1)}
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
+                </nav>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

@@ -3,22 +3,25 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-
 import {
-  ChartIcon,
-  ChatIcon,
-  ChevronLeftIcon,
-  DatabaseIcon,
-  FileIcon,
-  GaugeIcon,
-  LogoutIcon,
-  PanelLeftIcon,
-  PlayIcon,
-  ScaleIcon,
-  SettingIcon,
-  UploadIcon,
-  UserIcon,
-} from "./icons";
+  ChevronLeft,
+  Database,
+  FileUp,
+  FlaskConical,
+  Gauge,
+  LayoutDashboard,
+  LogOut,
+  type LucideIcon,
+  Menu,
+  MessagesSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ScrollText,
+  Settings,
+  User,
+} from "lucide-react";
+
+import { ScaleIcon } from "./icons";
 import { useStoredSession } from "@/hooks/use-stored-session";
 import { signOut } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -27,26 +30,26 @@ type AdminShellProps = { children: ReactNode };
 
 const adminNavGroups: {
   label: string;
-  items: { href: string; label: string; icon: typeof ChartIcon }[];
+  items: { href: string; label: string; icon: LucideIcon }[];
 }[] = [
   {
     label: "Ikhtisar",
-    items: [{ href: "/admin/dashboard", label: "Dashboard", icon: ChartIcon }],
+    items: [{ href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard }],
   },
   {
     label: "Pengelolaan",
     items: [
-      { href: "/documents", label: "Dokumen", icon: FileIcon },
-      { href: "/admin/upload", label: "Upload PDF", icon: UploadIcon },
-      { href: "/admin/ingestion", label: "Ingestion", icon: DatabaseIcon },
+      { href: "/documents", label: "Dokumen", icon: ScrollText },
+      { href: "/admin/upload", label: "Upload PDF", icon: FileUp },
+      { href: "/admin/ingestion", label: "Ingestion", icon: Database },
     ],
   },
   {
     label: "Evaluasi",
     items: [
-      { href: "/admin/feedback", label: "Feedback", icon: ChatIcon },
-      { href: "/admin/retrieval", label: "Retrieval Playground", icon: PlayIcon },
-      { href: "/admin/evaluation", label: "Evaluasi RAG", icon: GaugeIcon },
+      { href: "/admin/feedback", label: "Feedback", icon: MessagesSquare },
+      { href: "/admin/retrieval", label: "Retrieval Playground", icon: FlaskConical },
+      { href: "/admin/evaluation", label: "Evaluasi RAG", icon: Gauge },
     ],
   },
 ];
@@ -171,48 +174,37 @@ export function AdminShell({ children }: AdminShellProps) {
           sidebarCollapsed ? "lg:w-[76px]" : "lg:w-[248px]"
         )}
       >
-        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/10 px-4">
+        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-white/10 px-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-emas">
             <ScaleIcon className="size-5" />
           </span>
-          {!sidebarCollapsed && (
-            <>
-              <div className="min-w-0 leading-tight">
-                <p className="truncate font-display text-base font-semibold tracking-wide text-white">
-                  KerjaPedia AI
-                </p>
-                <p className="font-mono text-[10px] tracking-[0.22em] text-emas/90 uppercase">
-                  Konsol admin
-                </p>
-              </div>
-              <button
-                type="button"
-                className="ml-auto flex size-8 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white max-lg:hidden"
-                aria-label="Ciutkan sidebar"
-                onClick={() => toggleCollapsed(true)}
-              >
-                <PanelLeftIcon className="size-4" />
-              </button>
-              <button
-                type="button"
-                className="ml-auto flex size-8 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white lg:hidden"
-                aria-label="Tutup menu"
-                onClick={() => setMobileOpen(false)}
-              >
-                <ChevronLeftIcon className="size-5" />
-              </button>
-            </>
-          )}
-          {sidebarCollapsed && (
-            <button
-              type="button"
-              className="mx-auto flex size-8 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white"
-              aria-label="Perluas sidebar"
-              onClick={() => toggleCollapsed(false)}
-            >
-              <PanelLeftIcon className="size-4" />
-            </button>
-          )}
+          <div className={cn("min-w-0 leading-tight", sidebarCollapsed ? "lg:hidden" : "flex-1")}>
+            <p className="truncate font-display text-base font-semibold tracking-wide text-white">
+              KerjaPedia AI
+            </p>
+            <p className="font-mono text-[10px] tracking-[0.22em] text-emas/90 uppercase">
+              Konsol admin
+            </p>
+          </div>
+          <button
+            type="button"
+            className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white lg:hidden"
+            aria-label="Tutup menu"
+            onClick={() => setMobileOpen(false)}
+          >
+            <ChevronLeft className="size-5" />
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "ml-auto hidden size-8 shrink-0 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white lg:flex",
+              sidebarCollapsed && "lg:hidden"
+            )}
+            aria-label="Ciutkan sidebar"
+            onClick={() => toggleCollapsed(true)}
+          >
+            <PanelLeftClose className="size-4" />
+          </button>
         </div>
 
         <nav
@@ -221,12 +213,14 @@ export function AdminShell({ children }: AdminShellProps) {
         >
           {adminNavGroups.map((group) => (
             <div key={group.label} className="space-y-1">
-              {!sidebarCollapsed && (
-                <p className="px-3 pb-1 font-mono text-[10px] font-semibold tracking-[0.2em] text-white/35 uppercase">
-                  {group.label}
-                </p>
-              )}
-              {sidebarCollapsed && <div className="mx-auto mb-1 h-px w-8 bg-white/15" />}
+              <p
+                className={cn(
+                  "px-3 pb-1 font-mono text-[10px] font-semibold tracking-[0.2em] text-white/35 uppercase",
+                  sidebarCollapsed && "lg:hidden"
+                )}
+              >
+                {group.label}
+              </p>
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
@@ -238,33 +232,34 @@ export function AdminShell({ children }: AdminShellProps) {
                     title={sidebarCollapsed ? item.label : undefined}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
-                      "relative flex h-11 items-center gap-3 rounded-lg pr-3 text-sm transition",
+                      "relative flex h-11 items-center gap-3 rounded-lg px-3 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emas",
                       sidebarCollapsed && "lg:justify-center lg:px-0",
                       active
                         ? "bg-white/10 font-semibold text-white"
-                        : "text-white/60 hover:bg-white/5 hover:text-white"
+                        : "text-white/60 hover:bg-white/[0.06] hover:text-white"
                     )}
                   >
                     {active ? (
                       <span
                         aria-hidden="true"
-                        className="absolute top-1/2 left-0 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-emas"
+                        className="absolute inset-y-[9px] left-0 w-[3px] rounded-r-full bg-emas"
                       />
                     ) : null}
-                    <Icon className="size-5 shrink-0" />
-                    {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                    <Icon
+                      className={cn(
+                        "size-5 shrink-0 transition-colors",
+                        active ? "text-emas" : "text-current"
+                      )}
+                    />
+                    <span className={cn("truncate", sidebarCollapsed && "lg:hidden")}>
+                      {item.label}
+                    </span>
                   </Link>
                 );
               })}
             </div>
           ))}
         </nav>
-
-        {!sidebarCollapsed && (
-          <p className="border-t border-white/10 px-5 py-3.5 font-mono text-[10px] tracking-wider text-white/35 uppercase">
-            Knowledge base MVP
-          </p>
-        )}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col bg-arsip">
@@ -277,7 +272,7 @@ export function AdminShell({ children }: AdminShellProps) {
               aria-expanded={mobileOpen}
               onClick={() => setMobileOpen(true)}
             >
-              <PanelLeftIcon className="size-5 rotate-180" />
+              <Menu className="size-5" />
             </button>
             {sidebarCollapsed && (
               <button
@@ -286,7 +281,7 @@ export function AdminShell({ children }: AdminShellProps) {
                 aria-label="Buka sidebar"
                 onClick={() => toggleCollapsed(false)}
               >
-                <PanelLeftIcon className="size-4" />
+                <PanelLeftOpen className="size-4" />
               </button>
             )}
             <nav aria-label="Lokasi halaman" className="flex min-w-0 items-center gap-2 text-sm">
@@ -308,7 +303,7 @@ export function AdminShell({ children }: AdminShellProps) {
               aria-haspopup="menu"
             >
               <span className="flex size-7 items-center justify-center rounded-lg bg-javanese text-white">
-                <UserIcon className="size-4" />
+                <User className="size-4" />
               </span>
               <span className="max-w-40 truncate text-sm font-medium text-tinta">
                 {session.user.name}
@@ -325,7 +320,7 @@ export function AdminShell({ children }: AdminShellProps) {
                   className="flex h-11 items-center gap-2.5 px-4 text-sm text-tinta transition hover:bg-surface-soft"
                   onClick={() => setDropdownOpen(false)}
                 >
-                  <SettingIcon className="size-4 text-muted-text" />
+                  <Settings className="size-4 text-muted-text" />
                   <span>Pengaturan</span>
                 </Link>
                 <button
@@ -334,7 +329,7 @@ export function AdminShell({ children }: AdminShellProps) {
                   className="flex h-11 w-full items-center gap-2.5 px-4 text-sm text-tinta transition hover:bg-surface-soft"
                   onClick={handleLogout}
                 >
-                  <LogoutIcon className="size-4 text-muted-text" />
+                  <LogOut className="size-4 text-muted-text" />
                   <span>Logout</span>
                 </button>
               </div>

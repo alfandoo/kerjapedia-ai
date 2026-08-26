@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
 from app.api.dependencies import AdminUser, DbSession
 from app.api.schemas import IngestionJobRequest
@@ -21,7 +22,59 @@ from app.services.ingestion.pipeline import ingest_document
 from app.services.ingestion.uploads import load_uploads_manifest, merge_documents
 from app.services.providers import embedding_provider_from_settings, pinecone_store_from_settings
 
+logger = logging.getLogger("kerjapedia.ingestion")
+
 router = APIRouter(prefix="/ingestion/jobs", tags=["ingestion"])
+
+
+def _run_ingestion_background(
+    job_id: str, document_id: str, version_id: str, persist_db: bool
+) -> None:
+    """Run the heavy ingestion pipeline in a background thread."""
+    try:
+        extra_manifest_path = storage_root() / "uploads" / "manifest.json"
+        result = ingest_document(
+            project_root=project_root(),
+            metadata_path=dataset_metadata_path(),
+            document_id=document_id,
+            output_dir=storage_root(),
+            embedding_provider=embedding_provider_from_settings(settings),
+            database_session_factory=create_session if persist_db else None,
+            vector_store=(
+                pinecone_store_from_settings(settings)
+                if settings.vector_store == "pinecone"
+                else None
+            ),
+            extra_manifest_path=extra_manifest_path,
+        )
+        with create_session() as session:
+            job = session.get(IngestionJob, job_id)
+            if job:
+                job.status = result.status
+                job.warnings = result.warnings or []
+                job.artifact_paths = (
+                    asdict(result) if hasattr(result, "__dataclass_fields__") else {}
+                )
+                session.commit()
+        # Invalidate admin caches
+        try:
+            from app.api.routes_admin import _docs_cache, _stats_cache
+            _stats_cache.clear()
+            _docs_cache.clear()
+        except Exception:
+            pass
+        logger.info("Ingestion job %s completed: %s", job_id, result.status)
+    except Exception as exc:
+        logger.exception("Ingestion job %s failed", job_id)
+        try:
+            with create_session() as session:
+                job = session.get(IngestionJob, job_id)
+                if job:
+                    job.status = "failed"
+                    job.warnings = [str(exc)]
+                    session.commit()
+        except Exception:
+            logger.exception("Failed to update job %s status", job_id)
 
 
 @router.post("")
@@ -29,6 +82,7 @@ def create_ingestion_job(
     payload: IngestionJobRequest,
     session: DbSession,
     _: AdminUser,
+    background_tasks: BackgroundTasks,
 ) -> dict:
     documents = merge_documents(
         load_dataset_documents(),
@@ -81,35 +135,20 @@ def create_ingestion_job(
     session.add(job)
     session.commit()
 
-    try:
-        extra_manifest_path = storage_root() / "uploads" / "manifest.json"
-        result = ingest_document(
-            project_root=project_root(),
-            metadata_path=dataset_metadata_path(),
-            document_id=payload.document_id,
-            output_dir=storage_root(),
-            embedding_provider=embedding_provider_from_settings(settings),
-            database_session_factory=create_session if payload.persist_db else None,
-            vector_store=(
-                pinecone_store_from_settings(settings)
-                if settings.vector_store == "pinecone"
-                else None
-            ),
-            extra_manifest_path=extra_manifest_path,
-        )
-        job.status = result.status
-        job.warnings = result.warnings or []
-        job.artifact_paths = asdict(result) if hasattr(result, "__dataclass_fields__") else {}
-    except Exception as exc:
-        job.status = "failed"
-        job.warnings = [str(exc)]
-    session.commit()
+    background_tasks.add_task(
+        _run_ingestion_background,
+        job_id=job_id,
+        document_id=payload.document_id,
+        version_id=job_version_id,
+        persist_db=payload.persist_db,
+    )
+
     return {
         "job_id": job.job_id,
         "document_id": job.document_id,
-        "status": job.status,
+        "status": "running",
         "created_at": job.created_at,
-        "warnings": job.warnings,
+        "warnings": [],
     }
 
 

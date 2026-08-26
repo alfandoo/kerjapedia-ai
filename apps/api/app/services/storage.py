@@ -12,7 +12,7 @@ def ensure_bucket() -> None:
     supabase = get_supabase()
     buckets = supabase.storage.list_buckets()
     if not any(b.name == BUCKET for b in buckets):
-        supabase.storage.create_bucket(BUCKET, public=False)
+        supabase.storage.create_bucket(BUCKET, options={"public": False})
 
 
 def upload_pdf(

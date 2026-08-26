@@ -15,7 +15,10 @@
       "number": 1,
       "year": 2025,
       "issuer": "Kementerian Ketenagakerjaan",
-      "topics": ["bpjs", "jaminan_sosial_ketenagakerjaan"],
+      "topics": [
+        "bpjs",
+        "jaminan_sosial_ketenagakerjaan"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=74&nomor=1&tahun=2025",
@@ -33,7 +36,11 @@
       "number": 37,
       "year": 2021,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["bpjs", "jkp", "jaminan_sosial_ketenagakerjaan"],
+      "topics": [
+        "bpjs",
+        "jkp",
+        "jaminan_sosial_ketenagakerjaan"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=11&nomor=37&tahun=2021",
@@ -51,7 +58,11 @@
       "number": 6,
       "year": 2025,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["bpjs", "jkp", "jaminan_sosial_ketenagakerjaan"],
+      "topics": [
+        "bpjs",
+        "jkp",
+        "jaminan_sosial_ketenagakerjaan"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=11&nomor=6&tahun=2025",
@@ -69,7 +80,10 @@
       "number": 24,
       "year": 2011,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["bpjs", "jaminan_sosial"],
+      "topics": [
+        "bpjs",
+        "jaminan_sosial"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=8&nomor=24&tahun=2011",
@@ -87,7 +101,12 @@
       "number": 7,
       "year": 2026,
       "issuer": "Kementerian Ketenagakerjaan",
-      "topics": ["dasar_ketenagakerjaan", "pkwt", "phk", "alih_daya"],
+      "topics": [
+        "dasar_ketenagakerjaan",
+        "pkwt",
+        "phk",
+        "alih_daya"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=74&nomor=7&tahun=2026",
@@ -105,7 +124,10 @@
       "number": 34,
       "year": 2021,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["tenaga_kerja_asing", "dasar_ketenagakerjaan"],
+      "topics": [
+        "tenaga_kerja_asing",
+        "dasar_ketenagakerjaan"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=11&nomor=34&tahun=2021",
@@ -123,7 +145,13 @@
       "number": 35,
       "year": 2021,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["pkwt", "phk", "alih_daya", "waktu_kerja", "pesangon"],
+      "topics": [
+        "pkwt",
+        "phk",
+        "alih_daya",
+        "waktu_kerja",
+        "pesangon"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=11&nomor=35&tahun=2021",
@@ -141,8 +169,10 @@
       "number": 13,
       "year": 2003,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["dasar_ketenagakerjaan"],
-      "legal_status": "needs_verification",
+      "topics": [
+        "dasar_ketenagakerjaan"
+      ],
+      "legal_status": "active",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=8&nomor=13&tahun=2003",
       "local_file": "dataset/Dasar ketenagakerjaan, PKWT, PHK, dan alih daya/UU Nomor 13 Tahun 2003.pdf",
@@ -159,8 +189,14 @@
       "number": 6,
       "year": 2023,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["cipta_kerja", "dasar_ketenagakerjaan", "pkwt", "phk", "pengupahan"],
-      "legal_status": "needs_verification",
+      "topics": [
+        "cipta_kerja",
+        "dasar_ketenagakerjaan",
+        "pkwt",
+        "phk",
+        "pengupahan"
+      ],
+      "legal_status": "active",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=8&nomor=6&tahun=2023",
       "local_file": "dataset/Dasar ketenagakerjaan, PKWT, PHK, dan alih daya/UU Nomor 6 Tahun 2023.pdf",
@@ -177,7 +213,10 @@
       "number": 2,
       "year": 2004,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["hubungan_industrial", "perselisihan_hubungan_industrial"],
+      "topics": [
+        "hubungan_industrial",
+        "perselisihan_hubungan_industrial"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=8&nomor=2&tahun=2004",
@@ -195,7 +234,10 @@
       "number": 21,
       "year": 2000,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["serikat_pekerja", "hubungan_industrial"],
+      "topics": [
+        "serikat_pekerja",
+        "hubungan_industrial"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=8&nomor=21&tahun=2000",
@@ -213,7 +255,10 @@
       "number": 11,
       "year": 2023,
       "issuer": "Kementerian Ketenagakerjaan",
-      "topics": ["k3", "keselamatan_kesehatan_kerja"],
+      "topics": [
+        "k3",
+        "keselamatan_kesehatan_kerja"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=74&nomor=11&tahun=2023",
@@ -231,7 +276,10 @@
       "number": 13,
       "year": 2025,
       "issuer": "Kementerian Ketenagakerjaan",
-      "topics": ["k3", "keselamatan_kesehatan_kerja"],
+      "topics": [
+        "k3",
+        "keselamatan_kesehatan_kerja"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=74&nomor=13&tahun=2025",
@@ -249,7 +297,11 @@
       "number": 50,
       "year": 2012,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["k3", "smk3", "keselamatan_kesehatan_kerja"],
+      "topics": [
+        "k3",
+        "smk3",
+        "keselamatan_kesehatan_kerja"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=11&nomor=50&tahun=2012",
@@ -267,7 +319,10 @@
       "number": 1,
       "year": 1970,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["k3", "keselamatan_kerja"],
+      "topics": [
+        "k3",
+        "keselamatan_kerja"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=8&nomor=1&tahun=1970",
@@ -285,7 +340,10 @@
       "number": 6,
       "year": 2016,
       "issuer": "Kementerian Ketenagakerjaan",
-      "topics": ["thr", "pengupahan"],
+      "topics": [
+        "thr",
+        "pengupahan"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=74&nomor=6&tahun=2016",
@@ -303,7 +361,10 @@
       "number": 36,
       "year": 2021,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["pengupahan", "upah_minimum"],
+      "topics": [
+        "pengupahan",
+        "upah_minimum"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=11&nomor=36&tahun=2021",
@@ -321,7 +382,10 @@
       "number": 49,
       "year": 2025,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["pengupahan", "upah_minimum"],
+      "topics": [
+        "pengupahan",
+        "upah_minimum"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=11&nomor=49&tahun=2025",
@@ -339,7 +403,10 @@
       "number": 51,
       "year": 2023,
       "issuer": "Pemerintah Republik Indonesia",
-      "topics": ["pengupahan", "upah_minimum"],
+      "topics": [
+        "pengupahan",
+        "upah_minimum"
+      ],
       "legal_status": "needs_verification",
       "source_name": "Database Peraturan JDIH BPK",
       "source_url": "https://peraturan.bpk.go.id/Search?jenis=11&nomor=51&tahun=2023",

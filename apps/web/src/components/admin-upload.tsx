@@ -1,12 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { type DragEvent, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, FileText, Loader2, PlayCircle, Upload, X } from "lucide-react";
+import { type DragEvent, useEffect, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  FileText,
+  Loader2,
+  PlayCircle,
+  Upload,
+  X,
+} from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -17,14 +25,14 @@ import {
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/admin/primitives";
 import { cn } from "@/lib/utils";
-import { createIngestionJob, uploadAdminDocument, type AdminUploadResult } from "@/lib/api";
+import { createIngestionJob, fetchIngestionJob, uploadAdminDocument, type AdminUploadResult } from "@/lib/api";
 
-const topics: { value: string; label: string }[] = [
-  { value: "pkwt", label: "PKWT dan PHK" },
-  { value: "pengupahan", label: "Pengupahan dan THR" },
-  { value: "bpjs", label: "BPJS dan jaminan sosial" },
-  { value: "k3", label: "Keselamatan dan kesehatan kerja" },
-  { value: "hubungan_industrial", label: "Hubungan industrial" },
+const topics: { value: string; label: string; desc: string }[] = [
+  { value: "pkwt", label: "PKWT dan PHK", desc: "Perjanjian kerja waktu tertentu & pemutusan hubungan kerja" },
+  { value: "pengupahan", label: "Pengupahan dan THR", desc: "Upah minimum, struktur upah, & tunjangan hari raya" },
+  { value: "bpjs", label: "BPJS dan jaminan sosial", desc: "Jaminan kesehatan, ketenagakerjaan, & sosial" },
+  { value: "k3", label: "Keselamatan dan kesehatan kerja", desc: "Keselamatan, kesehatan, & standar lingkungan kerja" },
+  { value: "hubungan_industrial", label: "Hubungan industrial", desc: "Relasi kerja, serikat pekerja, & penyelesaian sengketa" },
 ];
 
 function formatBytes(bytes: number) {
@@ -32,36 +40,46 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-type StatusTone = "success" | "error" | "info";
+type Step = "select" | "configure" | "done";
 
 export function AdminUpload() {
   const inputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
+
   const [file, setFile] = useState<File | null>(null);
   const [topic, setTopic] = useState("pkwt");
-  const [status, setStatus] = useState<string | null>(null);
-  const [statusTone, setStatusTone] = useState<StatusTone | null>(null);
   const [dragging, setDragging] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploaded, setUploaded] = useState<AdminUploadResult | null>(null);
+
   const [ingesting, setIngesting] = useState(false);
-  const [ingestMessage, setIngestMessage] = useState<string | null>(null);
+  const [ingestDone, setIngestDone] = useState(false);
+  const [ingestError, setIngestError] = useState<string | null>(null);
+  const ingestPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (ingestPollRef.current) clearInterval(ingestPollRef.current);
+    };
+  }, []);
+
+  const step: Step = uploaded ? (ingestDone ? "done" : "configure") : "select";
+  const selectedTopic = topics.find((t) => t.value === topic);
 
   function acceptFile(nextFile: File | undefined) {
     if (!nextFile) return;
     if (nextFile.type !== "application/pdf" && !nextFile.name.toLowerCase().endsWith(".pdf")) {
-      setStatus("File harus berformat PDF.");
-      setStatusTone("error");
+      setUploadError("File harus berformat PDF.");
       return;
     }
     if (nextFile.size > 50 * 1024 * 1024) {
-      setStatus("Ukuran file melebihi batas 50 MB.");
-      setStatusTone("error");
+      setUploadError("Ukuran file melebihi batas 50 MB.");
       return;
     }
     setFile(nextFile);
-    setStatus(null);
-    setStatusTone(null);
+    setUploadError(null);
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
@@ -71,23 +89,23 @@ export function AdminUpload() {
     acceptFile(event.dataTransfer.files[0]);
   }
 
+  function clearFile() {
+    setFile(null);
+    setUploadError(null);
+    setUploaded(null);
+    setIngestDone(false);
+    setIngestError(null);
+  }
+
   async function handleUpload() {
-    if (!file) {
-      setStatus("Pilih file PDF terlebih dahulu.");
-      setStatusTone("error");
-      return;
-    }
+    if (!file) return;
     setSubmitting(true);
-    setStatus("Mengunggah dan memvalidasi PDF...");
-    setStatusTone("info");
+    setUploadError(null);
     try {
       const result = await uploadAdminDocument(file, topic);
       setUploaded(result);
-      setStatus("PDF berhasil diunggah dan terdaftar di knowledge base.");
-      setStatusTone("success");
     } catch (error) {
-      setStatus(`Upload gagal: ${(error as Error).message}`);
-      setStatusTone("error");
+      setUploadError(`Upload gagal: ${(error as Error).message}`);
     } finally {
       setSubmitting(false);
     }
@@ -96,13 +114,39 @@ export function AdminUpload() {
   async function handleIngest() {
     if (!uploaded) return;
     setIngesting(true);
-    setIngestMessage(null);
+    setIngestError(null);
     try {
       const job = await createIngestionJob(uploaded.document_id);
-      setIngestMessage(`Job selesai dengan status ${job.status}.`);
+      // Job starts as "running" — poll until it finishes
+      if (job.status === "running" || job.status === "queued") {
+        ingestPollRef.current = setInterval(async () => {
+          try {
+            const updated = await fetchIngestionJob(job.job_id);
+            if (updated.status !== "running" && updated.status !== "queued") {
+              if (ingestPollRef.current) clearInterval(ingestPollRef.current);
+              ingestPollRef.current = null;
+              if (updated.status === "completed") {
+                setIngestDone(true);
+              } else {
+                setIngestError(
+                  `Ingestion ${updated.status}: ${(updated as Record<string, unknown>).warnings ?? "Lihat log"}`
+                );
+              }
+              setIngesting(false);
+            }
+          } catch {
+            // keep polling
+          }
+        }, 3000);
+      } else if (job.status === "completed") {
+        setIngestDone(true);
+        setIngesting(false);
+      } else {
+        setIngestError(`Ingestion gagal: status ${job.status}`);
+        setIngesting(false);
+      }
     } catch (error) {
-      setIngestMessage(`Ingestion gagal: ${(error as Error).message}`);
-    } finally {
+      setIngestError(`Ingestion gagal: ${(error as Error).message}`);
       setIngesting(false);
     }
   }
@@ -112,103 +156,176 @@ export function AdminUpload() {
       <PageHeader
         eyebrow="Tambah regulasi"
         title="Upload PDF"
-        description="Tambahkan dokumen resmi ke knowledge base untuk diproses oleh pipeline ingestion."
+        description="Unggah dokumen resmi ketenagakerjaan untuk diproses pipeline ingestion."
         actions={
           <Button asChild variant="outline">
             <Link href="/documents">
-              <ArrowLeft /> Kembali ke dokumen
+              <ArrowLeft /> Kembali
             </Link>
           </Button>
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div
-          className={cn(
-            "flex min-h-80 flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
-            dragging
-              ? "border-forest bg-[#e7f3ec]"
-              : "border-[#e8e6e1] bg-white hover:border-forest/50 hover:bg-[#f1f0ec]/30"
-          )}
-          onDragEnter={(event) => {
-            event.preventDefault();
-            dragCounter.current += 1;
-            setDragging(true);
-          }}
-          onDragLeave={(event) => {
-            event.preventDefault();
-            dragCounter.current -= 1;
-            if (dragCounter.current <= 0) setDragging(false);
-          }}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={handleDrop}
-        >
-          <span
-            className={cn(
-              "flex size-14 items-center justify-center rounded-full transition-colors",
-              dragging ? "bg-white text-forest" : "bg-teal-soft text-forest"
-            )}
-          >
-            <Upload className="size-6" />
-          </span>
-          <div className="space-y-1">
-            <p className="text-base font-medium">
-              {dragging ? "Lepaskan file di sini" : "Tarik dan lepas file PDF di sini"}
-            </p>
-            <p className="text-sm text-muted-text">
-              atau pilih file dari komputer — maksimum 50 MB
-            </p>
-          </div>
-          <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}>
-            Pilih file
-          </Button>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="application/pdf,.pdf"
-            className="sr-only"
-            onChange={(event) => acceptFile(event.target.files?.[0])}
-          />
-        </div>
+      {/* Step indicator */}
+      <div className="flex items-center gap-3">
+        {(["select", "configure", "done"] as const).map((s, i) => {
+          const active = step === s;
+          const completed =
+            (s === "select" && (step === "configure" || step === "done")) ||
+            (s === "configure" && step === "done");
+          return (
+            <div key={s} className="flex items-center gap-3">
+              {i > 0 && (
+                <span
+                  className={cn(
+                    "h-px w-8 transition-colors",
+                    completed ? "bg-forest" : "bg-line"
+                  )}
+                />
+              )}
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "flex size-7 items-center justify-center rounded-full text-xs font-semibold transition-colors",
+                    active && "bg-javanese text-white",
+                    completed && "bg-forest text-white",
+                    !active && !completed && "bg-surface-soft text-muted-text"
+                  )}
+                >
+                  {completed ? <CheckCircle2 className="size-3.5" /> : i + 1}
+                </span>
+                <span
+                  className={cn(
+                    "text-sm transition-colors",
+                    active ? "font-semibold text-tinta" : completed ? "text-forest" : "text-muted-text"
+                  )}
+                >
+                  {s === "select" ? "Pilih file" : s === "configure" ? "Konfigurasi" : "Selesai"}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Konfigurasi dokumen</CardTitle>
-            <CardDescription>Atur topik sebelum dokumen diproses</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+        {/* Left — upload zone */}
+        <div className="space-y-4">
+          <div
+            className={cn(
+              "relative flex min-h-[320px] flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-200",
+              dragging
+                ? "border-forest bg-teal-soft/50 scale-[1.01]"
+                : file
+                  ? "border-forest/40 bg-white"
+                  : "border-line bg-white hover:border-forest/40 hover:bg-surface-soft/50"
+            )}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              dragCounter.current += 1;
+              setDragging(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              dragCounter.current -= 1;
+              if (dragCounter.current <= 0) setDragging(false);
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={handleDrop}
+          >
+            {/* Background pattern */}
+            {!file && !dragging && (
+              <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-[0.03]" aria-hidden="true">
+                <svg className="size-full" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+                      <circle cx="1.5" cy="1.5" r="1" fill="currentColor" />
+                    </pattern>
+                  </defs>
+                  <rect width="100%" height="100%" fill="url(#grid)" />
+                </svg>
+              </div>
+            )}
+
             {file ? (
-              <div className="flex items-center gap-3 rounded-lg border border-line px-3 py-2.5">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-teal-soft text-forest">
-                  <FileText className="size-4" />
+              /* File selected state */
+              <div className="flex w-full max-w-md flex-col items-center gap-4">
+                <span className="flex size-16 items-center justify-center rounded-2xl bg-teal-soft text-forest">
+                  <FileText className="size-7" />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <strong className="block truncate text-sm">{file.name}</strong>
-                  <small className="text-xs text-muted-text">{formatBytes(file.size)}</small>
-                </span>
+                <div className="min-w-0 w-full space-y-1 text-center">
+                  <p className="truncate text-base font-semibold text-tinta">{file.name}</p>
+                  <p className="text-sm text-muted-text">{formatBytes(file.size)}</p>
+                </div>
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon-sm"
-                  aria-label="Hapus file"
-                  onClick={() => {
-                    setFile(null);
-                    setStatus(null);
-                    setStatusTone(null);
-                  }}
+                  size="sm"
+                  className="text-muted-text hover:text-red"
+                  onClick={clearFile}
                 >
-                  <X />
+                  <X className="size-4" /> Hapus file
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-line px-3 py-8 text-center">
-                <FileText className="size-5 text-muted-text" />
-                <p className="text-sm text-muted-text">Belum ada file dipilih.</p>
-              </div>
+              /* Empty state */
+              <>
+                <span
+                  className={cn(
+                    "flex size-16 items-center justify-center rounded-2xl transition-colors duration-200",
+                    dragging ? "bg-forest text-white" : "bg-teal-soft text-forest"
+                  )}
+                >
+                  <Upload className="size-7" />
+                </span>
+                <div className="space-y-1.5">
+                  <p className="font-display text-lg font-semibold text-tinta">
+                    {dragging ? "Lepaskan file di sini" : "Tarik PDF ke area ini"}
+                  </p>
+                  <p className="text-sm text-muted-text">
+                    atau klik tombol di bawah untuk memilih file
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={() => inputRef.current?.click()}
+                >
+                  <FileText className="size-4" /> Pilih file dari komputer
+                </Button>
+                <p className="text-xs text-muted-text/70">Format PDF, maksimum 50 MB</p>
+              </>
             )}
 
-            <div className="space-y-1.5">
-              <Label>Topik utama</Label>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="sr-only"
+              onChange={(event) => acceptFile(event.target.files?.[0])}
+            />
+          </div>
+
+          {/* Error */}
+          {uploadError ? (
+            <div className="rounded-xl border border-red/25 bg-red-soft px-4 py-3 text-sm text-red">
+              {uploadError}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Right — config & actions */}
+        <div className="space-y-4">
+          {/* Topic selector */}
+          <Card>
+            <CardContent className="space-y-4 p-5">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-semibold">Topik regulasi</Label>
+                <p className="text-xs text-muted-text">
+                  Pilih kategori yang paling sesuai untuk dokumen ini.
+                </p>
+              </div>
               <Select value={topic} onValueChange={setTopic}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -221,86 +338,119 @@ export function AdminUpload() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+              {selectedTopic && (
+                <p className="text-xs text-muted-text">{selectedTopic.desc}</p>
+              )}
 
-            <ul className="space-y-2">
-              <li className="flex items-center gap-2 text-sm text-muted-text">
-                <CheckCircle2 className="size-4 shrink-0 text-forest" />
-                Header file PDF akan divalidasi
-              </li>
-              <li className="flex items-center gap-2 text-sm text-muted-text">
-                <CheckCircle2 className="size-4 shrink-0 text-forest" />
-                Dokumen baru dibuat sebagai draft
-              </li>
-              <li className="flex items-center gap-2 text-sm text-muted-text">
-                <CheckCircle2 className="size-4 shrink-0 text-forest" />
-                Publikasi membutuhkan review admin
-              </li>
-            </ul>
+              <div className="border-t border-line pt-3">
+                <p className="text-xs font-medium text-tinta">Yang akan terjadi:</p>
+                <ul className="mt-2 space-y-1.5">
+                  {[
+                    "Header PDF akan divalidasi",
+                    "Dokumen terdaftar sebagai draft",
+                    "Publikasi menunggu review admin",
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-xs text-muted-text">
+                      <CheckCircle2 className="size-3.5 shrink-0 text-forest" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
 
+          {/* Upload button */}
+          {!uploaded && (
             <Button
               className="w-full bg-javanese text-white hover:bg-forest"
-              disabled={submitting}
+              size="lg"
+              disabled={!file || submitting}
               onClick={() => void handleUpload()}
             >
-              {submitting ? <Loader2 className="animate-spin" /> : <Upload />}
-              {submitting ? "Mengunggah..." : "Mulai upload"}
+              {submitting ? (
+                <>
+                  <Loader2 className="animate-spin" /> Mengunggah…
+                </>
+              ) : (
+                <>
+                  <Upload /> Unggah PDF
+                </>
+              )}
             </Button>
+          )}
 
-            {status ? (
-              <div
-                role="status"
-                className={cn(
-                  "flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm",
-                  statusTone === "error" && "border-red/25 bg-red-soft text-red",
-                  statusTone === "success" && "border-forest/25 bg-teal-soft/60 text-forest",
-                  statusTone === "info" && "border-line bg-surface-soft text-muted-text"
-                )}
-              >
-                {statusTone === "error" ? (
-                  <Badge className="border border-red/25 bg-red-soft text-red">Gagal</Badge>
-                ) : statusTone === "success" ? (
-                  <Badge className="border border-forest/20 bg-teal-soft/70 text-forest">
-                    Berhasil
-                  </Badge>
-                ) : null}
-                <span className="flex-1">{status}</span>
-              </div>
-            ) : null}
-
-            {uploaded ? (
-              <div className="space-y-3 rounded-lg border border-forest/25 bg-teal-soft/30 p-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="size-4 shrink-0 text-forest" />
-                  <span className="min-w-0">
-                    <strong className="block truncate">{uploaded.file_name}</strong>
-                    <small className="block font-mono text-xs text-muted-text">
-                      {uploaded.document_id}
-                    </small>
+          {/* Uploaded — ready for ingestion */}
+          {uploaded && !ingestDone && (
+            <Card className="border-forest/25 bg-teal-soft/30">
+              <CardContent className="space-y-3 p-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-forest text-white">
+                    <CheckCircle2 className="size-4" />
                   </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-tinta">
+                      {uploaded.file_name}
+                    </p>
+                    <p className="truncate font-mono text-xs text-muted-text">
+                      {uploaded.document_id}
+                    </p>
+                  </div>
                 </div>
                 <Button
                   className="w-full bg-javanese text-white hover:bg-forest"
+                  size="lg"
                   disabled={ingesting}
                   onClick={() => void handleIngest()}
                 >
-                  {ingesting ? <Loader2 className="animate-spin" /> : <PlayCircle />}
-                  {ingesting ? "Memproses..." : "Mulai ingestion"}
+                  {ingesting ? (
+                    <>
+                      <Loader2 className="animate-spin" /> Memproses…
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle /> Mulai ingestion
+                    </>
+                  )}
                 </Button>
-                {ingestMessage ? (
-                  <p
-                    className={cn(
-                      "text-xs",
-                      ingestMessage.startsWith("Job selesai") ? "text-forest" : "text-[#a94442]"
-                    )}
-                  >
-                    {ingestMessage}
+                {ingestError && (
+                  <p className="text-xs text-red">{ingestError}</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Done */}
+          {ingestDone && (
+            <Card className="border-forest/25 bg-teal-soft/30">
+              <CardContent className="space-y-4 p-5 text-center">
+                <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-forest text-white">
+                  <CheckCircle2 className="size-6" />
+                </span>
+                <div className="space-y-1">
+                  <p className="font-semibold text-tinta">Upload & ingestion selesai</p>
+                  <p className="text-xs text-muted-text">
+                    Dokumen telah diproses dan siap untuk direview.
                   </p>
-                ) : null}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/documents">
+                      Lihat dokumen <ArrowRight className="size-4" />
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full text-muted-text"
+                    onClick={clearFile}
+                  >
+                    Upload lagi
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -53,6 +53,11 @@ from app.services.retrieval.store import count_chunks_per_document, load_artifac
 from app.services.storage import upload_bytes
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+_stats_cache: dict[str, tuple[float, dict]] = {}
+_docs_cache: dict[str, tuple[float, dict]] = {}
+_STATS_CACHE_TTL = 30  # seconds
+_DOCS_CACHE_TTL = 30
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
@@ -113,6 +118,11 @@ def _latest_jobs(session) -> dict[str, dict]:
 
 @router.get("/stats")
 def admin_stats(session: DbSession, _: AdminUser) -> dict:
+    cache_key = "stats"
+    cached = _stats_cache.get(cache_key)
+    if cached and (time.time() - cached[0]) < _STATS_CACHE_TTL:
+        return cached[1]
+
     documents = load_dataset_documents()
     chunk_counts = count_chunks_per_document(storage_root())
     jobs = _latest_jobs(session)
@@ -149,7 +159,7 @@ def admin_stats(session: DbSession, _: AdminUser) -> dict:
         .all()
     )
 
-    return {
+    result = {
         "documents": doc_counts,
         "users": user_count,
         "conversations": conversation_count,
@@ -172,10 +182,17 @@ def admin_stats(session: DbSession, _: AdminUser) -> dict:
             ],
         },
     }
+    _stats_cache[cache_key] = (time.time(), result)
+    return result
 
 
 @router.get("/documents")
 def list_admin_documents(session: DbSession, _: AdminUser) -> dict:
+    cache_key = "documents"
+    cached = _docs_cache.get(cache_key)
+    if cached and (time.time() - cached[0]) < _DOCS_CACHE_TTL:
+        return cached[1]
+
     documents = merge_documents(
         load_dataset_documents(),
         load_uploads_manifest(storage_root()),
@@ -218,7 +235,9 @@ def list_admin_documents(session: DbSession, _: AdminUser) -> dict:
         "needs_review": sum(item["ingestion_status"] == "needs_review" for item in results),
         "failed": sum(item["ingestion_status"] == "failed" for item in results),
     }
-    return {"summary": summary, "documents": results}
+    result = {"summary": summary, "documents": results}
+    _docs_cache[cache_key] = (time.time(), result)
+    return result
 
 
 @router.patch("/documents/{document_id}")
@@ -228,6 +247,8 @@ def update_admin_document(
     session: DbSession,
     user: AdminUser,
 ) -> dict:
+    _stats_cache.clear()
+    _docs_cache.clear()
     dataset_path = dataset_metadata_path()
     changes = payload.model_dump(exclude_none=True)
 
