@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 
 import {
-  AlertIcon,
-  CopyIcon,
-  EditIcon,
-  FileIcon,
-  ShareIcon,
-  ThumbsDownIcon,
-  ThumbsUpIcon,
-} from "./icons";
+  AlertTriangle,
+  Copy,
+  FileText,
+  Pencil,
+  Share2,
+  ThumbsDown,
+  ThumbsUp,
+} from "lucide-react";
 import type { ChatMessage } from "./chat-types";
 import type { FeedbackIssue, FeedbackRating } from "@/lib/api";
 import type { AnswerPayload } from "@/lib/types";
@@ -117,7 +117,7 @@ function answerBlocks(content: string): AnswerBlock[] {
 function AnswerContent({ content, streaming }: { content: string; streaming: boolean }) {
   const blocks = answerBlocks(content);
   return (
-    <div className="mt-3.5 mb-2 text-sm leading-[1.8] text-tinta [&_strong]:font-bold [&_strong]:text-javanese">
+    <div className="mt-1 mb-2 text-[13.5px] leading-[1.75] text-[#2a342e] [&_strong]:font-bold [&_strong]:text-javanese">
       {blocks.map((block, index) =>
         block.kind === "list" ? (
           block.ordered ? (
@@ -128,7 +128,7 @@ function AnswerContent({ content, streaming }: { content: string; streaming: boo
               {block.items.map((item) => (
                 <li
                   key={item}
-                  className="grid grid-cols-[24px_minmax(0,1fr)] gap-2 pl-0 [counter-increment:answer-point] before:mt-0.5 before:grid before:size-[22px] before:place-items-center before:rounded-full before:bg-[#edf4f0] before:text-[11px] before:font-bold before:text-javanese before:content-[counter(answer-point)]"
+                  className="grid grid-cols-[22px_minmax(0,1fr)] gap-2 pl-0 [counter-increment:answer-point] before:mt-0.5 before:grid before:size-[20px] before:place-items-center before:rounded-full before:bg-javanese/10 before:text-[10px] before:font-bold before:text-javanese before:content-[counter(answer-point)]"
                 >
                   {inlineRendered(item)}
                 </li>
@@ -142,7 +142,7 @@ function AnswerContent({ content, streaming }: { content: string; streaming: boo
               {block.items.map((item) => (
                 <li
                   key={item}
-                  className="grid grid-cols-[24px_minmax(0,1fr)] gap-2 pl-0 before:mt-[9px] before:ml-[7px] before:size-2 before:rounded-full before:bg-javanese"
+                  className="grid grid-cols-[22px_minmax(0,1fr)] gap-2 pl-0 before:mt-[9px] before:ml-[7px] before:size-[6px] before:rounded-full before:bg-javanese/60"
                 >
                   {inlineRendered(item)}
                 </li>
@@ -220,37 +220,37 @@ export function ConversationThread({
       {messages.map((message) =>
         message.role === "user" ? (
           <article
-            className="mb-[22px] flex flex-col items-end pl-[68px] max-[760px]:pl-0"
+            className="mb-5 flex flex-col items-end pl-[68px] max-[760px]:pl-0"
             key={message.id}
           >
             <p className="max-w-[min(82%,560px)] rounded-[18px_18px_4px_18px] bg-[#eef4f0] px-4 py-[11px] text-[13px] leading-[1.55] text-[#29332d]">
               {message.content}
             </p>
-            <div className="mt-0.5 flex min-h-[30px] items-center justify-end gap-[5px]">
+            <div className="mt-1 flex min-h-[28px] items-center justify-end gap-1">
               <time
-                className="font-mono text-[10px] leading-[1.4] tabular-nums text-[#8a928d]"
+                className="font-mono text-[10px] leading-[1.4] tabular-nums text-[#a0a8a3]"
                 title={formatMessageTime(message.createdAt)}
               >
                 {formatMessageTime(message.createdAt)}
               </time>
-              <div className="flex min-h-7 items-center gap-[3px]">
+              <div className="flex min-h-7 items-center gap-0.5">
                 <button
                   type="button"
-                  className="grid size-7 place-items-center rounded-lg border border-transparent text-[#68736c] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
+                  className="grid size-7 place-items-center rounded-lg border border-transparent text-[#8a928d] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
                   aria-label="Edit pesan"
                   title="Edit pesan"
                   onClick={() => onEditMessage(message)}
                 >
-                  <EditIcon className="size-[18px] [stroke-width:1.8]" />
+                  <Pencil className="size-[16px]" />
                 </button>
                 <button
                   type="button"
-                  className="grid size-7 place-items-center rounded-lg border border-transparent text-[#68736c] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
+                  className="grid size-7 place-items-center rounded-lg border border-transparent text-[#8a928d] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
                   aria-label="Salin pesan"
                   title="Salin pesan"
                   onClick={() => void copyText(message.id, message.content)}
                 >
-                  <CopyIcon className="size-[18px] [stroke-width:1.8]" />
+                      <Copy className="size-[16px]" />
                 </button>
                 {actionStatus?.messageId === message.id ? (
                   <span className="mx-1 whitespace-nowrap text-[11px] text-muted-text" role="status">
@@ -261,144 +261,146 @@ export function ConversationThread({
             </div>
           </article>
         ) : (
-          <article className="mb-5 pb-2" key={message.id}>
-            <header className="grid grid-cols-[34px_auto_auto] items-center justify-start gap-2.5">
-              <span className="grid size-[34px] place-items-center rounded-full bg-javanese text-[10px] font-bold text-white">
-                KP
-              </span>
-              <strong className="text-xs font-semibold text-tinta">
-                {message.streaming ? "KerjaPedia sedang berpikir" : "Jawaban KerjaPedia"}
-              </strong>
-              <time
-                className="ml-0.5 font-mono text-[10px] leading-[1.4] tabular-nums text-[#8a928d]"
-                title={formatMessageTime(message.createdAt)}
-              >
-                {formatMessageTime(message.createdAt)}
-              </time>
-            </header>
-            {message.status && !message.content ? (
-              <div className="inline-flex min-h-[38px] items-center gap-2 text-[13px] text-[#65726b]" role="status" aria-live="polite">
-                <span
-                  className="size-2 rounded-full bg-javanese [animation:editorial-thinking-pulse_1.4s_ease-in-out_infinite]"
-                  aria-hidden="true"
-                />
-                <span>{message.status}</span>
-              </div>
-            ) : (
-              <AnswerContent content={message.content} streaming={Boolean(message.streaming)} />
-            )}
-            {message.answer?.citations.length ? (
-              <button
-                className="ml-[44px] mt-1 inline-flex min-h-[34px] items-center gap-2 text-xs font-semibold text-javanese transition hover:text-forest max-[760px]:ml-0"
-                type="button"
-                onClick={() => onShowSources(message.answer as AnswerPayload)}
-              >
-                <FileIcon className="size-[18px] [stroke-width:1.8]" />
-                Lihat {message.answer.citations.length} sumber resmi
-                <span aria-hidden="true">→</span>
-              </button>
-            ) : null}
-            {message.answer?.refusal_reason ? (
-              <div className="ml-[44px] mt-3 flex items-start gap-[11px] rounded border-l-[3px] border-[#bd8a2e] bg-[#fffaf0] p-3 text-xs leading-[1.55] text-[#88540d] max-[760px]:ml-0">
-                <AlertIcon className="size-[18px] [stroke-width:1.8] shrink-0" />
-                <span>
-                  {message.answer.refusal_reason === "out_of_scope_query"
-                    ? "KerjaPedia AI hanya menjawab topik ketenagakerjaan Indonesia."
-                    : message.answer.refusal_reason === "prompt_injection_detected"
-                      ? "Permintaan diblokir oleh sistem keamanan."
-                      : "Dasar dokumen belum cukup untuk menjawab pertanyaan ini dengan aman."}
+          <article className="mb-6" key={message.id}>
+            <div className="rounded-xl border-l-[3px] border-javanese/20 pl-4 transition-colors group-hover:border-javanese/40 max-[760px]:pl-3">
+              <header className="mb-2 flex items-center gap-2.5">
+                <span className="grid size-[28px] place-items-center rounded-lg bg-javanese/10 text-[9px] font-bold text-javanese">
+                  KP
                 </span>
-              </div>
-            ) : null}
-            {message.answer?.clarification_question ? (
-              <div className="ml-[44px] mt-3 flex items-start gap-[11px] rounded border-l-[3px] border-[#bd8a2e] bg-[#fffaf0] p-3 text-xs leading-[1.55] text-[#88540d] max-[760px]:ml-0">
-                <AlertIcon className="size-[18px] [stroke-width:1.8] shrink-0" />
-                <span>{message.answer.clarification_question}</span>
-              </div>
-            ) : null}
-            {message.answer?.warnings?.length ? (
-              <div className="grid gap-1.5">
-                {message.answer.warnings.map((code) => {
-                  const label = WARNING_LABELS[code];
-                  if (!label) return null;
-                  return (
-                    <div
-                      className="ml-[44px] mt-3 flex items-start gap-[11px] rounded border-l-[3px] border-[#bd8a2e] bg-[#fffaf0] p-3 text-xs leading-[1.55] text-[#88540d] max-[760px]:ml-0"
-                      key={code}
-                    >
-                      <AlertIcon className="size-[18px] [stroke-width:1.8] shrink-0" />
-                      <span>{label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-            {!message.streaming ? (
-              <footer className="ml-[44px] mt-0.5 flex min-h-[34px] items-center text-[11px] text-muted-text max-[760px]:ml-0">
-                <div className="flex gap-[3px]">
-                  <button
-                    type="button"
-                    className="grid size-8 place-items-center rounded-lg border border-transparent text-[#68736c] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
-                    aria-label="Salin jawaban"
-                    title="Salin jawaban"
-                    onClick={() => void copyText(message.id, message.content)}
-                  >
-                    <CopyIcon className="size-[18px] [stroke-width:1.8]" />
-                  </button>
-                  <button
-                    type="button"
-                    className={`grid size-8 place-items-center rounded-lg border transition ${
-                      feedback[message.id] === "helpful"
-                        ? "border-[#afc9bb] bg-[#f5f8f6] text-javanese"
-                        : "border-transparent text-[#68736c] hover:bg-[#eef2ef] hover:text-[#26312b]"
-                    }`}
-                    aria-label="Tandai jawaban membantu"
-                    aria-pressed={feedback[message.id] === "helpful"}
-                    onClick={() => onFeedback(message, "helpful")}
-                  >
-                    <ThumbsUpIcon className="size-[18px] [stroke-width:1.8]" />
-                  </button>
-                  <button
-                    type="button"
-                    className={`grid size-8 place-items-center rounded-lg border transition ${
-                      feedback[message.id] === "not_helpful"
-                        ? "border-[#afc9bb] bg-[#f5f8f6] text-javanese"
-                        : "border-transparent text-[#68736c] hover:bg-[#eef2ef] hover:text-[#26312b]"
-                    }`}
-                    aria-label="Tandai jawaban tidak membantu"
-                    aria-pressed={feedback[message.id] === "not_helpful"}
-                    onClick={() => {
-                      if (feedbackPanel?.messageId === message.id) {
-                        setFeedbackPanel(null);
-                      } else {
-                        setFeedbackPanel({ messageId: message.id });
-                        setIssueSelection(null);
-                        setIssueComment("");
-                      }
-                    }}
-                  >
-                    <ThumbsDownIcon className="size-[18px] [stroke-width:1.8]" />
-                  </button>
-                  <button
-                    type="button"
-                    className="grid size-8 place-items-center rounded-lg border border-transparent text-[#68736c] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
-                    aria-label="Bagikan jawaban"
-                    title="Bagikan jawaban"
-                    onClick={() => void shareAnswer(message)}
-                  >
-                    <ShareIcon className="size-[18px] [stroke-width:1.8]" />
-                  </button>
+                <strong className="text-[12px] font-semibold text-[#4a564e]">
+                  {message.streaming ? "Berpikir…" : "Jawaban KerjaPedia"}
+                </strong>
+                <time
+                  className="font-mono text-[10px] leading-[1.4] tabular-nums text-[#a0a8a3]"
+                  title={formatMessageTime(message.createdAt)}
+                >
+                  {formatMessageTime(message.createdAt)}
+                </time>
+              </header>
+              {message.status && !message.content ? (
+                <div className="inline-flex min-h-[38px] items-center gap-2 text-[13px] text-[#65726b]" role="status" aria-live="polite">
+                  <span
+                    className="size-2 rounded-full bg-javanese [animation:editorial-thinking-pulse_1.4s_ease-in-out_infinite]"
+                    aria-hidden="true"
+                  />
+                  <span>{message.status}</span>
                 </div>
-                {actionStatus?.messageId === message.id ? (
-                  <span className="mx-1 whitespace-nowrap text-[11px] text-muted-text" role="status">
-                    {actionStatus.text}
+              ) : (
+                <AnswerContent content={message.content} streaming={Boolean(message.streaming)} />
+              )}
+              {message.answer?.citations.length ? (
+                <button
+                  className="mt-1 inline-flex min-h-[32px] items-center gap-1.5 rounded-lg border border-[#e2e8e2] bg-[#fafbf9] px-3 text-[11px] font-semibold text-javanese transition hover:border-javanese/40 hover:bg-[#f0f5f1]"
+                  type="button"
+                  onClick={() => onShowSources(message.answer as AnswerPayload)}
+                >
+                  <FileText className="size-[16px]" />
+                  {message.answer.citations.length} sumber resmi
+                  <span aria-hidden="true" className="text-[10px]">→</span>
+                </button>
+              ) : null}
+              {message.answer?.refusal_reason ? (
+                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-[#f0e6d2] bg-[#fffcf5] p-3 text-xs leading-[1.55] text-[#88540d]">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    {message.answer.refusal_reason === "out_of_scope_query"
+                      ? "KerjaPedia AI hanya menjawab topik ketenagakerjaan Indonesia."
+                      : message.answer.refusal_reason === "prompt_injection_detected"
+                        ? "Permintaan diblokir oleh sistem keamanan."
+                        : "Dasar dokumen belum cukup untuk menjawab pertanyaan ini dengan aman."}
                   </span>
-                ) : null}
-              </footer>
-            ) : null}
+                </div>
+              ) : null}
+              {message.answer?.clarification_question ? (
+                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-[#f0e6d2] bg-[#fffcf5] p-3 text-xs leading-[1.55] text-[#88540d]">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <span>{message.answer.clarification_question}</span>
+                </div>
+              ) : null}
+              {message.answer?.warnings?.length ? (
+                <div className="mt-3 grid gap-1.5">
+                  {message.answer.warnings.map((code) => {
+                    const label = WARNING_LABELS[code];
+                    if (!label) return null;
+                    return (
+                      <div
+                        className="flex items-start gap-2.5 rounded-lg border border-[#f0e6d2] bg-[#fffcf5] p-3 text-xs leading-[1.55] text-[#88540d]"
+                        key={code}
+                      >
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                        <span>{label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {!message.streaming ? (
+                <footer className="mt-2 flex min-h-[30px] items-center text-[11px] text-muted-text">
+                  <div className="flex gap-0.5">
+                    <button
+                      type="button"
+                      className="grid size-7 place-items-center rounded-lg border border-transparent text-[#8a928d] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
+                      aria-label="Salin jawaban"
+                      title="Salin jawaban"
+                      onClick={() => void copyText(message.id, message.content)}
+                    >
+                  <Copy className="size-[16px]" />
+                    </button>
+                    <button
+                      type="button"
+                      className={`grid size-7 place-items-center rounded-lg border transition ${
+                        feedback[message.id] === "helpful"
+                          ? "border-javanese/30 bg-[#f0f5f1] text-javanese"
+                          : "border-transparent text-[#8a928d] hover:bg-[#eef2ef] hover:text-[#26312b]"
+                      }`}
+                      aria-label="Tandai jawaban membantu"
+                      aria-pressed={feedback[message.id] === "helpful"}
+                      onClick={() => onFeedback(message, "helpful")}
+                    >
+                      <ThumbsUp className="size-[16px]" />
+                    </button>
+                    <button
+                      type="button"
+                      className={`grid size-7 place-items-center rounded-lg border transition ${
+                        feedback[message.id] === "not_helpful"
+                          ? "border-javanese/30 bg-[#f0f5f1] text-javanese"
+                          : "border-transparent text-[#8a928d] hover:bg-[#eef2ef] hover:text-[#26312b]"
+                      }`}
+                      aria-label="Tandai jawaban tidak membantu"
+                      aria-pressed={feedback[message.id] === "not_helpful"}
+                      onClick={() => {
+                        if (feedbackPanel?.messageId === message.id) {
+                          setFeedbackPanel(null);
+                        } else {
+                          setFeedbackPanel({ messageId: message.id });
+                          setIssueSelection(null);
+                          setIssueComment("");
+                        }
+                      }}
+                    >
+                      <ThumbsDown className="size-[16px]" />
+                    </button>
+                    <button
+                      type="button"
+                      className="grid size-7 place-items-center rounded-lg border border-transparent text-[#8a928d] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
+                      aria-label="Bagikan jawaban"
+                      title="Bagikan jawaban"
+                      onClick={() => void shareAnswer(message)}
+                    >
+                      <Share2 className="size-[16px]" />
+                    </button>
+                  </div>
+                  {actionStatus?.messageId === message.id ? (
+                    <span className="mx-1 whitespace-nowrap text-[11px] text-muted-text" role="status">
+                      {actionStatus.text}
+                    </span>
+                  ) : null}
+                </footer>
+              ) : null}
+            </div>
             {feedbackPanel?.messageId === message.id ? (
               <div
-                className="mt-3 grid max-w-[420px] gap-2.5 rounded-xl border border-[#e2e8e2] bg-[#fafbf9] p-3.5"
+                className="mt-3 ml-4 grid max-w-[420px] gap-2.5 rounded-xl border border-[#e2e8e2] bg-[#fafbf9] p-3.5 max-[760px]:ml-3"
                 role="group"
                 aria-label="Detail feedback"
               >

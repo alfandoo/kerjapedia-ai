@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { ChatIcon, EditIcon, MoreIcon, TrashIcon } from "./icons";
+import { MessageSquare, Pencil, MoreHorizontal, Trash2 } from "lucide-react";
 import type { ConversationSummary } from "@/lib/types";
 
 type ConversationHistoryProps = {
@@ -82,7 +82,7 @@ export function ConversationHistory({
   async function removeConversation(item: ConversationSummary) {
     if (!onConversationDelete) return;
     const confirmed = window.confirm(
-      `Hapus percakapan “${item.title}”? Tindakan ini tidak dapat dibatalkan.`
+      `Hapus percakapan "${item.title}"? Tindakan ini tidak dapat dibatalkan.`
     );
     if (!confirmed) return;
     setPendingId(item.conversation_id);
@@ -203,7 +203,7 @@ export function ConversationHistory({
                   aria-current={item.conversation_id === activeConversationId ? "true" : undefined}
                   onClick={() => onConversationSelect?.(item.conversation_id)}
                 >
-                  <ChatIcon className="mt-0.5 size-4 [stroke-width:1.8] text-[#78827c]" />
+                  <MessageSquare className="mt-0.5 size-4 text-[#78827c]" />
                   <span className="min-w-0">
                     <strong className="block truncate text-xs font-semibold">
                       {item.title}
@@ -233,7 +233,7 @@ export function ConversationHistory({
                       )
                     }
                   >
-                    <MoreIcon className="size-[17px] [stroke-width:1.8]" />
+                    <MoreHorizontal className="size-[17px]" />
                   </button>
                   {openMenuId === item.conversation_id ? (
                     <div
@@ -249,7 +249,7 @@ export function ConversationHistory({
                           setEditingId(item.conversation_id);
                         }}
                       >
-                        <EditIcon className="size-4 [stroke-width:1.8] shrink-0" />
+                        <Pencil className="size-4 shrink-0" />
                         <span className="flex-1">Ubah judul</span>
                       </button>
                       <button
@@ -259,7 +259,7 @@ export function ConversationHistory({
                         disabled={pendingId === item.conversation_id}
                         onClick={() => void removeConversation(item)}
                       >
-                        <TrashIcon className="size-4 [stroke-width:1.8] shrink-0" />
+                        <Trash2 className="size-4 shrink-0" />
                         <span className="flex-1">Hapus chat</span>
                       </button>
                     </div>

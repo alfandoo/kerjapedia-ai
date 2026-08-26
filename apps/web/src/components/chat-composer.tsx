@@ -2,7 +2,7 @@
 
 import type { KeyboardEvent, RefObject } from "react";
 
-import { SendIcon, StopIcon } from "./icons";
+import { Send, Square } from "lucide-react";
 
 type ChatComposerProps = {
   question: string;
@@ -30,7 +30,7 @@ export function ChatComposer({
 
   return (
     <form
-      className="relative z-10 mx-auto w-full max-w-[800px]"
+      className="relative z-10 mx-auto w-full max-w-[800px] px-4 max-[760px]:px-3"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();
@@ -42,40 +42,44 @@ export function ChatComposer({
       >
         Ketik pertanyaan Anda
       </label>
-      <textarea
-        ref={inputRef}
-        id="question-input"
-        value={question}
-        onChange={(event) => onQuestionChange(event.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Tanyakan regulasi ketenagakerjaan…"
-        maxLength={2000}
-        rows={2}
-        disabled={loading}
-        className="w-full resize-none rounded-2xl border border-[#dce4df] bg-white p-4 pb-11 text-sm leading-[1.65] text-tinta shadow-sm outline-none transition placeholder:text-[#8a928d] focus:border-javanese focus:outline-2 focus:outline-offset-1 focus:outline-javanese/40 disabled:cursor-not-allowed disabled:bg-[#f5f7f5]"
-      />
-      <span className="pointer-events-none absolute bottom-[14px] left-[18px] text-[10px] font-medium tracking-wide text-[#8a928d]">
-        {question.length}/2000
-      </span>
-      {loading ? (
-        <button
-          className="absolute bottom-[10px] right-[12px] grid h-[38px] shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-white px-3.5 text-xs font-semibold text-[#68736c] transition hover:bg-[#f2f5f2] hover:text-[#26312b]"
-          type="button"
-          onClick={onCancel}
-        >
-          <StopIcon className="size-[18px] [stroke-width:1.8]" />
-          Batalkan
-        </button>
-      ) : (
-        <button
-          className="absolute bottom-[10px] right-[12px] grid h-[38px] shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-javanese px-3.5 text-xs font-semibold whitespace-nowrap text-white transition hover:bg-forest disabled:cursor-not-allowed disabled:bg-[#c9d3cb]"
-          type="submit"
-          disabled={!question.trim()}
-        >
-          <SendIcon className="size-[18px] [stroke-width:1.8]" />
-          Kirim
-        </button>
-      )}
+      <div className="relative rounded-2xl border border-[#dce4df] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition focus-within:border-emas/50 focus-within:shadow-[0_0_0_3px_rgba(201,162,39,0.08)]">
+        <textarea
+          ref={inputRef}
+          id="question-input"
+          value={question}
+          onChange={(event) => onQuestionChange(event.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Tanyakan regulasi ketenagakerjaan…"
+          maxLength={2000}
+          rows={2}
+          disabled={loading}
+          className="w-full resize-none rounded-2xl bg-transparent p-4 pb-11 text-[14px] leading-[1.65] text-tinta outline-none placeholder:text-[#9ca39e] disabled:cursor-not-allowed disabled:opacity-50"
+        />
+        <div className="absolute bottom-0 inset-x-0 flex items-center justify-between px-4 pb-3">
+          <span className="text-[10px] font-medium tabular-nums text-[#b0b8b3]">
+            {question.length}/2000
+          </span>
+          {loading ? (
+            <button
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#e8e4dc] bg-white px-3.5 text-xs font-semibold text-[#68736c] transition hover:bg-[#f5f3ef] hover:text-[#26312b]"
+              type="button"
+              onClick={onCancel}
+            >
+              <Square className="size-4" />
+              Batalkan
+            </button>
+          ) : (
+            <button
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest disabled:cursor-not-allowed disabled:bg-[#c9d3cb]"
+              type="submit"
+              disabled={!question.trim()}
+            >
+              <Send className="size-4" />
+              Kirim
+            </button>
+          )}
+        </div>
+      </div>
     </form>
   );
 }

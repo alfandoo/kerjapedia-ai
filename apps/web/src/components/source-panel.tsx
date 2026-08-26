@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { ExternalIcon, FileIcon, ThumbsDownIcon, ThumbsUpIcon } from "./icons";
+import { ExternalLink, FileText, ThumbsDown, ThumbsUp } from "lucide-react";
 import { documentPdfUrl, submitFeedback } from "@/lib/api";
 import type { Citation } from "@/lib/types";
 
@@ -27,7 +27,7 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
   return (
     <section className="flex h-full flex-col gap-3.5 bg-white">
       <div
-        className="sticky top-0 z-10 flex h-[58px] shrink-0 border-b border-[#dce4df] bg-white"
+        className="sticky top-0 z-10 flex h-[58px] shrink-0 border-b border-[#e8e4dc] bg-white"
         role="tablist"
         aria-label="Detail sumber"
       >
@@ -41,7 +41,7 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
             aria-selected={activeTab === tab}
             className={`relative min-h-12 flex-1 cursor-pointer border-0 bg-transparent text-xs font-medium text-[#68736c] transition hover:text-tinta ${
               activeTab === tab
-                ? "font-semibold text-javanese after:absolute after:inset-x-[18px] after:bottom-[-1px] after:h-0.5 after:rounded-t after:bg-javanese"
+                ? "font-semibold text-javanese after:absolute after:inset-x-[18px] after:bottom-[-1px] after:h-0.5 after:rounded-t after:bg-emas"
                 : ""
             }`}
             onClick={() => setActiveTab(tab)}
@@ -57,8 +57,8 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
         aria-labelledby={`source-tab-${activeTab}`}
       >
         {activeCitations.length === 0 ? (
-          <div className="flex flex-col items-center rounded-xl border border-dashed border-[#bfd2ce] p-[34px_18px] text-center">
-            <FileIcon className="size-6 [stroke-width:1.8] text-javanese" />
+          <div className="flex flex-col items-center rounded-xl border border-dashed border-[#e2ddd3] bg-[#faf8f4] p-[34px_18px] text-center">
+            <FileText className="size-6 text-emas" />
             <h3 className="mt-3 text-sm font-semibold text-tinta">Belum ada sumber</h3>
             <p className="text-xs leading-[1.55] text-muted-text">
               Sumber resmi akan muncul setelah KerjaPedia menjawab pertanyaan Anda.
@@ -66,9 +66,9 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
           </div>
         ) : null}
         {activeCitations.map((citation, index) => (
-          <article className="border-b border-[#dce4df] py-[22px]" key={citation.citation_id}>
-            <div className="flex items-start gap-2.5">
-              <span className="grid size-6 shrink-0 place-items-center rounded-md bg-[#eaf2ed] text-[10px] font-semibold text-javanese">
+          <article className="border-b border-[#f0ede8] py-5" key={citation.citation_id}>
+            <div className="flex items-start gap-3">
+              <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-emas/10 font-mono text-[11px] font-bold text-emas">
                 {index + 1}
               </span>
               <h3 className="mt-0.5 font-display text-sm font-semibold leading-snug text-tinta">
@@ -76,17 +76,17 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
               </h3>
             </div>
             {activeTab !== "kutipan" ? (
-              <dl className="ml-[34px] mt-4 divide-y divide-[#edf1ee] border-t border-[#edf1ee]">
+              <dl className="ml-[34px] mt-4 divide-y divide-[#f5f2ed] border-t border-[#f5f2ed]">
                 <div className="grid min-h-10 grid-cols-[82px_minmax(0,1fr)] items-center py-[7px]">
                   <dt className="text-[11px] font-medium text-[#78837c]">Pasal</dt>
-                  <dd className="text-xs leading-normal text-tinta">
+                  <dd className="font-mono text-xs leading-normal text-tinta">
                     {[citation.article, citation.paragraph].filter(Boolean).join(" · ") || "-"}
                   </dd>
                 </div>
                 <div className="grid min-h-10 grid-cols-[82px_minmax(0,1fr)] items-center py-[7px]">
                   <dt className="text-[11px] font-medium text-[#78837c]">Halaman</dt>
-                  <dd className="text-xs leading-normal text-tinta">
-                    {citation.page_start}-{citation.page_end}
+                  <dd className="font-mono text-xs leading-normal text-tinta">
+                    {citation.page_start}–{citation.page_end}
                   </dd>
                 </div>
                 {activeTab === "pasal" && citation.section ? (
@@ -118,9 +118,9 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
               </dl>
             ) : null}
             {activeTab === "kutipan" ? (
-              <div className="ml-[34px] mt-4 flex items-start gap-2.5 rounded-r-lg border-l-[3px] border-javanese bg-[#f3f7f4] p-[14px_15px]">
-                <FileIcon className="size-4 shrink-0 text-javanese" />
-                <p className="m-0 font-display text-xs leading-[1.7] text-[#344139]">
+              <div className="ml-[34px] mt-4 flex items-start gap-2.5 rounded-r-lg border-l-[3px] border-emas bg-[#faf8f4] p-[14px_15px]">
+                <FileText className="size-4 shrink-0 text-emas" />
+                <p className="m-0 font-display text-xs leading-[1.7] text-[#5a4f3a]">
                   {citation.quote}
                 </p>
               </div>
@@ -131,10 +131,10 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
               }`}
               target="_blank"
               rel="noreferrer"
-              className="ml-[34px] mt-2.5 inline-flex min-h-[38px] items-center gap-2 text-[11px] font-semibold text-javanese transition hover:text-forest"
+              className="ml-[34px] mt-3 inline-flex min-h-[32px] items-center gap-1.5 rounded-lg border border-[#e8e4dc] bg-white px-3 text-[11px] font-semibold text-javanese transition hover:border-javanese/40 hover:bg-[#f0f5f1]"
             >
-              Buka PDF dokumen
-              <ExternalIcon className="size-3.5 [stroke-width:1.8]" />
+              Buka PDF
+              <ExternalLink className="size-3.5" />
             </a>
             <div className="ml-[34px] mt-[18px] hidden last:block">
               <p className="mb-2 text-xs text-muted-text">Apakah sumber ini membantu?</p>
@@ -143,24 +143,24 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
                   type="button"
                   className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition hover:border-javanese hover:text-javanese ${
                     feedback === "helpful"
-                      ? "border-[#9adbd5] bg-[#dff4f1] text-[#00645c]"
-                      : "border-[#dce4df] bg-white text-tinta"
+                      ? "border-javanese/30 bg-[#f0f5f1] text-javanese"
+                      : "border-[#e8e4dc] bg-white text-tinta"
                   }`}
                   onClick={() => void handleFeedback("helpful")}
                 >
-                  <ThumbsUpIcon className="size-[18px] [stroke-width:1.8]" />
+                  <ThumbsUp className="size-[18px]" />
                   Membantu
                 </button>
                 <button
                   type="button"
                   className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition hover:border-javanese hover:text-javanese ${
                     feedback === "not_helpful"
-                      ? "border-[#9adbd5] bg-[#dff4f1] text-[#00645c]"
-                      : "border-[#dce4df] bg-white text-tinta"
+                      ? "border-javanese/30 bg-[#f0f5f1] text-javanese"
+                      : "border-[#e8e4dc] bg-white text-tinta"
                   }`}
                   onClick={() => void handleFeedback("not_helpful")}
                 >
-                  <ThumbsDownIcon className="size-[18px] [stroke-width:1.8]" />
+                  <ThumbsDown className="size-[18px]" />
                   Tidak membantu
                 </button>
               </div>
@@ -177,7 +177,7 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
         href="/legal/disclaimer"
         className="ml-[34px] mt-2 inline-flex items-center gap-[7px] text-xs font-semibold text-javanese transition hover:underline"
       >
-        <FileIcon className="size-[18px] [stroke-width:1.8]" />
+        <FileText className="size-[18px]" />
         Baca disclaimer hukum
       </Link>
     </section>

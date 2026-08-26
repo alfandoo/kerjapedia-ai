@@ -10,7 +10,19 @@ import {
 } from "react";
 
 import { AuthModal } from "./auth-modal";
-import { EditIcon, FileIcon, ScaleIcon, SearchIcon, SettingsIcon, UserIcon } from "./icons";
+import {
+  FileText,
+  LogOut,
+  Menu,
+  PanelLeftClose,
+  Pencil,
+  Plus,
+  Search,
+  Scale,
+  Settings,
+  User,
+  X,
+} from "lucide-react";
 import { ConversationHistory } from "./conversation-history";
 import { useStoredSession } from "@/hooks/use-stored-session";
 import { SESSION_STORAGE_KEY } from "@/lib/api";
@@ -33,50 +45,6 @@ type ChatWorkspaceShellProps = {
   onConversationRename: (id: string, title: string) => Promise<void>;
   onConversationDelete: (id: string) => Promise<void>;
 };
-
-const iconStroke =
-  "fill-none stroke-current [stroke-width:1.7] [stroke-linecap:round] [stroke-linejoin:round]";
-
-function MenuIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${iconStroke} ${className}`}>
-      <path d="M4 7h16M4 12h16M4 17h16" />
-    </svg>
-  );
-}
-
-function PanelIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${iconStroke} ${className}`}>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M9 4v16" />
-    </svg>
-  );
-}
-
-function PlusIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${iconStroke} ${className}`}>
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  );
-}
-
-function CloseIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${iconStroke} ${className}`}>
-      <path d="m6 6 12 12M18 6 6 18" />
-    </svg>
-  );
-}
-
-function LogoutIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${iconStroke} ${className}`}>
-      <path d="M10 5H5v14h5M14 8l4 4-4 4M9 12h9" />
-    </svg>
-  );
-}
 
 export function ChatWorkspaceShell({
   children,
@@ -237,7 +205,7 @@ export function ChatWorkspaceShell({
             className="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-1 text-tinta transition hover:bg-[#e9efeb]"
             aria-label="KerjaPedia AI beranda"
           >
-            <ScaleIcon className="size-[23px] fill-none stroke-current [stroke-width:1.85]" />
+            <Scale className="size-[23px]" />
             <strong className="whitespace-nowrap font-display text-sm font-semibold">
               KerjaPedia AI
             </strong>
@@ -248,7 +216,7 @@ export function ChatWorkspaceShell({
             className="grid size-10 place-items-center rounded-[9px] text-tinta transition hover:bg-[#e9efeb]"
             aria-label="KerjaPedia AI beranda"
           >
-            <ScaleIcon className="size-[23px] fill-none stroke-current [stroke-width:1.85]" />
+            <Scale className="size-[23px]" />
           </Link>
         )}
         <div className="flex flex-none items-center gap-0.5">
@@ -259,7 +227,7 @@ export function ChatWorkspaceShell({
             aria-expanded={chatSearchOpen}
             onClick={(event) => openChatSearch(event.currentTarget)}
           >
-            <SearchIcon className="size-5 fill-none stroke-current" />
+            <Search className="size-5" />
           </button>
           <button
             type="button"
@@ -267,7 +235,7 @@ export function ChatWorkspaceShell({
             aria-label="Tutup sidebar"
             onClick={() => onSidebarExpandedChange(false)}
           >
-            <PanelIcon className="size-5" />
+            <PanelLeftClose className="size-5" />
           </button>
           <button
             type="button"
@@ -279,13 +247,13 @@ export function ChatWorkspaceShell({
               window.setTimeout(() => mobileMenuRef.current?.focus(), 0);
             }}
           >
-            <CloseIcon className="size-5" />
+            <X className="size-5" />
           </button>
         </div>
       </div>
       {chatSearchOpen ? (
         <div className="relative mb-2 mt-1 grid min-h-[42px] grid-cols-[20px_minmax(0,1fr)_34px] items-center gap-[7px] rounded-[9px] border border-[#bdc9c2] bg-white py-0 pl-2.5 pr-[3px]">
-          <SearchIcon className="size-[17px] fill-none stroke-current" />
+          <Search className="size-[17px]" />
           <label htmlFor="sidebar-chat-search" className="sr-only">
             Cari chat
           </label>
@@ -307,7 +275,7 @@ export function ChatWorkspaceShell({
             }}
             className="grid size-[34px] place-items-center rounded-md text-[#637168] transition hover:bg-[#edf2ef]"
           >
-            <CloseIcon className="size-4" />
+            <X className="size-4" />
           </button>
         </div>
       ) : null}
@@ -323,21 +291,21 @@ export function ChatWorkspaceShell({
             onMobileSidebarOpenChange(false);
           }}
         >
-          <PlusIcon className="size-[18px]" />
+          <Plus className="size-[18px]" />
           <span>Chat baru</span>
         </button>
         <Link
           href="/search"
           className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#e3ebe6]"
         >
-          <SearchIcon className="size-[18px]" />
+          <Search className="size-[18px]" />
           <span>Cari Regulasi</span>
         </Link>
         <Link
           href="/legal/disclaimer"
           className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#e3ebe6]"
         >
-          <FileIcon className="size-[18px]" />
+          <FileText className="size-[18px]" />
           <span>Legal &amp; Bantuan</span>
         </Link>
       </nav>
@@ -437,7 +405,7 @@ export function ChatWorkspaceShell({
             setProfileMenuOpen(false);
           }}
         >
-          <UserIcon className="size-[18px]" />
+          <User className="size-[18px]" />
           <span>Profil &amp; riwayat</span>
         </button>
         <Link
@@ -446,7 +414,7 @@ export function ChatWorkspaceShell({
           className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
           onClick={() => setProfileMenuOpen(false)}
         >
-          <SearchIcon className="size-[18px]" />
+          <Search className="size-[18px]" />
           <span>Cari Regulasi</span>
         </Link>
         <Link
@@ -455,7 +423,7 @@ export function ChatWorkspaceShell({
           className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
           onClick={() => setProfileMenuOpen(false)}
         >
-          <SettingsIcon className="size-[18px]" />
+          <Settings className="size-[18px]" />
           <span>Privasi</span>
         </Link>
         {session.user.roles.includes("admin") ? (
@@ -465,7 +433,7 @@ export function ChatWorkspaceShell({
             className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
             onClick={() => setProfileMenuOpen(false)}
           >
-            <SettingsIcon className="size-[18px]" />
+<Settings className="size-[18px]" />
             <span>Pengaturan</span>
           </Link>
         ) : null}
@@ -477,7 +445,7 @@ export function ChatWorkspaceShell({
           className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
           onClick={() => setProfileMenuOpen(false)}
         >
-          <FileIcon className="size-[18px]" />
+          <FileText className="size-[18px]" />
           <span>Bantuan</span>
         </Link>
         <button
@@ -486,7 +454,7 @@ export function ChatWorkspaceShell({
           className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
           onClick={handleLogout}
         >
-          <LogoutIcon className="size-[18px]" />
+          <LogOut className="size-[18px]" />
           <span>Keluar</span>
         </button>
       </div>
@@ -503,7 +471,7 @@ export function ChatWorkspaceShell({
         className="mb-2 grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
         aria-label="KerjaPedia AI beranda"
       >
-        <ScaleIcon className="size-[21px] fill-none stroke-current [stroke-width:1.85]" />
+        <Scale className="size-[21px]" />
       </Link>
       <button
         type="button"
@@ -511,7 +479,7 @@ export function ChatWorkspaceShell({
         aria-label="Percakapan baru"
         onClick={onNewConversation}
       >
-        <EditIcon className="size-[21px] fill-none stroke-current" />
+        <Pencil className="size-[21px]" />
       </button>
       <button
         type="button"
@@ -519,14 +487,14 @@ export function ChatWorkspaceShell({
         aria-label="Cari chat"
         onClick={(event) => openChatSearch(event.currentTarget)}
       >
-        <SearchIcon className="size-[21px] fill-none stroke-current" />
+        <Search className="size-[21px]" />
       </button>
       <Link
         href="/legal/disclaimer"
         className="grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
         aria-label="Legal dan bantuan"
       >
-        <FileIcon className="size-[21px] fill-none stroke-current" />
+        <FileText className="size-[21px]" />
       </Link>
       <button
         type="button"
@@ -540,7 +508,7 @@ export function ChatWorkspaceShell({
           }
         }}
       >
-        <UserIcon className="size-[21px] fill-none stroke-current" />
+        <User className="size-[21px]" />
       </button>
     </nav>
   );
@@ -589,7 +557,7 @@ export function ChatWorkspaceShell({
             tabIndex={sidebarExpanded ? -1 : 0}
             onClick={() => onSidebarExpandedChange(!sidebarExpanded)}
           >
-            <PanelIcon className="size-[21px]" />
+            <PanelLeftClose className="size-[21px]" />
           </button>
           <button
             ref={mobileMenuRef}
@@ -599,7 +567,7 @@ export function ChatWorkspaceShell({
             aria-expanded={mobileSidebarOpen}
             onClick={() => onMobileSidebarOpenChange(true)}
           >
-            <MenuIcon className="size-[21px]" />
+            <Menu className="size-[21px]" />
           </button>
           <div className="hidden max-[760px]:block">
             <span className="grid size-[30px] place-items-center rounded-[7px] bg-javanese text-[9px] font-bold tracking-[0.04em] text-white">
@@ -651,7 +619,7 @@ export function ChatWorkspaceShell({
               aria-label="Tutup sumber"
               onClick={onSourceDrawerClose}
             >
-              <CloseIcon className="size-5" />
+<X className="size-5" />
             </button>
           </header>
           {sourcePanel}

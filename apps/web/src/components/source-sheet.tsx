@@ -72,7 +72,7 @@ export function SourceSheet({ open, citations, question, onClose }: SourceSheetP
           className="mx-auto mb-0.5 mt-1 hidden h-1 w-[42px] rounded-[10px] bg-[#c5cec9] max-[760px]:block"
           aria-hidden="true"
         />
-        <div className="mb-3 flex items-center justify-between border-b border-[#dce4df] pb-3.5">
+        <div className="mb-3 flex items-center justify-between border-b border-[#e8e4dc] pb-3.5">
           <div>
             <h2
               id="source-sheet-title"
@@ -84,7 +84,7 @@ export function SourceSheet({ open, citations, question, onClose }: SourceSheetP
           <button
             ref={closeButtonRef}
             type="button"
-            className="grid size-[42px] place-items-center rounded-full border border-[#dce4df] bg-[#f6faf9] text-2xl leading-none text-tinta transition hover:border-javanese hover:text-javanese"
+            className="grid size-[42px] place-items-center rounded-full border border-[#e8e4dc] bg-[#f6faf9] text-2xl leading-none text-tinta transition hover:border-javanese hover:text-javanese"
             onClick={onClose}
             aria-label="Tutup sumber dan kutipan"
           >

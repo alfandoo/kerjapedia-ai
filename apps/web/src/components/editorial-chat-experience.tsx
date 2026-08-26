@@ -6,7 +6,7 @@ import { ChatComposer } from "./chat-composer";
 import type { ChatMessage } from "./chat-types";
 import { ChatWorkspaceShell } from "./chat-workspace-shell";
 import { ConversationThread } from "./conversation-thread";
-import { AlertIcon } from "./icons";
+import { AlertTriangle } from "lucide-react";
 import { SourcePanel } from "./source-panel";
 import { SourceSheet } from "./source-sheet";
 import { useStoredSession } from "@/hooks/use-stored-session";
@@ -21,9 +21,9 @@ import {
 import type { AnswerPayload, Citation, ConversationSummary } from "@/lib/types";
 
 const suggestions = [
-  "Kapan batas waktu pembayaran THR?",
-  "Apakah pekerja PKWT berhak atas uang kompensasi?",
-  "Apa syarat PHK karena efisiensi perusahaan?",
+  { text: "Kapan batas waktu pembayaran THR?", tag: "Pengupahan" },
+  { text: "Apakah pekerja PKWT berhak atas uang kompensasi?", tag: "PKWT" },
+  { text: "Apa syarat PHK karena efisiensi perusahaan?", tag: "PHK" },
 ];
 
 const SIDEBAR_STORAGE_KEY = "kerjapedia.chat.sidebar.v1";
@@ -304,26 +304,32 @@ export function EditorialChatExperience() {
           messages.length === 0 ? "is-empty" : ""
         }`}
       >
-        <div className="min-h-0 flex-1 overflow-y-auto px-[clamp(24px,7vw,100px)] pb-[122px] pt-[36px] [scroll-padding-bottom:20px] [@media(max-height:680px)]:min-[761px]:pt-5 max-[760px]:px-4 max-[760px]:pb-[112px] max-[760px]:pt-[22px]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-[clamp(24px,7vw,100px)] pb-[160px] pt-[36px] [scroll-padding-bottom:20px] [@media(max-height:680px)]:min-[761px]:pt-5 max-[760px]:px-4 max-[760px]:pb-[140px] max-[760px]:pt-[22px]">
           {messages.length === 0 ? (
-            <div className="mx-auto mt-[clamp(32px,8vh,88px)] flex max-w-[720px] flex-col items-center text-center max-[760px]:mt-[clamp(38px,9vh,72px)]">
-              <h1 className="font-display text-[clamp(26px,3vw,34px)] font-semibold leading-[1.15] tracking-[-0.03em] text-tinta max-[760px]:text-[26px]">
+            <div className="mx-auto mt-[clamp(24px,6vh,72px)] flex max-w-[680px] flex-col items-center text-center max-[760px]:mt-[clamp(28px,7vh,56px)]">
+              <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#e2ddd3] bg-[#faf8f4] px-4 py-1.5 text-[11px] font-medium tracking-wide text-[#8a7a5e]">
+                <span className="size-1.5 rounded-full bg-emas" />
+                Asisten Hukum Ketenagakerjaan
+              </span>
+              <h1 className="font-display text-[clamp(28px,3.5vw,38px)] font-semibold leading-[1.12] tracking-[-0.03em] text-tinta max-[760px]:text-[28px]">
                 Apa yang ingin Anda pahami?
               </h1>
-              <p className="mb-6 mt-2 text-[13px] leading-[1.6] text-muted-text max-[760px]:mb-[18px] max-[760px]:mt-1.5">
-                Tanyakan regulasi ketenagakerjaan dan periksa dasar hukumnya.
+              <p className="mb-8 mt-3 max-w-[420px] text-[13px] leading-[1.65] text-muted-text max-[760px]:mb-6 max-[760px]:mt-2.5">
+                Tanyakan regulasi ketenagakerjaan Indonesia. Jawaban dilengkapi dasar hukum dan kutipan resmi.
               </p>
-              <div className="grid w-full grid-cols-3 gap-2.5 max-[760px]:grid-cols-1 max-[760px]:gap-2">
+              <div className="grid w-full grid-cols-3 gap-3 max-[760px]:grid-cols-1 max-[760px]:gap-2.5">
                 {suggestions.map((item) => (
                   <button
-                    key={item}
+                    key={item.text}
                     type="button"
-                    onClick={() => void handleSubmit(item)}
-                    className="flex min-h-[82px] w-full items-start justify-between gap-5 rounded-[11px] border border-[#dce4df] bg-white px-[15px] py-[14px] text-left text-[13px] leading-[1.45] text-[#303b35] transition hover:bg-[#f5f8f6] max-[760px]:min-h-[52px]"
+                    onClick={() => void handleSubmit(item.text)}
+                    className="group flex min-h-[90px] w-full flex-col justify-between rounded-xl border border-[#e8e4dc] bg-white px-4 py-3.5 text-left transition hover:border-emas/40 hover:shadow-[0_2px_12px_rgba(201,162,39,0.08)] max-[760px]:min-h-[auto] max-[760px]:py-3"
                   >
-                    {item}
-                    <span aria-hidden="true" className="text-[18px] text-forest">
-                      →
+                    <span className="mb-2 inline-flex self-start rounded-md bg-[#faf8f4] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#8a7a5e]">
+                      {item.tag}
+                    </span>
+                    <span className="text-[13px] leading-[1.45] text-[#303b35] group-hover:text-tinta">
+                      {item.text}
                     </span>
                   </button>
                 ))}
@@ -343,14 +349,14 @@ export function EditorialChatExperience() {
           )}
           {isLoading && !messages.some((message) => message.streaming) ? (
             <div
-              className="mx-auto mb-[18px] flex max-w-[760px] items-start gap-[11px] py-[14px] text-xs leading-[1.55] text-tinta"
+              className="mx-auto mb-5 flex max-w-[760px] items-start gap-3 rounded-xl border-l-[3px] border-javanese/20 bg-[#fafbf9] py-3 pl-4 pr-3 text-xs leading-[1.55] text-tinta"
               role="status"
               aria-live="polite"
             >
-              <span className="mt-0.5 size-4 shrink-0 animate-spin rounded-full border-2 border-[rgba(33,92,168,0.2)] border-t-[#215ca8]" />
+              <span className="mt-0.5 size-4 shrink-0 animate-spin rounded-full border-2 border-javanese/20 border-t-javanese" />
               <div>
                 <strong className="block font-semibold">Menelusuri regulasi yang relevan…</strong>
-                <span className="mt-[3px] block text-muted-text">
+                <span className="mt-0.5 block text-muted-text">
                   Memeriksa pasal, status, dan sumber pendukung.
                 </span>
               </div>
@@ -358,10 +364,10 @@ export function EditorialChatExperience() {
           ) : null}
           {error ? (
             <div
-              className="mx-auto mb-[18px] flex max-w-[760px] items-start gap-[11px] border-l-[3px] border-[#b14b3d] bg-[#fff7f5] p-3 text-xs leading-[1.55] text-[#753328]"
+              className="mx-auto mb-5 flex max-w-[760px] items-start gap-2.5 rounded-lg border border-[#f0d6d2] bg-[#fef7f5] p-3 text-xs leading-[1.55] text-[#753328]"
               role="alert"
             >
-              <AlertIcon className="mt-0.5 size-4 [stroke-width:1.8] shrink-0" />
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <span>{error}</span>
             </div>
           ) : null}
@@ -376,26 +382,26 @@ export function EditorialChatExperience() {
           onCancel={stopRequest}
         />
         {messages.length === 0 ? (
-          <p className="absolute inset-x-6 bottom-[max(15px,env(safe-area-inset-bottom))] z-[3] mx-auto max-w-[680px] text-center text-[10px] leading-[1.5] text-[#7c8580] max-[760px]:inset-x-[18px] max-[760px]:bottom-[max(12px,env(safe-area-inset-bottom))] max-[760px]:text-[9px]">
+          <p className="absolute inset-x-6 bottom-[max(15px,env(safe-area-inset-bottom))] z-[3] mx-auto max-w-[680px] text-center text-[10px] leading-[1.5] text-[#b0b8b3] max-[760px]:inset-x-[18px] max-[760px]:bottom-[max(12px,env(safe-area-inset-bottom))] max-[760px]:text-[9px]">
             KerjaPedia dapat membuat kekeliruan. Periksa selalu sumber resmi. Dengan menggunakan
             layanan ini, Anda menyetujui{" "}
             <Link
               href="/legal/terms"
-              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-forest"
+              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-javanese"
             >
               Ketentuan
             </Link>
             ,{" "}
             <Link
               href="/legal/privacy"
-              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-forest"
+              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-javanese"
             >
               Privasi
             </Link>
             , dan{" "}
             <Link
               href="/legal/disclaimer"
-              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-forest"
+              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-javanese"
             >
               Disclaimer
             </Link>
