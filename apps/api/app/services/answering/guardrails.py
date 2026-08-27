@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from app.services.answering.generator import DISCLAIMER
+from app.services.answering.generator import DISCLAIMER_ID, DISCLAIMER_EN, _detect_language
 from app.services.answering.prompts import default_prompt_template
 from app.services.answering.schemas import AnswerResponse
 
@@ -44,6 +44,8 @@ def evaluate_input_guardrail(query: str) -> GuardrailDecision:
 
 
 def build_guardrail_refusal(query: str, reason: str) -> AnswerResponse:
+    lang = _detect_language(query)
+    disclaimer = DISCLAIMER_ID if lang == "id" else DISCLAIMER_EN
     return AnswerResponse(
         query=query,
         answer=GUARDRAIL_REFUSAL,
@@ -52,7 +54,7 @@ def build_guardrail_refusal(query: str, reason: str) -> AnswerResponse:
         related_documents=[],
         refusal_reason=reason,
         clarification_question=None,
-        disclaimer=DISCLAIMER,
+        disclaimer=disclaimer,
         prompt_version_id=default_prompt_template().prompt_version_id,
         retrieved_chunk_ids=[],
         warnings=["input_guardrail_triggered"],
