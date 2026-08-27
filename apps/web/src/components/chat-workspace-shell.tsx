@@ -512,7 +512,11 @@ export function ChatWorkspaceShell({
       </Link>
       <button
         type="button"
-        className="grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
+        className={`grid size-11 place-items-center rounded-[10px] transition ${
+          !activeConversationId
+            ? "bg-[#1a1a1a] text-white"
+            : "text-[#28342d] hover:bg-[#e7eeea]"
+        }`}
         aria-label="Percakapan baru"
         onClick={onNewConversation}
       >

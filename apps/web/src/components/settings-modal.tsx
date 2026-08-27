@@ -70,7 +70,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         aria-modal="true"
         aria-labelledby="settings-title"
         onKeyDown={keepFocusInside}
-        className="relative z-[1] flex w-full max-w-[420px] max-h-[70vh] overflow-y-auto rounded-2xl bg-white shadow-2xl max-[760px]:mx-4"
+        className="relative z-[1] flex w-full max-w-[420px] max-h-[70vh] overflow-y-auto rounded-2xl bg-white shadow-2xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[760px]:mx-4"
       >
         <div className="flex w-full flex-col">
           <header className="flex items-center gap-3 border-b border-[#e8e4dc] px-4 py-3">

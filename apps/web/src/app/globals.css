@@ -511,6 +511,128 @@
 }
 
 .dark .hover\:bg-\[\#f7faf8\]:hover {
+  background-color: #1a1a1a !important;
+}
+
+.dark .hover\:bg-\[\#e7eeea\]:hover {
+  background-color: #1a1a1a !important;
+}
+
+.dark .bg-\[\#e7eeea\] {
+  background-color: #1a1a1a !important;
+}
+
+.dark .text-\[\#28342d\] {
+  color: #f3f4f6 !important;
+}
+
+.dark .hover\:bg-\[\#f5f8f6\]:hover {
+  background-color: #1a1a1a !important;
+}
+
+.dark .hover\:bg-\[\#f5f3ef\]:hover {
+  background-color: #1a1a1a !important;
+}
+
+.dark .hover\:border-javanese:hover {
+  border-color: #3d3d3d !important;
+}
+
+/* Auth modal dark */
+.dark .bg-\[\#fafcfb\] {
+  background-color: #0a0a0a !important;
+}
+
+.dark .text-\[\#536058\] {
+  color: #d1d5db !important;
+}
+
+.dark .text-\[\#111713\] {
+  color: #f3f4f6 !important;
+}
+
+.dark .text-\[\#758078\] {
+  color: #9ca3af !important;
+}
+
+.dark .text-\[\#657169\] {
+  color: #9ca3af !important;
+}
+
+.dark .border-\[\#d0d8d3\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#d6ddd8\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .before\:bg-\[\#d6ddd8\]::before {
+  background-color: #1f1f1f !important;
+}
+
+.dark .after\:bg-\[\#d6ddd8\]::after {
+  background-color: #1f1f1f !important;
+}
+
+.dark .hover\:border-\[\#b7c9be\]:hover {
+  border-color: #3d3d3d !important;
+}
+
+.dark .text-\[\#344039\] {
+  color: #f3f4f6 !important;
+}
+
+.dark .text-\[\#26322b\] {
+  color: #f3f4f6 !important;
+}
+
+.dark .bg-\[\#f1f5f2\] {
+  background-color: #1a1a1a !important;
+}
+
+.dark .text-\[\#68736c\] {
+  color: #9ca3af !important;
+}
+
+.dark .text-\[\#253029\] {
+  color: #f3f4f6 !important;
+}
+
+.dark .border-\[\#dce4df\] {
+  border-color: #1f1f1f !important;
+}
+
+/* Auth modal dialog dark */
+.dark [role="dialog"] {
+  background-color: #141414 !important;
+  border-color: #2a2a2a !important;
+}
+
+.dark [role="dialog"] .bg-white,
+.dark [role="dialog"] [class*="bg-white"],
+.dark div[class*="bg-white"][role="dialog"],
+.dark div.bg-white {
+  background-color: #141414 !important;
+}
+
+.dark [role="dialog"] [class*="shadow-"] {
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Close button in modal dark */
+.dark .bg-white.text-\[\#26322b\] {
+  background-color: #2a2a2a !important;
+  color: #f3f4f6 !important;
+}
+
+/* Auth modal sections dark */
+.dark [role="dialog"] header,
+.dark [role="dialog"] header.bg-white {
+  background-color: transparent !important;
+}
+
+.dark [role="dialog"] > div {
   background-color: #141414 !important;
 }
 

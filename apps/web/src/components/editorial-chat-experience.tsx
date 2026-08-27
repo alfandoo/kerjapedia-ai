@@ -304,7 +304,7 @@ export function EditorialChatExperience() {
           messages.length === 0 ? "is-empty" : ""
         }`}
       >
-        <div className="min-h-0 flex-1 overflow-y-auto px-[clamp(24px,7vw,100px)] pb-[100px] pt-[36px] [scroll-padding-bottom:20px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [@media(max-height:680px)]:min-[761px]:pt-5 max-[760px]:px-4 max-[760px]:pb-[90px] max-[760px]:pt-[22px]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-[clamp(24px,7vw,100px)] pb-[60px] pt-[36px] [scroll-padding-bottom:20px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [@media(max-height:680px)]:min-[761px]:pt-5 max-[760px]:px-4 max-[760px]:pb-[50px] max-[760px]:pt-[22px]">
           {messages.length === 0 ? (
             <div className="mx-auto mt-[clamp(24px,6vh,72px)] flex max-w-[680px] flex-col items-center text-center max-[760px]:mt-[clamp(28px,7vh,56px)]">
               <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#e2ddd3] bg-[#faf8f4] px-4 py-1.5 text-[11px] font-medium tracking-wide text-[#8a7a5e]">
