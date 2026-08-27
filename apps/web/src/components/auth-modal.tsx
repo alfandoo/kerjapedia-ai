@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { login, register, SESSION_STORAGE_KEY } from "@/lib/api";
+import { useSettings } from "./settings-provider";
 import type { UserSession } from "@/lib/types";
 
 type AuthModalProps = {
@@ -95,6 +96,7 @@ const providers = [
 ];
 
 export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
+  const { t: translate } = useSettings();
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -246,13 +248,13 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
               id={titleId}
               className="font-display text-[30px] font-semibold leading-[1.15] tracking-[-0.025em] text-tinta max-[760px]:text-[27px]"
             >
-              {mode === "signup" ? "Buat akun KerjaPedia" : "Masuk ke KerjaPedia"}
+              {mode === "signup" ? translate("auth.signupTitle") : translate("auth.loginTitle")}
             </h2>
             <p
               id={descriptionId}
               className="mx-auto mt-3.5 max-w-[320px] text-sm leading-[1.55] text-muted-text"
             >
-              Dapatkan jawaban yang lebih personal dan simpan riwayat percakapan Anda.
+              {translate("auth.subtitle")}
             </p>
           </header>
 
@@ -270,7 +272,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                 </span>
                 <span className="justify-self-center">{provider.label}</span>
                 <small className="text-[9px] font-bold uppercase tracking-[0.03em] text-[#758078] max-[760px]:text-[8px]">
-                  Segera hadir
+                  {translate("auth.comingSoon")}
                 </small>
               </button>
             ))}
@@ -280,7 +282,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
             className="my-[30px] grid grid-cols-[1fr_auto_1fr] items-center gap-[18px] text-[10px] font-bold text-[#657169] before:h-px before:bg-[#d6ddd8] before:content-[''] after:h-px after:bg-[#d6ddd8] after:content-['']"
             aria-hidden="true"
           >
-            <span>ATAU</span>
+            <span>{translate("auth.or")}</span>
           </div>
 
           <form className="grid gap-3" onSubmit={handleSubmit} noValidate>
@@ -289,7 +291,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                 {mode === "signup" ? (
                   <>
                     <label htmlFor="auth-modal-name" className={labelClass}>
-                      Nama lengkap
+                      {translate("auth.fullName")}
                     </label>
                     <input
                       ref={nameRef}
@@ -297,7 +299,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                       name="name"
                       type="text"
                       autoComplete="name"
-                      placeholder="Nama lengkap"
+                      placeholder={translate("auth.fullName")}
                       value={name}
                       minLength={2}
                       required
@@ -307,7 +309,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                   </>
                 ) : null}
                 <label htmlFor="auth-modal-email" className={labelClass}>
-                  Alamat email
+                  {translate("auth.email")}
                 </label>
                 <input
                   ref={emailRef}
@@ -315,14 +317,14 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                   name="email"
                   type="email"
                   autoComplete="email"
-                  placeholder="Alamat email"
+                  placeholder={translate("auth.email")}
                   value={email}
                   required
                   onChange={(event) => setEmail(event.target.value)}
                   className={inputClass}
                 />
                 <button className={submitClass} type="submit">
-                  Lanjutkan
+                  {translate("auth.continue")}
                 </button>
               </>
             ) : (
@@ -339,11 +341,11 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                       setError(null);
                     }}
                   >
-                    Ganti email
+                    {translate("auth.changeEmail")}
                   </button>
                 </div>
                 <label htmlFor="auth-modal-password" className={labelClass}>
-                  Password
+                  {translate("auth.password")}
                 </label>
                 <div className="grid h-11 grid-cols-[minmax(0,1fr)_52px] overflow-hidden rounded-xl border border-[#dce4df] bg-[#f6faf9] transition focus-within:border-javanese focus-within:ring-2 focus-within:ring-javanese/10">
                   <input
@@ -352,7 +354,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                     name="password"
                     type={passwordVisible ? "text" : "password"}
                     autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                    placeholder="Password"
+                    placeholder={translate("auth.password")}
                     value={password}
                     minLength={mode === "signup" ? 8 : 1}
                     required
@@ -362,7 +364,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                   <button
                     type="button"
                     className="grid w-[52px] place-items-center border-0 bg-transparent text-[#526159] transition hover:text-tinta"
-                    aria-label={passwordVisible ? "Sembunyikan password" : "Tampilkan password"}
+                    aria-label={passwordVisible ? translate("auth.hidePassword") : translate("auth.showPassword")}
                     aria-pressed={passwordVisible}
                     onClick={() => setPasswordVisible((visible) => !visible)}
                   >
@@ -372,21 +374,21 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                 <button className={submitClass} type="submit" disabled={submitting}>
                   {submitting
                     ? mode === "signup"
-                      ? "Membuat akun..."
-                      : "Memeriksa..."
+                      ? translate("auth.creating")
+                      : translate("auth.checking")
                     : mode === "signup"
-                      ? "Buat akun"
-                      : "Masuk"}
+                      ? translate("auth.createAccount")
+                      : translate("auth.login")}
                 </button>
               </>
             )}
             <p className="min-h-[19px] text-center text-[11px] leading-[1.45] text-[#9b332b]" role="status" aria-live="polite">
               {error
-                ? `${mode === "signup" ? "Pendaftaran" : "Login"} gagal: ${error}`
+                ? `${mode === "signup" ? translate("auth.signup") : translate("auth.login")} ${translate("auth.failed")}: ${error}`
                 : submitting
                   ? mode === "signup"
-                    ? "Membuat akun Anda..."
-                    : "Memeriksa akun Anda..."
+                    ? translate("auth.creatingAccount")
+                    : translate("auth.checkingAccount")
                   : ""}
             </p>
           </form>

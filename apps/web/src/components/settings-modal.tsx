@@ -11,7 +11,7 @@ type SettingsModalProps = {
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const { theme, setTheme, language, setLanguage } = useSettings();
+  const { theme, setTheme, language, setLanguage, t: translate } = useSettings();
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
 
@@ -53,15 +53,15 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }
 
-  const themeLabel = theme === "system" ? "System" : theme === "dark" ? "Dark" : "Light";
-  const langLabel = language === "auto" ? "Otomatis" : language === "id" ? "Indonesia" : "English";
+  const themeLabel = theme === "system" ? translate("settings.system") : theme === "dark" ? translate("settings.dark") : translate("settings.light");
+  const langLabel = language === "auto" ? translate("settings.auto") : language === "id" ? translate("settings.indonesian") : translate("settings.english");
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center">
       <button
         type="button"
         className="absolute inset-0 w-full border-0 bg-[rgba(10,28,25,0.5)]"
-        aria-label="Tutup pengaturan"
+        aria-label={translate("settings.close")}
         onClick={onClose}
       />
       <section
@@ -75,13 +75,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         <div className="flex w-full flex-col">
           <header className="flex items-center gap-3 border-b border-[#e8e4dc] px-4 py-3">
             <h2 id="settings-title" className="flex-1 text-center text-[15px] font-semibold text-tinta">
-              Pengaturan
+              {translate("settings.title")}
             </h2>
           </header>
 
           <div className="flex-1 p-5">
             <div className="space-y-5">
-              <p className="text-[13px] font-medium text-muted-text">Umum</p>
+              <p className="text-[13px] font-medium text-muted-text">{translate("settings.general")}</p>
               <div className="rounded-2xl border border-[#e8e4dc] bg-[#f9f9f9]">
                 <button
                   type="button"
@@ -100,7 +100,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     </svg>
                   </span>
                   <div className="flex-1">
-                    <span className="block text-[15px] font-medium text-tinta">Tampilan</span>
+                    <span className="block text-[15px] font-medium text-tinta">{translate("settings.appearance")}</span>
                     <span className="block text-[13px] text-muted-text">{themeLabel}</span>
                   </div>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`size-4 text-[#8a928d] transition-transform ${appearanceOpen ? "rotate-180" : ""}`}>
@@ -110,9 +110,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 {appearanceOpen ? (
                   <div className="border-t border-[#e8e4dc] bg-white">
                     {([
-                      { value: "system" as const, label: "System" },
-                      { value: "dark" as const, label: "Dark" },
-                      { value: "light" as const, label: "Light" },
+                      { value: "system" as const, label: translate("settings.system") },
+                      { value: "dark" as const, label: translate("settings.dark") },
+                      { value: "light" as const, label: translate("settings.light") },
                     ]).map((option, index) => (
                       <button
                         key={option.value}
@@ -148,7 +148,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     </svg>
                   </span>
                   <div className="flex-1">
-                    <span className="block text-[15px] font-medium text-tinta">Bahasa</span>
+                    <span className="block text-[15px] font-medium text-tinta">{translate("settings.language")}</span>
                     <span className="block text-[13px] text-muted-text">{langLabel}</span>
                   </div>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`size-4 text-[#8a928d] transition-transform ${languageOpen ? "rotate-180" : ""}`}>
@@ -158,9 +158,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 {languageOpen ? (
                   <div className="border-t border-[#e8e4dc] bg-white">
                     {([
-                      { value: "auto" as const, label: "Otomatis" },
-                      { value: "id" as const, label: "Indonesia" },
-                      { value: "en" as const, label: "English" },
+                      { value: "auto" as const, label: translate("settings.auto") },
+                      { value: "id" as const, label: translate("settings.indonesian") },
+                      { value: "en" as const, label: translate("settings.english") },
                     ]).map((option, index) => (
                       <button
                         key={option.value}
@@ -190,7 +190,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
                     </svg>
                   </span>
-                  <span className="flex-1 text-[15px] font-medium text-tinta">Kontrol Data</span>
+                  <span className="flex-1 text-[15px] font-medium text-tinta">{translate("settings.dataControl")}</span>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 text-[#8a928d]">
                     <path d="M9 18l6-6-6-6" />
                   </svg>

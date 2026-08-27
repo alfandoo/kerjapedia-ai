@@ -10,6 +10,7 @@ import { AlertTriangle } from "lucide-react";
 import { SourcePanel } from "./source-panel";
 import { SourceSheet } from "./source-sheet";
 import { useStoredSession } from "@/hooks/use-stored-session";
+import { useSettings } from "./settings-provider";
 import {
   askQuestionStream,
   deleteConversation,
@@ -20,16 +21,11 @@ import {
 } from "@/lib/api";
 import type { AnswerPayload, Citation, ConversationSummary } from "@/lib/types";
 
-const suggestions = [
-  { text: "Kapan batas waktu pembayaran THR?", tag: "Pengupahan" },
-  { text: "Apakah pekerja PKWT berhak atas uang kompensasi?", tag: "PKWT" },
-  { text: "Apa syarat PHK karena efisiensi perusahaan?", tag: "PHK" },
-];
-
 const SIDEBAR_STORAGE_KEY = "kerjapedia.chat.sidebar.v1";
 
 export function EditorialChatExperience() {
   const session = useStoredSession();
+  const { t: translate, resolvedLanguage } = useSettings();
   const [question, setQuestion] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -309,16 +305,20 @@ export function EditorialChatExperience() {
             <div className="mx-auto mt-[clamp(24px,6vh,72px)] flex max-w-[680px] flex-col items-center text-center max-[760px]:mt-[clamp(28px,7vh,56px)]">
               <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#e2ddd3] bg-[#faf8f4] px-4 py-1.5 text-[11px] font-medium tracking-wide text-[#8a7a5e]">
                 <span className="size-1.5 rounded-full bg-emas" />
-                Asisten Hukum Ketenagakerjaan
+                {translate("chat.badge")}
               </span>
               <h1 className="font-display text-[clamp(28px,3.5vw,38px)] font-semibold leading-[1.12] tracking-[-0.03em] text-tinta max-[760px]:text-[28px]">
-                Apa yang ingin Anda pahami?
+                {translate("chat.title")}
               </h1>
               <p className="mb-8 mt-3 max-w-[420px] text-[13px] leading-[1.65] text-muted-text max-[760px]:mb-6 max-[760px]:mt-2.5">
-                Tanyakan regulasi ketenagakerjaan Indonesia. Jawaban dilengkapi dasar hukum dan kutipan resmi.
+                {translate("chat.subtitle")}
               </p>
               <div className="grid w-full grid-cols-3 gap-3 max-[760px]:grid-cols-1 max-[760px]:gap-2.5">
-                {suggestions.map((item) => (
+                {[
+                  { text: translate("suggestion.thr"), tag: translate("category.pengupahan") },
+                  { text: translate("suggestion.pkwt"), tag: translate("category.pkwt") },
+                  { text: translate("suggestion.phk"), tag: translate("category.phk") },
+                ].map((item) => (
                   <button
                     key={item.text}
                     type="button"
@@ -355,9 +355,9 @@ export function EditorialChatExperience() {
             >
               <span className="mt-0.5 size-4 shrink-0 animate-spin rounded-full border-2 border-javanese/20 border-t-javanese" />
               <div>
-                <strong className="block font-semibold">Menelusuri regulasi yang relevan…</strong>
+                <strong className="block font-semibold">{translate("chat.loading.title")}</strong>
                 <span className="mt-0.5 block text-muted-text">
-                  Memeriksa pasal, status, dan sumber pendukung.
+                  {translate("chat.loading.subtitle")}
                 </span>
               </div>
             </div>

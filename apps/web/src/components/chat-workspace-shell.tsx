@@ -26,6 +26,7 @@ import {
 import { ConversationHistory } from "./conversation-history";
 import { SettingsModal } from "./settings-modal";
 import { useStoredSession } from "@/hooks/use-stored-session";
+import { useSettings } from "./settings-provider";
 import { SESSION_STORAGE_KEY } from "@/lib/api";
 import type { ConversationSummary } from "@/lib/types";
 
@@ -65,6 +66,7 @@ export function ChatWorkspaceShell({
   onConversationDelete,
 }: ChatWorkspaceShellProps) {
   const session = useStoredSession();
+  const { t: translate } = useSettings();
   const mobileSidebarRef = useRef<HTMLElement>(null);
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLButtonElement>(null);
@@ -375,7 +377,7 @@ export function ChatWorkspaceShell({
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                 </svg>
               </span>
-              <span>Pengaturan</span>
+              <span>{translate("sidebar.settings")}</span>
             </button>
             <Link
               href="/legal/disclaimer"
@@ -388,7 +390,7 @@ export function ChatWorkspaceShell({
                   <path d="M12 17h.01" />
                 </svg>
               </span>
-              <span className="flex-1">Bantuan</span>
+              <span className="flex-1">{translate("sidebar.help")}</span>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 text-[#8a928d]">
                 <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
               </svg>
@@ -396,17 +398,17 @@ export function ChatWorkspaceShell({
           </nav>
           <div className="border-t border-[#e8e4dc] p-4">
             <h3 className="text-[15px] font-semibold text-tinta">
-              Dapatkan jawaban yang sesuai untuk Anda
+              {translate("sidebar.loginTitle")}
             </h3>
             <p className="mt-1 text-[13px] leading-[1.5] text-muted-text">
-              Masuk untuk menyimpan percakapan, serta mengakses fitur lengkap KerjaPedia AI.
+              {translate("sidebar.loginDescription")}
             </p>
             <button
               type="button"
               className="mt-3 flex min-h-[40px] w-full items-center justify-center rounded-full border border-[#dce4df] bg-white text-[13px] font-semibold text-tinta transition hover:border-javanese hover:bg-[#f5f8f6]"
               onClick={(event) => openAuthModal(event.currentTarget, "login")}
             >
-              Masuk
+              {translate("sidebar.loginButton")}
             </button>
           </div>
         </div>
@@ -476,14 +478,14 @@ export function ChatWorkspaceShell({
         ) : null}
       </div>
       <div className="grid gap-0.5 border-t border-[#4d524e] py-[7px]">
-        <Link
+          <Link
           href="/legal/disclaimer"
           role="menuitem"
           className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
           onClick={() => setProfileMenuOpen(false)}
         >
           <FileText className="size-[18px]" />
-          <span>Bantuan</span>
+          <span>{translate("sidebar.help")}</span>
         </Link>
         <button
           type="button"
@@ -492,7 +494,7 @@ export function ChatWorkspaceShell({
           onClick={handleLogout}
         >
           <LogOut className="size-[18px]" />
-          <span>Keluar</span>
+          <span>{translate("sidebar.logout")}</span>
         </button>
       </div>
     </div>
@@ -517,7 +519,7 @@ export function ChatWorkspaceShell({
             ? "bg-[#1a1a1a] text-white"
             : "text-[#28342d] hover:bg-[#e7eeea]"
         }`}
-        aria-label="Percakapan baru"
+        aria-label={translate("sidebar.newChat")}
         onClick={onNewConversation}
       >
         <Pencil className="size-[21px]" />
@@ -525,7 +527,7 @@ export function ChatWorkspaceShell({
       <button
         type="button"
         className="grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
-        aria-label="Cari chat"
+        aria-label={translate("sidebar.search")}
         onClick={(event) => openChatSearch(event.currentTarget)}
       >
         <Search className="size-[21px]" />
@@ -533,14 +535,14 @@ export function ChatWorkspaceShell({
       <Link
         href="/legal/disclaimer"
         className="grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
-        aria-label="Legal dan bantuan"
+        aria-label={translate("sidebar.legal")}
       >
         <FileText className="size-[21px]" />
       </Link>
       <button
         type="button"
         className="mt-auto grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
-        aria-label={session ? "Buka profil pengguna" : "Masuk atau daftar"}
+        aria-label={session ? translate("sidebar.profile") : translate("sidebar.login")}
         onClick={(event) => {
           if (session) {
             onSidebarExpandedChange(true);
@@ -629,14 +631,14 @@ export function ChatWorkspaceShell({
                 className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-[#c8d2cc] bg-white px-4 text-xs font-semibold text-[#253029] transition hover:border-[#9dafa4] hover:bg-[#f7faf8] max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
                 onClick={(event) => openAuthModal(event.currentTarget, "login")}
               >
-                Masuk
+                {translate("header.login")}
               </button>
               <button
                 type="button"
                 className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-[#c8d2cc] bg-white px-4 text-xs font-semibold text-[#253029] transition hover:border-[#9dafa4] hover:bg-[#f7faf8] max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
                 onClick={(event) => openAuthModal(event.currentTarget, "signup")}
               >
-                Daftar gratis
+                {translate("header.signup")}
               </button>
             </div>
           ) : null}

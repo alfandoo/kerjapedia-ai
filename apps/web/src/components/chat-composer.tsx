@@ -3,6 +3,7 @@
 import type { KeyboardEvent, RefObject } from "react";
 
 import { Send, Square } from "lucide-react";
+import { useSettings } from "./settings-provider";
 
 type ChatComposerProps = {
   question: string;
@@ -21,6 +22,7 @@ export function ChatComposer({
   onSubmit,
   onCancel,
 }: ChatComposerProps) {
+  const { t: translate } = useSettings();
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
@@ -40,7 +42,7 @@ export function ChatComposer({
         htmlFor="question-input"
         className="sr-only"
       >
-        Ketik pertanyaan Anda
+        {translate("chat.inputLabel")}
       </label>
       <div className="relative rounded-2xl border border-[#dce4df] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition focus-within:border-emas/50 focus-within:shadow-[0_0_0_3px_rgba(201,162,39,0.08)]">
         <textarea
@@ -49,7 +51,7 @@ export function ChatComposer({
           value={question}
           onChange={(event) => onQuestionChange(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Tanyakan regulasi ketenagakerjaan…"
+          placeholder={translate("chat.placeholder")}
           maxLength={2000}
           rows={2}
           disabled={loading}
@@ -66,7 +68,7 @@ export function ChatComposer({
               onClick={onCancel}
             >
               <Square className="size-4" />
-              Batalkan
+              {translate("chat.cancel")}
             </button>
           ) : (
             <button
@@ -75,7 +77,7 @@ export function ChatComposer({
               disabled={!question.trim()}
             >
               <Send className="size-4" />
-              Kirim
+              {translate("chat.send")}
             </button>
           )}
         </div>

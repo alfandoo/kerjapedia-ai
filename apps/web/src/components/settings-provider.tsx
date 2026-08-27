@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { t, type TranslationKey } from "@/lib/translations";
 
 type Theme = "system" | "dark" | "light";
 
@@ -10,6 +11,8 @@ type SettingsContextType = {
   language: "auto" | "id" | "en";
   setLanguage: (lang: "auto" | "id" | "en") => void;
   resolvedTheme: "dark" | "light";
+  resolvedLanguage: "id" | "en";
+  t: (key: TranslationKey) => string;
 };
 
 const SettingsContext = createContext<SettingsContextType>({
@@ -18,6 +21,8 @@ const SettingsContext = createContext<SettingsContextType>({
   language: "auto",
   setLanguage: () => {},
   resolvedTheme: "light",
+  resolvedLanguage: "id",
+  t: (key) => key,
 });
 
 export function useSettings() {
@@ -53,8 +58,9 @@ function applyDarkClass(resolved: "dark" | "light") {
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("system");
-  const [language, setLanguage] = useState<"auto" | "id" | "en">("auto");
+  const [language, setLanguageState] = useState<"auto" | "id" | "en">("auto");
   const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("light");
+  const [resolvedLanguage, setResolvedLanguage] = useState<"id" | "en">("id");
 
   const applyTheme = useCallback((t: Theme) => {
     const resolved = t === "system" ? getSystemTheme() : t;
@@ -62,11 +68,25 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     applyDarkClass(resolved);
   }, []);
 
+  const applyLanguage = useCallback((lang: "auto" | "id" | "en") => {
+    const resolved = lang === "auto" ? getSystemLanguage() : lang;
+    setResolvedLanguage(resolved);
+    document.documentElement.lang = resolved;
+  }, []);
+
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
     localStorage.setItem("settings-theme", t);
     applyTheme(t);
   }, [applyTheme]);
+
+  const setLanguage = useCallback((lang: "auto" | "id" | "en") => {
+    setLanguageState(lang);
+    localStorage.setItem("settings-language", lang);
+    applyLanguage(lang);
+  }, [applyLanguage]);
+
+  const translate = useCallback((key: TranslationKey) => t(key, resolvedLanguage), [resolvedLanguage]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("settings-theme") as Theme | null;
@@ -77,8 +97,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     } else {
       applyTheme("system");
     }
-    if (savedLang) setLanguage(savedLang);
-  }, [applyTheme]);
+    if (savedLang) {
+      setLanguageState(savedLang);
+      applyLanguage(savedLang);
+    } else {
+      applyLanguage("auto");
+    }
+  }, [applyTheme, applyLanguage]);
 
   useEffect(() => {
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
@@ -89,14 +114,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return () => mql.removeEventListener("change", handler);
   }, [theme, applyTheme]);
 
-  useEffect(() => {
-    localStorage.setItem("settings-language", language);
-    const resolved = language === "auto" ? getSystemLanguage() : language;
-    document.documentElement.lang = resolved === "id" ? "id" : "en";
-  }, [language]);
-
   return (
-    <SettingsContext.Provider value={{ theme, setTheme, language, setLanguage, resolvedTheme }}>
+    <SettingsContext.Provider value={{ theme, setTheme, language, setLanguage, resolvedTheme, resolvedLanguage, t: translate }}>
       {children}
     </SettingsContext.Provider>
   );
