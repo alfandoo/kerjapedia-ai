@@ -146,6 +146,7 @@
   --sidebar-accent: #141414;
   --sidebar-accent-foreground: #f3f4f6;
   --sidebar-border: #1f1f1f;
+  --emas-keraton: #1f1f1f;
 }
 
 /* ── Dark mode overrides for hardcoded Tailwind classes ── */
