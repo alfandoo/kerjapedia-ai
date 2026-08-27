@@ -41,7 +41,7 @@ function applyDarkClass(resolved: "dark" | "light") {
   if (resolved === "dark") {
     root.classList.add("dark");
     root.classList.remove("light");
-    body.style.backgroundColor = "#0a0f0d";
+    body.style.backgroundColor = "#000000";
     body.style.color = "#f3f4f6";
   } else {
     root.classList.remove("dark");
