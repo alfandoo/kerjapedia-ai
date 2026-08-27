@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useSettings } from "./settings-provider";
 
 type SettingsModalProps = {
   open: boolean;
@@ -12,9 +13,8 @@ type SettingSection = "main" | "appearance" | "language";
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const { theme, setTheme, language, setLanguage } = useSettings();
   const [section, setSection] = useState<SettingSection>("main");
-  const [appearance, setAppearance] = useState<"Terang" | "Gelap">("Terang");
-  const [language, setLanguage] = useState<"Indonesia" | "English">("Indonesia");
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
 
@@ -56,6 +56,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       first.focus();
     }
   }
+
+  const themeLabel = theme === "system" ? "Sistem" : theme === "dark" ? "Gelap" : "Terang";
+  const langLabel = language === "auto" ? "Otomatis" : language === "id" ? "Indonesia" : "English";
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center">
@@ -111,7 +114,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     </span>
                     <div className="flex-1">
                       <span className="block text-[15px] font-medium text-tinta">Tampilan</span>
-                      <span className="block text-[13px] text-muted-text">{appearance}</span>
+                      <span className="block text-[13px] text-muted-text">{themeLabel}</span>
                     </div>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 text-[#8a928d]">
                       <path d="M6 9l6 6 6-6" />
@@ -120,20 +123,24 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   {appearanceOpen ? (
                     <div className="border-t border-[#e8e4dc] bg-white px-4 py-3">
                       <div className="space-y-1">
-                        {(["Terang", "Gelap"] as const).map((option) => (
+                        {([
+                          { value: "system" as const, label: "Sistem" },
+                          { value: "dark" as const, label: "Gelap" },
+                          { value: "light" as const, label: "Terang" },
+                        ]).map((option) => (
                           <button
-                            key={option}
+                            key={option.value}
                             type="button"
                             className={`flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-left text-[13px] transition hover:bg-[#f0f2f0] ${
-                              appearance === option ? "font-semibold text-tinta" : "text-muted-text"
+                              theme === option.value ? "font-semibold text-tinta" : "text-muted-text"
                             }`}
                             onClick={() => {
-                              setAppearance(option);
+                              setTheme(option.value);
                               setAppearanceOpen(false);
                             }}
                           >
-                            <span className="flex-1">{option}</span>
-                            {appearance === option ? (
+                            <span className="flex-1">{option.label}</span>
+                            {theme === option.value ? (
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 text-javanese">
                                 <path d="M20 6L9 17l-5-5" />
                               </svg>
@@ -157,7 +164,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     </span>
                     <div className="flex-1">
                       <span className="block text-[15px] font-medium text-tinta">Bahasa</span>
-                      <span className="block text-[13px] text-muted-text">{language}</span>
+                      <span className="block text-[13px] text-muted-text">{langLabel}</span>
                     </div>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 text-[#8a928d]">
                       <path d="M6 9l6 6 6-6" />
@@ -166,20 +173,24 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   {languageOpen ? (
                     <div className="border-t border-[#e8e4dc] bg-white px-4 py-3">
                       <div className="space-y-1">
-                        {(["Indonesia", "English"] as const).map((option) => (
+                        {([
+                          { value: "auto" as const, label: "Otomatis" },
+                          { value: "id" as const, label: "Indonesia" },
+                          { value: "en" as const, label: "English" },
+                        ]).map((option) => (
                           <button
-                            key={option}
+                            key={option.value}
                             type="button"
                             className={`flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-left text-[13px] transition hover:bg-[#f0f2f0] ${
-                              language === option ? "font-semibold text-tinta" : "text-muted-text"
+                              language === option.value ? "font-semibold text-tinta" : "text-muted-text"
                             }`}
                             onClick={() => {
-                              setLanguage(option);
+                              setLanguage(option.value);
                               setLanguageOpen(false);
                             }}
                           >
-                            <span className="flex-1">{option}</span>
-                            {language === option ? (
+                            <span className="flex-1">{option.label}</span>
+                            {language === option.value ? (
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 text-javanese">
                                 <path d="M20 6L9 17l-5-5" />
                               </svg>
