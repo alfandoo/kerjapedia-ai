@@ -76,7 +76,10 @@ function answerBlocks(content: string): AnswerBlock[] {
 
   const flushParagraph = () => {
     if (pendingParagraph.length) {
-      blocks.push({ kind: "paragraph", text: pendingParagraph.join(" ") });
+      const text = pendingParagraph.join(" ").trim();
+      if (text) {
+        blocks.push({ kind: "paragraph", text });
+      }
       pendingParagraph = [];
     }
   };

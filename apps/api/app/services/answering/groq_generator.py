@@ -198,7 +198,32 @@ def _clean_answer_text(answer: str, retrieved_chunk_ids: list[str]) -> str:
         escaped_id = re.escape(chunk_id)
         cleaned = re.sub(rf"\[\[\s*{escaped_id}\s*\]\]", "", cleaned)
         cleaned = re.sub(rf"\[\s*{escaped_id}\s*\]", "", cleaned)
+    # Normalize line endings
+    cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n")
+    # Collapse 3+ newlines into 2 (paragraph break)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    # Remove newlines within a sentence (between non-punctuation and non-list)
+    # Keep newlines before list items (- or 1.) and after paragraph breaks (\n\n)
+    lines = cleaned.split("\n")
+    result: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            result.append("")
+            continue
+        # Keep list items as-is
+        if re.match(r"^[-•∙]\s+", stripped) or re.match(r"^\d+[.)]\s+", stripped):
+            result.append(stripped)
+        elif result and result[-1] == "":
+            # After a blank line, treat as new paragraph
+            result.append(stripped)
+        elif result and result[-1] != "":
+            # Join with previous line (within same paragraph)
+            result[-1] = result[-1] + " " + stripped
+        else:
+            result.append(stripped)
+    cleaned = "\n".join(result)
+    # Final cleanup
     cleaned = re.sub(r"[ \t]+([.,;:!?])", r"\1", cleaned)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
-    cleaned = re.sub(r" *\n *", "\n", cleaned)
     return cleaned.strip()
