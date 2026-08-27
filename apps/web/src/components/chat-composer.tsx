@@ -30,7 +30,7 @@ export function ChatComposer({
 
   return (
     <form
-      className="relative z-10 mx-auto w-full max-w-[800px] px-4 max-[760px]:px-3"
+      className="relative z-10 mx-auto mb-4 w-full max-w-[800px] px-4 max-[760px]:px-3"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();

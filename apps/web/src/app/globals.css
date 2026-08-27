@@ -330,7 +330,24 @@
 }
 
 .dark .hover\:border-emas\/40:hover {
-  border-color: rgba(201, 162, 39, 0.4) !important;
+  border-color: #3d3d3d !important;
+}
+
+.dark button[class*="hover:border-emas"]:hover {
+  border-color: #3d3d3d !important;
+  box-shadow: none !important;
+}
+
+.dark button[class*="hover:shadow"]:hover {
+  box-shadow: none !important;
+}
+
+.dark [class*="focus-within:border-emas"] {
+  border-color: #3d3d3d !important;
+}
+
+.dark [class*="focus-within:shadow"][class*="201,162,39"] {
+  box-shadow: none !important;
 }
 
 .dark .border-t-\[\#e8e4dc\] {
@@ -430,18 +447,19 @@
 
 /* Kirim button dark */
 .dark button[type="submit"],
-.dark .bg-javanese {
-  background-color: #1a3a2a !important;
+.dark .bg-javanese,
+.dark button.rounded-full.bg-javanese {
+  background-color: #1a1a1a !important;
   color: #f3f4f6 !important;
 }
 
 .dark button[type="submit"]:hover,
 .dark .hover\:bg-forest:hover {
-  background-color: #2d6a4f !important;
+  background-color: #2a2a2a !important;
 }
 
 .dark .border-javanese {
-  border-color: #1a3a2a !important;
+  border-color: #2a2a2a !important;
 }
 
 .dark .text-white {

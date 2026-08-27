@@ -622,7 +622,7 @@ export function ChatWorkspaceShell({
             <div className="flex items-center justify-self-end gap-2 max-[760px]:gap-1.5">
               <button
                 type="button"
-                className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-javanese bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
+                className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-[#c8d2cc] bg-white px-4 text-xs font-semibold text-[#253029] transition hover:border-[#9dafa4] hover:bg-[#f7faf8] max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
                 onClick={(event) => openAuthModal(event.currentTarget, "login")}
               >
                 Masuk
