@@ -200,10 +200,11 @@ def _clean_answer_text(answer: str, retrieved_chunk_ids: list[str]) -> str:
         cleaned = re.sub(rf"\[\s*{escaped_id}\s*\]", "", cleaned)
     # Normalize line endings
     cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n")
-    # Collapse 3+ newlines into 2 (paragraph break)
+    # Remove JSON escape sequences
+    cleaned = cleaned.replace("\\n", "\n").replace("\\t", " ")
+    # Collapse multiple newlines into paragraph breaks
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    # Remove newlines within a sentence (between non-punctuation and non-list)
-    # Keep newlines before list items (- or 1.) and after paragraph breaks (\n\n)
+    # Process line by line
     lines = cleaned.split("\n")
     result: list[str] = []
     for line in lines:
@@ -226,4 +227,6 @@ def _clean_answer_text(answer: str, retrieved_chunk_ids: list[str]) -> str:
     # Final cleanup
     cleaned = re.sub(r"[ \t]+([.,;:!?])", r"\1", cleaned)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    # Remove any remaining orphaned newlines within text
+    cleaned = re.sub(r"([^\n])\n([^\n-•∙\d])", r"\1 \2", cleaned)
     return cleaned.strip()

@@ -76,7 +76,7 @@ function answerBlocks(content: string): AnswerBlock[] {
 
   const flushParagraph = () => {
     if (pendingParagraph.length) {
-      const text = pendingParagraph.join(" ").trim();
+      const text = pendingParagraph.join(" ").replace(/\s+/g, " ").trim();
       if (text) {
         blocks.push({ kind: "paragraph", text });
       }
@@ -106,7 +106,8 @@ function answerBlocks(content: string): AnswerBlock[] {
       if (inList && ordered !== isOrdered) flushList();
       ordered = isOrdered;
       inList = true;
-      listItems.push((bulletMatch ?? numberMatch)![1]);
+      const itemText = (bulletMatch ?? numberMatch)![1].replace(/\s+/g, " ").trim();
+      listItems.push(itemText);
     } else {
       flushList();
       pendingParagraph.push(line);
@@ -153,7 +154,7 @@ function AnswerContent({ content, streaming }: { content: string; streaming: boo
             </ul>
           )
         ) : (
-          <p className="mb-2.5 max-w-[74ch] whitespace-pre-wrap last:mb-0" key={`p-${index}`}>
+          <p className="mb-2.5 max-w-[74ch] break-words last:mb-0" key={`p-${index}`}>
             {inlineRendered(block.text)}
           </p>
         )
