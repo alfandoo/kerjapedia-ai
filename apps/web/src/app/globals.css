@@ -430,11 +430,53 @@
 /* Kirim button dark */
 .dark button[type="submit"],
 .dark .bg-javanese {
-  background-color: #1b4332 !important;
+  background-color: #1a3a2a !important;
+  color: #f3f4f6 !important;
 }
 
-.dark button[type="submit"]:hover {
+.dark button[type="submit"]:hover,
+.dark .hover\:bg-forest:hover {
   background-color: #2d6a4f !important;
+}
+
+.dark .text-white {
+  color: #f3f4f6 !important;
+}
+
+.dark .bg-emas {
+  background-color: #92741d !important;
+}
+
+.dark .text-emas {
+  color: #fbbf24 !important;
+}
+
+.dark .bg-javanese\/10 {
+  background-color: rgba(26, 58, 42, 0.3) !important;
+}
+
+.dark .bg-javanese\/50 {
+  background-color: rgba(26, 58, 42, 0.5) !important;
+}
+
+.dark .bg-javanese\/60 {
+  background-color: rgba(26, 58, 42, 0.6) !important;
+}
+
+.dark .bg-emas\/10 {
+  background-color: rgba(201, 162, 39, 0.15) !important;
+}
+
+.dark .text-emas {
+  color: #fbbf24 !important;
+}
+
+.dark .text-\[\#fbbf24\] {
+  color: #fbbf24 !important;
+}
+
+.dark .disabled\:bg-\[\#c9d3cb\]:disabled {
+  background-color: #1f1f1f !important;
 }
 
 /* Card borders dark */
