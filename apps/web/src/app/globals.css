@@ -439,6 +439,10 @@
   background-color: #2d6a4f !important;
 }
 
+.dark .border-javanese {
+  border-color: #1a3a2a !important;
+}
+
 .dark .text-white {
   color: #f3f4f6 !important;
 }
@@ -477,6 +481,18 @@
 
 .dark .disabled\:bg-\[\#c9d3cb\]:disabled {
   background-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#c8d2cc\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .hover\:border-\[\#9dafa4\]:hover {
+  border-color: #3d3d3d !important;
+}
+
+.dark .hover\:bg-\[\#f7faf8\]:hover {
+  background-color: #141414 !important;
 }
 
 /* Card borders dark */
