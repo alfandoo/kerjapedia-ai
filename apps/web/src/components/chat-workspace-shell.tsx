@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { ConversationHistory } from "./conversation-history";
+import { SettingsModal } from "./settings-modal";
 import { useStoredSession } from "@/hooks/use-stored-session";
 import { SESSION_STORAGE_KEY } from "@/lib/api";
 import type { ConversationSummary } from "@/lib/types";
@@ -77,6 +78,7 @@ export function ChatWorkspaceShell({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const visibleConversations = chatSearchQuery.trim()
     ? conversations.filter((conversation) =>
@@ -359,6 +361,56 @@ export function ChatWorkspaceShell({
           </button>
         </div>
       ) : null}
+      {!session ? (
+        <div className="mt-auto border-t border-[#e8e4dc]">
+          <nav className="grid gap-0.5 p-2" aria-label="Menu tamu">
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-[#f0f2f0]"
+            >
+              <span className="flex size-5 shrink-0 items-center justify-center">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </span>
+              <span>Pengaturan</span>
+            </button>
+            <Link
+              href="/legal/disclaimer"
+              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-[#f0f2f0]"
+            >
+              <span className="flex size-5 shrink-0 items-center justify-center">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                  <path d="M12 17h.01" />
+                </svg>
+              </span>
+              <span className="flex-1">Bantuan</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 text-[#8a928d]">
+                <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              </svg>
+            </Link>
+          </nav>
+          <div className="border-t border-[#e8e4dc] p-4">
+            <h3 className="text-[15px] font-semibold text-tinta">
+              Dapatkan jawaban yang sesuai untuk Anda
+            </h3>
+            <p className="mt-1 text-[13px] leading-[1.5] text-muted-text">
+              Masuk untuk menyimpan percakapan, serta mengakses fitur lengkap KerjaPedia AI.
+            </p>
+            <button
+              type="button"
+              className="mt-3 flex min-h-[40px] w-full items-center justify-center rounded-full border border-[#dce4df] bg-white text-[13px] font-semibold text-tinta transition hover:border-javanese hover:bg-[#f5f8f6]"
+              onClick={(event) => openAuthModal(event.currentTarget, "login")}
+            >
+              Masuk
+            </button>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 
@@ -639,6 +691,7 @@ export function ChatWorkspaceShell({
           onNewConversation();
         }}
       />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }
