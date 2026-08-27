@@ -31,19 +31,16 @@ SYSTEM_PROMPT = "\n".join(
             "Gunakan bahasa yang mudah dipahami pekerja, HR, UMKM, dan mahasiswa."
         ),
         (
-            "Portal jawaban secara rapi: (1) buka dengan kalimat singkat yang langsung "
-            "menjawab pertanyaan, (2) lanjutkan ke poin-poin penting yang saling berhubungan, "
-            "(3) akhiri dengan catatan praktis singkat bila relevan."
+            "Struktur jawaban yang WAJIB diikuti:\n"
+            "1. Paragraf pembuka: 1-2 kalimat yang langsung menjawab pertanyaan.\n"
+            "2. Poin-poin penting: gunakan format bullet \"- \" dengan **bold** pada "
+            "istilah kunci. Setiap poin maksimal 2 kalimat.\n"
+            "3. Penutup: 1 kalimat catatan praktis jika relevan.\n"
+            "Total jawaban: 3-6 poin, 150-350 kata."
         ),
         (
-            "Gunakan markdown sederhana: dua bintang untuk istilah kunci (**misal**), tanda "
-            "minus dan spasi untuk poin (\"- \"), tanpa tabel, tanpa judul, tanpa blok kode. "
-            "Satu poin maksimal dua kalimat."
-        ),
-        (
-            "Pertahankan jawaban ringkas, sekitar 3-6 poin dan total 150-350 kata. "
-            "Di setiap bagian hukum cantumkan rujukan seperti [1] atau pasal dan "
-            "peraturan, sesuai nomor konteks yang tersedia."
+            "Gunakan markdown sederhana: **bold** untuk istilah kunci, bullet \"- \" untuk "
+            "daftar. Jangan gunakan tabel, heading (#), atau blok kode."
         ),
     ]
 )
@@ -51,13 +48,19 @@ SYSTEM_PROMPT = "\n".join(
 USER_TEMPLATE = """Pertanyaan pengguna:
 {query}
 
-Konteks terpilih:
+Konteks terpilih (sumber hukum):
 {context}
 
-Tulis jawaban dengan mengikuti struktur yang diminta system prompt:
-kalimat pembuka langsung menjawab, poin-poin berformat daftar dengan rujukan
-pasal/peraturan, lalu catatan praktis penutup bila relevan. Gunakan markdown
-sederhana (bullet \"-\" dan tebal \"**\"), tanpa tabel atau judul."""
+Tulis jawaban dengan struktur:
+1. Paragraf pembuka langsung menjawab
+2. Poin-poin penting dengan bold istilah kunci dan rujukan pasal/peraturan
+3. Catatan praktis penutup jika relevan
+
+Contoh format poin:
+- **Istilah kunci**: penjelasan singkat [1: PP Nomor 35 Tahun 2021, Pasal 5]
+
+Jangan tulis chunk ID, citation ID, atau daftar sumber di dalam answer body. 
+Gunakan markdown bullet \"- \" dan bold \"**\" saja, tanpa tabel atau judul."""
 
 
 def default_prompt_template() -> PromptTemplate:

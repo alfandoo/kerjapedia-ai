@@ -176,21 +176,23 @@ class AnswerGenerator:
             )
 
         if lang == "id":
-            opening = "Berdasarkan dokumen yang tersedia, poin yang paling relevan adalah:"
             if self._contains_high_risk_term(query):
                 opening = (
                     "Berdasarkan dokumen yang tersedia, berikut ringkasan awal yang perlu "
                     "diverifikasi lebih lanjut:"
                 )
+            else:
+                opening = "Berdasarkan regulasi yang berlaku, berikut jawaban untuk pertanyaan Anda:"
         else:
-            opening = "Based on the available documents, the most relevant points are:"
             if self._contains_high_risk_term(query):
                 opening = (
                     "Based on the available documents, here is an initial summary that "
                     "requires further verification:"
                 )
+            else:
+                opening = "Based on the applicable regulations, here is the answer to your question:"
 
-        return "\n".join([opening, *citation_lines])
+        return "\n\n".join([opening, *citation_lines])
 
     def _needs_clarification(self, query: str, retrieval: RetrievalResponse) -> bool:
         tokens = _TOKEN_RE.findall(query.lower())

@@ -124,24 +124,33 @@ class GroqAnswerGenerator(AnswerGenerator):
         retrieved_chunk_ids: list[str],
     ) -> dict[str, Any]:
         lang = _detect_language(query)
-        lang_instruction = (
-            "Tulis answer dalam bahasa Indonesia yang mudah dipindai"
-            if lang == "id"
-            else "Write the answer in clear, easy-to-scan English"
-        )
+        if lang == "id":
+            lang_instruction = (
+                "Tulis answer dalam bahasa Indonesia dengan format yang rapi:\n"
+                "1. Paragraf pembuka 1-2 kalimat langsung menjawab\n"
+                "2. Poin-poin bullet dengan **bold** istilah kunci dan rujukan [1: Pasal, PP]\n"
+                "3. Catatan praktis penutup jika relevan\n"
+                "Total 3-6 poin, 150-350 kata. Tanpa heading, tabel, atau blok kode."
+            )
+        else:
+            lang_instruction = (
+                "Write the answer in clear English with clean formatting:\n"
+                "1. Opening paragraph 1-2 sentences directly answering the question\n"
+                "2. Bullet points with **bold** key terms and references [1: Article, Regulation]\n"
+                "3. Practical note at the end if relevant\n"
+                "Total 3-6 points, 150-350 words. No headings, tables, or code blocks."
+            )
         user_prompt = "\n\n".join(
             [
                 render_user_prompt(query, retrieval),
-                "Kembalikan JSON valid saja dengan bentuk:",
+                "Return valid JSON only in this format:",
                 '{"answer":"...","confidence":0.0,"cited_chunk_ids":["..."]}',
-                "cited_chunk_ids hanya boleh memakai chunk berikut: "
+                "cited_chunk_ids must use only these chunks: "
                 + ", ".join(retrieved_chunk_ids),
                 (
-                    f"{lang_instruction}: awali dengan "
-                    "kesimpulan singkat, gunakan paragraf pendek atau daftar bernomor bila "
-                    "ada beberapa poin. Jangan tulis chunk ID, citation ID, tanda rujukan "
-                    "seperti [chunk-id], atau daftar sumber di dalam answer; sumber akan "
-                    "ditampilkan terpisah oleh aplikasi."
+                    f"{lang_instruction}\n"
+                    "Do NOT write chunk IDs, citation IDs, reference tags like [chunk-id], "
+                    "or source lists inside the answer body; sources are displayed separately by the app."
                 ),
             ]
         )
