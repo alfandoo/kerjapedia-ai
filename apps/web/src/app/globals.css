@@ -168,6 +168,42 @@
   background-color: #141414 !important;
 }
 
+.dark .bg-\[\#e8eeea\] {
+  background-color: #1a1a1a !important;
+}
+
+.dark .bg-\[\#f6faf9\] {
+  background-color: #0a0a0a !important;
+}
+
+.dark .bg-\[\#f5f8f6\] {
+  background-color: #141414 !important;
+}
+
+.dark .bg-\[\#fafbf9\] {
+  background-color: #0a0a0a !important;
+}
+
+.dark .bg-\[\#faf8f4\] {
+  background-color: #0a0a0a !important;
+}
+
+.dark .bg-\[\#fffaf0\] {
+  background-color: #1a1500 !important;
+}
+
+.dark .bg-\[\#fffcf5\] {
+  background-color: #1a1500 !important;
+}
+
+.dark .bg-\[\#fef7f5\] {
+  background-color: #1a0a08 !important;
+}
+
+.dark .bg-\[\#fdf3f1\] {
+  background-color: #1a0a08 !important;
+}
+
 .dark [class*="bg-[rgba(10,28,25,0.5)]"] {
   background-color: rgba(0, 0, 0, 0.8) !important;
 }
@@ -184,8 +220,68 @@
   color: #9ca3af !important;
 }
 
+.dark .text-\[\#26312b\] {
+  color: #f3f4f6 !important;
+}
+
+.dark .text-\[\#253029\] {
+  color: #f3f4f6 !important;
+}
+
+.dark .text-\[\#536058\] {
+  color: #d1d5db !important;
+}
+
+.dark .text-\[\#68736c\] {
+  color: #9ca3af !important;
+}
+
+.dark .text-\[\#4a564e\] {
+  color: #9ca3af !important;
+}
+
+.dark .text-\[\#88540d\] {
+  color: #fbbf24 !important;
+}
+
+.dark .text-\[\#6e531c\] {
+  color: #fbbf24 !important;
+}
+
+.dark .text-\[\#753328\] {
+  color: #f87171 !important;
+}
+
+.dark .text-\[\#8c3a27\] {
+  color: #f87171 !important;
+}
+
+.dark .text-\[\#8a7a5e\] {
+  color: #d4a574 !important;
+}
+
 .dark .border-\[\#e8e4dc\] {
   border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#dce4df\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#e2ddd3\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#e2e8e2\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#f0e6d2\] {
+  border-color: #3d2f1a !important;
+}
+
+.dark .border-\[\#f0d6d2\] {
+  border-color: #3d1a17 !important;
 }
 
 .dark .border-border {
@@ -196,12 +292,60 @@
   background-color: #1a1a1a !important;
 }
 
+.dark .hover\:bg-\[\#e3ebe6\]:hover {
+  background-color: #1a1a1a !important;
+}
+
+.dark .hover\:bg-\[\#f3f8f5\]:hover {
+  background-color: #141414 !important;
+}
+
+.dark .hover\:bg-\[\#f6faf9\]:hover {
+  background-color: #141414 !important;
+}
+
+.dark .hover\:bg-\[\#f8faf8\]:hover {
+  background-color: #141414 !important;
+}
+
 .dark .border-t-\[\#e8e4dc\] {
   border-color: #1f1f1f !important;
 }
 
 .dark .border-b-\[\#e8e4dc\] {
   border-color: #1f1f1f !important;
+}
+
+.dark .border-t-\[\#edf1ee\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-b-\[\#edf1ee\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-b-\[\#f0ede8\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-r-\[\#dce4df\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-l-emas {
+  border-left-color: #c9a227 !important;
+}
+
+.dark .border-l-\[\#bc8121\] {
+  border-left-color: #c9a227 !important;
+}
+
+.dark .border-l-\[\#c0563f\] {
+  border-left-color: #f87171 !important;
+}
+
+.dark .border-l-\[\#3c8a6e\] {
+  border-left-color: #34d399 !important;
 }
 
 /* Topbar dark */
@@ -238,6 +382,14 @@
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.5) !important;
 }
 
+.dark .shadow-\[0_1px_3px_rgba\(0,0,0,0\.04\)\] {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark .shadow-\[0_2px_12px_rgba\(201,162,39,0\.08\)\] {
+  box-shadow: 0 2px 12px 0 rgba(201, 162, 39, 0.15) !important;
+}
+
 /* Badge dark */
 .dark .bg-\[\#f0fdf4\] {
   background-color: #0a1a10 !important;
@@ -271,6 +423,54 @@
 
 /* Card borders dark */
 .dark .border {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#d0d8d3\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#cad7d0\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#bfd0c6\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#c7d4cd\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#bdc9c2\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#c8d2cc\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#9dafa4\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#9fb5a9\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#afc9bb\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#9adbd5\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#b7c9be\] {
+  border-color: #1f1f1f !important;
+}
+
+.dark .border-\[\#bee3c5\] {
   border-color: #1f1f1f !important;
 }
 
