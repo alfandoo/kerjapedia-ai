@@ -35,6 +35,22 @@ function getSystemLanguage(): "id" | "en" {
   return lang.startsWith("id") ? "id" : "en";
 }
 
+function applyDarkClass(resolved: "dark" | "light") {
+  const root = document.documentElement;
+  const body = document.body;
+  if (resolved === "dark") {
+    root.classList.add("dark");
+    root.classList.remove("light");
+    body.style.backgroundColor = "#0a0f0d";
+    body.style.color = "#f3f4f6";
+  } else {
+    root.classList.remove("dark");
+    root.classList.add("light");
+    body.style.backgroundColor = "";
+    body.style.color = "";
+  }
+}
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("system");
   const [language, setLanguage] = useState<"auto" | "id" | "en">("auto");
@@ -43,9 +59,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const applyTheme = useCallback((t: Theme) => {
     const resolved = t === "system" ? getSystemTheme() : t;
     setResolvedTheme(resolved);
-    const root = document.documentElement;
-    root.classList.toggle("dark", resolved === "dark");
-    root.style.colorScheme = resolved;
+    applyDarkClass(resolved);
   }, []);
 
   const setTheme = useCallback((t: Theme) => {
