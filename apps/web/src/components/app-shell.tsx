@@ -8,6 +8,7 @@ import { ChatAppHeader } from "./chat-app-header";
 import { ChatIcon, DatabaseIcon, FileIcon, ScaleIcon, SearchIcon } from "./icons";
 import { ConversationHistory } from "./conversation-history";
 import { useStoredSession } from "@/hooks/use-stored-session";
+import { useSettings } from "./settings-provider";
 import type { ConversationSummary } from "@/lib/types";
 
 type AppShellProps = {
@@ -54,6 +55,7 @@ export function AppShell({
 }: AppShellProps) {
   const pathname = usePathname();
   const session = useStoredSession();
+  const { t: translate } = useSettings();
 
   if (editorial) {
     return (
@@ -150,16 +152,16 @@ export function AppShell({
       <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] min-[1181px]:grid-cols-[300px_minmax(0,1fr)_360px]">
         <aside
           className="flex flex-col gap-2.5 border-b border-[#dce4df] bg-white/80 p-4 lg:gap-6 lg:border-b-0 lg:border-r lg:p-6"
-          aria-label="Riwayat percakapan"
+          aria-label={translate("sidebar.chatHistory")}
         >
           <div className="flex items-center justify-between gap-4 lg:flex-col lg:items-stretch lg:justify-start">
-            <h2 className="text-lg font-bold text-tinta">Riwayat</h2>
+            <h2 className="text-lg font-bold text-tinta">{translate("sidebar.chatHistory")}</h2>
             <button
               className="h-11 rounded-[7px] border border-[#dce4df] bg-white px-3.5 text-sm font-semibold text-tinta transition hover:border-javanese hover:text-javanese lg:w-full"
               type="button"
               onClick={onNewConversation}
             >
-              + Percakapan baru
+              + {translate("sidebar.newChat")}
             </button>
           </div>
           <div
@@ -168,12 +170,12 @@ export function AppShell({
           >
             {historyLoading ? (
               <p className="my-1.5 px-1 text-xs leading-[1.55] text-muted-text">
-                Memuat riwayat…
+                {translate("sidebar.loadingHistory")}
               </p>
             ) : null}
             {!historyLoading && conversations.length === 0 ? (
               <p className="my-1.5 px-1 text-xs leading-[1.55] text-muted-text">
-                Belum ada percakapan. Ajukan pertanyaan pertama Anda.
+                {translate("sidebar.emptyHistory")}
               </p>
             ) : null}
             {conversations.map((item) => (
@@ -203,7 +205,7 @@ export function AppShell({
             className="hidden items-center justify-center gap-2.5 rounded-[7px] border border-[#dce4df] bg-white text-sm font-semibold text-tinta transition hover:border-javanese hover:text-javanese lg:flex lg:h-11"
           >
             <SearchIcon className="size-[18px] [stroke-width:1.8]" />
-            Lihat semua regulasi
+            {translate("sidebar.viewAllRegulations")}
           </Link>
         </aside>
         <main className="min-h-[calc(100svh-72px)] min-w-0 bg-white px-[clamp(24px,6vw,92px)] pb-[72px] pt-[clamp(38px,5vw,64px)]">

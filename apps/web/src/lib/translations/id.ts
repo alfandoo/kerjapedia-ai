@@ -22,6 +22,10 @@ const id = {
   "sidebar.loginTitle": "Dapatkan jawaban yang sesuai untuk Anda",
   "sidebar.loginDescription": "Masuk untuk menyimpan percakapan, serta mengakses fitur lengkap KerjaPedia AI.",
   "sidebar.loginButton": "Masuk",
+  "sidebar.loadingHistory": "Memuat riwayat...",
+  "sidebar.emptyHistory": "Belum ada percakapan. Ajukan pertanyaan pertama Anda.",
+  "sidebar.chatHistory": "Riwayat percakapan",
+  "sidebar.viewAllRegulations": "Lihat semua regulasi",
 
   // Header
   "header.login": "Masuk",

@@ -227,7 +227,7 @@ export function ChatWorkspaceShell({
           <button
             type="button"
             className="grid size-[38px] place-items-center rounded-lg text-[#48534d] transition hover:bg-[#e9efeb]"
-            aria-label="Cari chat"
+            aria-label={translate("sidebar.search")}
             aria-expanded={chatSearchOpen}
             onClick={(event) => openChatSearch(event.currentTarget)}
           >
@@ -259,13 +259,13 @@ export function ChatWorkspaceShell({
         <div className="relative mb-2 mt-1 grid min-h-[42px] grid-cols-[20px_minmax(0,1fr)_34px] items-center gap-[7px] rounded-[9px] border border-[#bdc9c2] bg-white py-0 pl-2.5 pr-[3px]">
           <Search className="size-[17px]" />
           <label htmlFor="sidebar-chat-search" className="sr-only">
-            Cari chat
+            {translate("sidebar.search")}
           </label>
           <input
             ref={chatSearchInputRef}
             id="sidebar-chat-search"
             type="search"
-            placeholder="Cari chat..."
+            placeholder={`${translate("sidebar.search")}...`}
             value={chatSearchQuery}
             onChange={(event) => setChatSearchQuery(event.target.value)}
             className="min-w-0 bg-transparent text-[11px] text-tinta outline-none placeholder:text-[#8a928d]"
@@ -680,7 +680,7 @@ export function ChatWorkspaceShell({
             ref={mobileSidebarRef}
             role="dialog"
             aria-modal="true"
-            aria-label={session ? "Riwayat percakapan" : "Menu KerjaPedia"}
+            aria-label={session ? translate("sidebar.chatHistory") : "KerjaPedia Menu"}
             onKeyDown={keepMobileFocusInside}
             className="relative z-[1] flex h-full w-[min(86vw,320px)] flex-col overflow-hidden bg-[#f6faf9] p-[14px_12px_12px] shadow-[16px_0_40px_rgba(17,36,26,0.18)]"
           >

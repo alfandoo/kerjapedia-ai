@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { MessageSquare, Pencil, MoreHorizontal, Trash2 } from "lucide-react";
+import { useSettings } from "./settings-provider";
 import type { ConversationSummary } from "@/lib/types";
 
 type ConversationHistoryProps = {
@@ -38,8 +39,9 @@ export function ConversationHistory({
   onConversationDelete,
   historyEnabled = true,
   showNewConversation = true,
-  emptyMessage = "Belum ada percakapan. Ajukan pertanyaan pertama Anda.",
+  emptyMessage,
 }: ConversationHistoryProps) {
+  const { t: translate } = useSettings();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
@@ -99,9 +101,9 @@ export function ConversationHistory({
   return (
     <aside
       className="flex flex-col border-r border-[#dce4df] bg-white p-[32px_22px_20px_32px] max-[760px]:hidden"
-      aria-label="Riwayat percakapan"
+      aria-label={translate("sidebar.chatHistory")}
     >
-      <h2 className="mb-5 font-display text-lg font-semibold text-tinta">Percakapan</h2>
+      <h2 className="mb-5 font-display text-lg font-semibold text-tinta">{translate("sidebar.chatHistory")}</h2>
       {showNewConversation ? (
         <button
           className="flex min-h-11 items-center gap-2.5 rounded-lg border border-[#bfd0c6] bg-white px-3.5 text-[13px] font-semibold text-javanese transition hover:border-javanese hover:bg-[#f3f8f5]"
@@ -111,7 +113,7 @@ export function ConversationHistory({
           <span aria-hidden="true" className="text-xl font-normal">
             +
           </span>
-          Percakapan baru
+          {translate("sidebar.newChat")}
         </button>
       ) : null}
       <div className="mt-[22px] min-h-0 flex-1 overflow-y-auto" aria-busy={historyEnabled && loading}>
@@ -121,7 +123,7 @@ export function ConversationHistory({
               historyEnabled ? "" : "hidden"
             }`}
           >
-            Memuat riwayat…
+            {translate("sidebar.loadingHistory")}
           </p>
         ) : null}
         {!loading && conversations.length === 0 ? (
@@ -130,7 +132,7 @@ export function ConversationHistory({
               historyEnabled ? "" : "hidden"
             }`}
           >
-            {emptyMessage}
+            {emptyMessage || translate("sidebar.emptyHistory")}
           </p>
         ) : null}
         {conversations.map((item) => (

@@ -22,6 +22,10 @@ const en = {
   "sidebar.loginTitle": "Get answers tailored for you",
   "sidebar.loginDescription": "Sign in to save conversations and access full KerjaPedia AI features.",
   "sidebar.loginButton": "Sign in",
+  "sidebar.loadingHistory": "Loading history...",
+  "sidebar.emptyHistory": "No conversations yet. Ask your first question.",
+  "sidebar.chatHistory": "Chat history",
+  "sidebar.viewAllRegulations": "View all regulations",
 
   // Header
   "header.login": "Sign in",
