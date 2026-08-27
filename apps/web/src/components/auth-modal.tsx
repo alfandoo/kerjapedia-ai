@@ -327,7 +327,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
               </>
             ) : (
               <>
-                <div className="flex min-h-[46px] items-center justify-between gap-3 border-l-[3px] border-javanese pl-[14px] pr-1 text-[13px] text-[#344039]">
+                <div className="flex min-h-[46px] items-center justify-between gap-3 border-l-[3px] border-javanese pl-[14px] pr-1 text-[13px] text-tinta">
                   <span className="truncate">{email}</span>
                   <button
                     type="button"
@@ -361,7 +361,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                   />
                   <button
                     type="button"
-                    className="grid w-[52px] place-items-center border-0 bg-transparent text-[#526159] transition hover:bg-[#f3f7f4] hover:text-forest"
+                    className="grid w-[52px] place-items-center border-0 bg-transparent text-[#526159] transition hover:text-tinta"
                     aria-label={passwordVisible ? "Sembunyikan password" : "Tampilkan password"}
                     aria-pressed={passwordVisible}
                     onClick={() => setPasswordVisible((visible) => !visible)}

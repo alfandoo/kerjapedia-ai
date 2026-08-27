@@ -636,6 +636,32 @@
   background-color: #141414 !important;
 }
 
+.dark [role="dialog"] .text-javanese {
+  color: #f3f4f6 !important;
+}
+
+.dark [role="dialog"] .hover\:text-forest:hover {
+  color: #f3f4f6 !important;
+}
+
+/* Chat composer dark */
+.dark textarea {
+  background-color: transparent !important;
+}
+
+.dark form .bg-white {
+  background-color: #141414 !important;
+  border-color: #2a2a2a !important;
+}
+
+.dark form [class*="focus-within:border-emas"] {
+  border-color: #2a2a2a !important;
+}
+
+.dark form [class*="focus-within:shadow"] {
+  box-shadow: none !important;
+}
+
 /* Card borders dark */
 .dark .border {
   border-color: #1f1f1f !important;
