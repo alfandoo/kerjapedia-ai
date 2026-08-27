@@ -26,6 +26,7 @@ const en = {
   "sidebar.emptyHistory": "No conversations yet. Ask your first question.",
   "sidebar.chatHistory": "Chat history",
   "sidebar.viewAllRegulations": "View all regulations",
+  "sidebar.searchRegulations": "Search Regulations",
 
   // Header
   "header.login": "Sign in",

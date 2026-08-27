@@ -26,6 +26,7 @@ const id = {
   "sidebar.emptyHistory": "Belum ada percakapan. Ajukan pertanyaan pertama Anda.",
   "sidebar.chatHistory": "Riwayat percakapan",
   "sidebar.viewAllRegulations": "Lihat semua regulasi",
+  "sidebar.searchRegulations": "Cari Regulasi",
 
   // Header
   "header.login": "Masuk",

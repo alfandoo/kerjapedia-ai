@@ -22,15 +22,15 @@ type AppShellProps = {
   editorial?: boolean;
 };
 
-function getNavigation(session: { user: { roles: string[] } } | null) {
+function getNavigation(session: { user: { roles: string[] } } | null, translate: (key: any) => string) {
   const base = [
-    { href: "/chat", label: "Chat", icon: ChatIcon },
-    { href: "/search", label: "Cari Regulasi", icon: SearchIcon },
+    { href: "/chat", label: translate("chat.badge"), icon: ChatIcon },
+    { href: "/search", label: translate("sidebar.searchRegulations"), icon: SearchIcon },
   ];
   if (session?.user.roles.includes("admin")) {
     base.push({ href: "/admin/dashboard", label: "Admin", icon: DatabaseIcon });
   }
-  base.push({ href: "/legal/disclaimer", label: "Legal", icon: FileIcon });
+  base.push({ href: "/legal/disclaimer", label: translate("sidebar.legal"), icon: FileIcon });
   return base;
 }
 
@@ -108,7 +108,7 @@ export function AppShell({
           className="flex h-full items-stretch justify-center gap-[34px] max-[900px]:col-span-2 max-[900px]:row-start-2 max-[900px]:h-12 max-[900px]:justify-start max-[900px]:gap-6 max-[900px]:overflow-x-auto"
           aria-label="Navigasi utama"
         >
-          {getNavigation(session).map((item) => {
+          {getNavigation(session, translate).map((item) => {
             const active = pathname.startsWith(item.href);
             return (
               <Link

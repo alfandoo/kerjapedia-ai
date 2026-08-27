@@ -296,21 +296,21 @@ export function ChatWorkspaceShell({
           }}
         >
           <Plus className="size-[18px]" />
-          <span>Chat baru</span>
+          <span>{translate("sidebar.newChat")}</span>
         </button>
         <Link
           href="/search"
           className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#e3ebe6]"
         >
           <Search className="size-[18px]" />
-          <span>Cari Regulasi</span>
+          <span>{translate("sidebar.searchRegulations")}</span>
         </Link>
         <Link
           href="/legal/disclaimer"
           className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#e3ebe6]"
         >
           <FileText className="size-[18px]" />
-          <span>Legal &amp; Bantuan</span>
+          <span>{translate("sidebar.legal")}</span>
         </Link>
       </nav>
       {!session ? <div className="min-h-7 flex-1" /> : null}
@@ -454,7 +454,7 @@ export function ChatWorkspaceShell({
           onClick={() => setProfileMenuOpen(false)}
         >
           <Search className="size-[18px]" />
-          <span>Cari Regulasi</span>
+          <span>{translate("sidebar.searchRegulations")}</span>
         </Link>
         <Link
           href="/legal/privacy"

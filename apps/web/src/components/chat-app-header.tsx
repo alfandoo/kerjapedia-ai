@@ -4,18 +4,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { useStoredSession } from "@/hooks/use-stored-session";
+import { useSettings } from "./settings-provider";
 
 export function ChatAppHeader() {
   const pathname = usePathname();
   const session = useStoredSession();
+  const { t: translate } = useSettings();
 
   const navigation = [
-    { href: "/chat", label: "Chat" },
-    { href: "/search", label: "Cari Regulasi" },
+    { href: "/chat", label: translate("chat.badge") },
+    { href: "/search", label: translate("sidebar.searchRegulations") },
     ...(session?.user.roles.includes("admin")
       ? [{ href: "/admin/dashboard", label: "Admin" }]
       : []),
-    { href: "/legal/disclaimer", label: "Legal" },
+    { href: "/legal/disclaimer", label: translate("sidebar.legal") },
   ];
 
   return (
