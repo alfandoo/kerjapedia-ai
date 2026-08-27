@@ -260,6 +260,18 @@
   color: #d4a574 !important;
 }
 
+.dark .text-\[\#303b35\] {
+  color: #d1d5db !important;
+}
+
+.dark .text-\[\#753328\] {
+  color: #f87171 !important;
+}
+
+.dark .text-\[\#8c3a27\] {
+  color: #f87171 !important;
+}
+
 .dark .border-\[\#e8e4dc\] {
   border-color: #1f1f1f !important;
 }
@@ -288,6 +300,14 @@
   border-color: #1f1f1f !important;
 }
 
+.dark .border-javanese\/20 {
+  border-color: rgba(134, 239, 172, 0.2) !important;
+}
+
+.dark .border-t-javanese {
+  border-top-color: #86efac !important;
+}
+
 .dark .hover\:bg-\[\#f0f2f0\]:hover {
   background-color: #1a1a1a !important;
 }
@@ -306,6 +326,10 @@
 
 .dark .hover\:bg-\[\#f8faf8\]:hover {
   background-color: #141414 !important;
+}
+
+.dark .hover\:border-emas\/40:hover {
+  border-color: rgba(201, 162, 39, 0.4) !important;
 }
 
 .dark .border-t-\[\#e8e4dc\] {
