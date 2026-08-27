@@ -151,7 +151,24 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --muted-text: #9ca3af;
+  --kertas-arsip: #111827;
+  --tinta-pena: #f3f4f6;
 }
+
+.dark body {
+  background-color: #0a0f0d;
+  color: #f3f4f6;
+}
+
+.dark .bg-white { background-color: #1a1f1c; }
+.dark .bg-\[\#f9f9f9\] { background-color: #1a1f1c; }
+.dark .bg-\[\#f0f2f0\] { background-color: #252b28; }
+.dark .bg-\[rgba\(10,28,25,0\.5\)\] { background-color: rgba(0, 0, 0, 0.6); }
+.dark .text-tinta { color: #f3f4f6; }
+.dark .text-muted-text { color: #9ca3af; }
+.dark .border-\[\#e8e4dc\] { border-color: #2d3530; }
+.dark .hover\:bg-\[\#f0f2f0\]:hover { background-color: #252b28; }
 
 @layer base {
   * {
