@@ -1,29 +1,60 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from app.services.answering.citations import build_citations, build_related_documents, compact_text
 from app.services.answering.prompts import default_prompt_template, render_user_prompt
 from app.services.answering.schemas import AnswerResponse
 from app.services.retrieval.schemas import RetrievalResponse
 
-DISCLAIMER = (
+_ID_CHARS = set("àáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿāăąćĉċčđēĕėęěĝğġģĥħĩīĭįĳĴĵĸķĸĺļľŀłńņňŉŋōŏőœŕŗřśŝşšţťŧūŭůűųŵŷźżž")
+_EN_MIN, _EN_MAX = 97, 122
+
+DISCLAIMER_ID = (
     "KerjaPedia AI bukan pengganti advokat, konsultan hukum, mediator hubungan "
     "industrial, atau instansi pemerintah. Verifikasi sumber resmi sebelum mengambil "
     "keputusan."
 )
+DISCLAIMER_EN = (
+    "KerjaPedia AI is not a substitute for attorneys, legal consultants, industrial "
+    "relations mediators, or government agencies. Verify official sources before making "
+    "decisions."
+)
 
-REFUSAL_TEXT = (
+REFUSAL_TEXT_ID = (
     "Informasi yang cukup tidak ditemukan dalam dokumen yang tersedia. "
     "Silakan perjelas konteks pertanyaan, periksa sumber resmi, atau konsultasikan "
     "dengan pihak yang berwenang."
 )
+REFUSAL_TEXT_EN = (
+    "Sufficient information was not found in the available documents. "
+    "Please clarify the question context, check official sources, or consult "
+    "with the relevant authorities."
+)
 
-OUT_OF_SCOPE_TEXT = (
+OUT_OF_SCOPE_TEXT_ID = (
     "Maaf, saya tidak tahu untuk pertanyaan tersebut. KerjaPedia AI difokuskan "
     "khusus pada regulasi dan persoalan ketenagakerjaan Indonesia. Silakan ajukan "
     "pertanyaan tentang hubungan kerja, PKWT, PHK, pengupahan, THR, BPJS "
     "ketenagakerjaan, K3, atau topik ketenagakerjaan lainnya."
+)
+OUT_OF_SCOPE_TEXT_EN = (
+    "Sorry, I don't have an answer for that question. KerjaPedia AI is focused "
+    "specifically on Indonesian employment regulations and issues. Please ask "
+    "questions about employment relationships, fixed-term contracts (PKWT), "
+    "termination (PHK), wages, THR, BPJS employment, OHS, or other employment topics."
+)
+
+CLARIFICATION_TEXT_ID = (
+    "Pertanyaannya masih terlalu umum. Tolong tambahkan konteks seperti topik "
+    "(PKWT, PHK, THR, serikat pekerja), status pekerja, dan tahun atau pasal "
+    "jika ada."
+)
+CLARIFICATION_TEXT_EN = (
+    "The question is still too general. Please add context such as topic "
+    "(PKWT, PHK, THR, trade union), worker status, and year or article "
+    "if available."
 )
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
@@ -37,6 +68,35 @@ _HIGH_RISK_TERMS = {
     "lapor",
     "sanksi",
 }
+
+
+def _detect_language(query: str) -> str:
+    """Detect if query is primarily Indonesian or English."""
+    lower = query.lower()
+    _id_markers = {"apa", "bagaimana", "gimana", "kapan", "dimana", "mengapa", "kenapa",
+                   "adakah", "apakah", "berapa", "siapakah", "kah", "yang", "dan",
+                   "atau", "dalam", "untuk", "dengan", "pada", "adalah", "ini", "itu",
+                   "dari", "ke", "di", "tidak", "bukan", "belum", "akan", "dapat",
+                   "harus", "wajib", "hak", "pekerja", "perusahaan", "undang", "undang",
+                   "peraturan", "pp", "ppno", "perppu", "uu", "pkwt", "phk", "thr",
+                   "bpjs", "k3", "upah", "gaji", "komplain", "sanggahan"}
+    _en_markers = {"what", "how", "when", "where", "why", "which", "who",
+                   "is", "are", "was", "were", "do", "does", "did",
+                   "can", "could", "should", "would", "may", "might",
+                   "the", "a", "an", "and", "or", "but", "in", "on", "at",
+                   "to", "for", "of", "with", "by", "from", "this", "that",
+                   "these", "those", "not", "no", "yes", "if", "then",
+                   "employment", "worker", "labor", "labour", "wage", "salary",
+                   "contract", "termination", "bonus", "insurance", "safety"}
+    tokens = set(re.findall(r"[a-z]+", lower))
+    id_hits = len(tokens & _id_markers)
+    en_hits = len(tokens & _en_markers)
+    if id_hits > en_hits:
+        return "id"
+    if en_hits > id_hits:
+        return "en"
+    non_ascii = sum(1 for c in query if ord(c) > 127)
+    return "id" if non_ascii > 0 else "en"
 
 
 class AnswerGenerator:
@@ -75,6 +135,8 @@ class AnswerGenerator:
         answer = self._compose_grounded_answer(query, citations)
         confidence = self._estimate_confidence(retrieval)
         related_documents = build_related_documents(selected)
+        lang = _detect_language(query)
+        disclaimer = DISCLAIMER_ID if lang == "id" else DISCLAIMER_EN
 
         return AnswerResponse(
             query=query,
@@ -84,7 +146,7 @@ class AnswerGenerator:
             related_documents=related_documents,
             refusal_reason=None,
             clarification_question=None,
-            disclaimer=DISCLAIMER,
+            disclaimer=disclaimer,
             prompt_version_id=self.prompt_template.prompt_version_id,
             retrieved_chunk_ids=[item.document.chunk_id for item in selected],
             warnings=retrieval.warnings,
@@ -96,6 +158,7 @@ class AnswerGenerator:
         )
 
     def _compose_grounded_answer(self, query: str, citations: list) -> str:
+        lang = _detect_language(query)
         citation_lines = []
         for citation in citations:
             legal_ref = ", ".join(
@@ -112,12 +175,20 @@ class AnswerGenerator:
                 f"- {compact_text(citation.quote, 220)} [{citation.citation_id}: {legal_ref}]"
             )
 
-        opening = "Berdasarkan dokumen yang tersedia, poin yang paling relevan adalah:"
-        if self._contains_high_risk_term(query):
-            opening = (
-                "Berdasarkan dokumen yang tersedia, berikut ringkasan awal yang perlu "
-                "diverifikasi lebih lanjut:"
-            )
+        if lang == "id":
+            opening = "Berdasarkan dokumen yang tersedia, poin yang paling relevan adalah:"
+            if self._contains_high_risk_term(query):
+                opening = (
+                    "Berdasarkan dokumen yang tersedia, berikut ringkasan awal yang perlu "
+                    "diverifikasi lebih lanjut:"
+                )
+        else:
+            opening = "Based on the available documents, the most relevant points are:"
+            if self._contains_high_risk_term(query):
+                opening = (
+                    "Based on the available documents, here is an initial summary that "
+                    "requires further verification:"
+                )
 
         return "\n".join([opening, *citation_lines])
 
@@ -125,13 +196,16 @@ class AnswerGenerator:
         tokens = _TOKEN_RE.findall(query.lower())
         has_topic = bool(retrieval.query.detected_topics)
         has_intent = bool(retrieval.query.detected_intents)
+        _id_tokens = {"hak", "saya", "aturan", "gimana", "bagaimana"}
+        _en_tokens = {"rights", "my", "rule", "how"}
+        query_tokens = set(tokens)
         if (
             len(tokens) <= 3
             and not has_topic
-            and set(tokens) & {"hak", "saya", "aturan", "gimana", "bagaimana"}
+            and (query_tokens & _id_tokens or query_tokens & _en_tokens)
         ):
             return True
-        if any(term in tokens for term in {"hak", "aturan", "gimana", "bagaimana"}) and not (
+        if (query_tokens & _id_tokens or query_tokens & _en_tokens) and not (
             has_topic or has_intent
         ):
             return True
@@ -142,11 +216,8 @@ class AnswerGenerator:
         query: str,
         retrieval: RetrievalResponse,
     ) -> AnswerResponse:
-        question = (
-            "Pertanyaannya masih terlalu umum. Tolong tambahkan konteks seperti topik "
-            "(PKWT, PHK, THR, serikat pekerja), status pekerja, dan tahun atau pasal "
-            "jika ada."
-        )
+        lang = _detect_language(query)
+        question = CLARIFICATION_TEXT_ID if lang == "id" else CLARIFICATION_TEXT_EN
         return AnswerResponse(
             query=query,
             answer=question,
@@ -172,7 +243,13 @@ class AnswerGenerator:
         retrieval: RetrievalResponse,
         refusal_reason: str,
     ) -> AnswerResponse:
-        refusal_text = OUT_OF_SCOPE_TEXT if refusal_reason == "out_of_scope_query" else REFUSAL_TEXT
+        lang = _detect_language(query)
+        if lang == "id":
+            refusal_text = OUT_OF_SCOPE_TEXT_ID if refusal_reason == "out_of_scope_query" else REFUSAL_TEXT_ID
+            disclaimer = DISCLAIMER_ID
+        else:
+            refusal_text = OUT_OF_SCOPE_TEXT_EN if refusal_reason == "out_of_scope_query" else REFUSAL_TEXT_EN
+            disclaimer = DISCLAIMER_EN
         return AnswerResponse(
             query=query,
             answer=refusal_text,
@@ -181,7 +258,7 @@ class AnswerGenerator:
             related_documents=[],
             refusal_reason=refusal_reason,
             clarification_question=None,
-            disclaimer=DISCLAIMER,
+            disclaimer=disclaimer,
             prompt_version_id=self.prompt_template.prompt_version_id,
             retrieved_chunk_ids=[],
             warnings=retrieval.warnings,

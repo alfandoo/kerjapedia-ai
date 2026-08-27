@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from app.services.answering.citations import build_citations, build_related_documents
-from app.services.answering.generator import DISCLAIMER, AnswerGenerator
+from app.services.answering.generator import DISCLAIMER_ID, DISCLAIMER_EN, _detect_language, AnswerGenerator
 from app.services.answering.prompts import render_user_prompt
 from app.services.answering.schemas import AnswerResponse
 from app.services.retrieval.schemas import RetrievalResponse
@@ -76,6 +76,8 @@ class GroqAnswerGenerator(AnswerGenerator):
         except Exception as exc:
             answer = self._compose_grounded_answer(query, fallback_citations)
             confidence = self._estimate_confidence(retrieval)
+            lang = _detect_language(query)
+            disclaimer = DISCLAIMER_ID if lang == "id" else DISCLAIMER_EN
             return AnswerResponse(
                 query=query,
                 answer=answer,
@@ -84,7 +86,7 @@ class GroqAnswerGenerator(AnswerGenerator):
                 related_documents=build_related_documents(selected),
                 refusal_reason=None,
                 clarification_question=None,
-                disclaimer=DISCLAIMER,
+                disclaimer=disclaimer,
                 prompt_version_id=self.prompt_template.prompt_version_id,
                 retrieved_chunk_ids=retrieved_chunk_ids,
                 warnings=[*retrieval.warnings, "groq_answer_fallback_used"],
@@ -104,7 +106,7 @@ class GroqAnswerGenerator(AnswerGenerator):
             related_documents=related_documents,
             refusal_reason=None,
             clarification_question=None,
-            disclaimer=DISCLAIMER,
+            disclaimer=DISCLAIMER_ID if _detect_language(query) == "id" else DISCLAIMER_EN,
             prompt_version_id=self.prompt_template.prompt_version_id,
             retrieved_chunk_ids=retrieved_chunk_ids,
             warnings=retrieval.warnings,
@@ -121,6 +123,12 @@ class GroqAnswerGenerator(AnswerGenerator):
         retrieval: RetrievalResponse,
         retrieved_chunk_ids: list[str],
     ) -> dict[str, Any]:
+        lang = _detect_language(query)
+        lang_instruction = (
+            "Tulis answer dalam bahasa Indonesia yang mudah dipindai"
+            if lang == "id"
+            else "Write the answer in clear, easy-to-scan English"
+        )
         user_prompt = "\n\n".join(
             [
                 render_user_prompt(query, retrieval),
@@ -129,7 +137,7 @@ class GroqAnswerGenerator(AnswerGenerator):
                 "cited_chunk_ids hanya boleh memakai chunk berikut: "
                 + ", ".join(retrieved_chunk_ids),
                 (
-                    "Tulis answer dalam bahasa Indonesia yang mudah dipindai: awali dengan "
+                    f"{lang_instruction}: awali dengan "
                     "kesimpulan singkat, gunakan paragraf pendek atau daftar bernomor bila "
                     "ada beberapa poin. Jangan tulis chunk ID, citation ID, tanda rujukan "
                     "seperti [chunk-id], atau daftar sumber di dalam answer; sumber akan "
