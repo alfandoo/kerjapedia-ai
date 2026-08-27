@@ -257,7 +257,7 @@
 }
 
 .dark .text-\[\#8a7a5e\] {
-  color: #d4a574 !important;
+  color: #f3f4f6 !important;
 }
 
 .dark .text-\[\#303b35\] {
@@ -321,11 +321,11 @@
 }
 
 .dark .hover\:bg-\[\#f6faf9\]:hover {
-  background-color: #141414 !important;
+  background-color: #0a0a0a !important;
 }
 
 .dark .hover\:bg-\[\#f8faf8\]:hover {
-  background-color: #141414 !important;
+  background-color: #0a0a0a !important;
 }
 
 .dark .hover\:border-emas\/40:hover {
