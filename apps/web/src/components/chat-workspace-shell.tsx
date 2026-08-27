@@ -334,43 +334,28 @@ export function ChatWorkspaceShell({
           }
         />
       </div>
-      <div className="mt-2 border-t border-[#dce4df] pt-2">
-        <button
-          ref={profileTriggerRef}
-          type="button"
-          className="flex min-h-11 w-full items-center gap-[11px] rounded-lg px-2.5 text-left text-xs text-tinta transition hover:bg-[#e7eeea]"
-          aria-label={`Buka menu profil ${session?.user.name ?? "pengguna"}`}
-          aria-haspopup="menu"
-          aria-expanded={profileMenuOpen}
-          onClick={() => setProfileMenuOpen((open) => !open)}
-        >
-          <span className="grid size-[30px] shrink-0 place-items-center rounded-full bg-javanese text-[10px] font-bold text-white">
-            {session ? session.user.name.slice(0, 2).toUpperCase() : "TM"}
-          </span>
-          <span className="min-w-0 flex-1">
-            <strong className="block truncate text-xs font-medium">
-              {session ? session.user.name : "Tamu"}
-            </strong>
-            <small className="mt-0.5 block text-[9px] text-muted-text">
-              {session ? session.user.roles.join(", ") : "Belum masuk"}
-            </small>
-          </span>
-        </button>
-      </div>
-      {!session ? (
-        <div className="border-t border-[#dce4df] p-[17px_10px_8px]">
-          <strong className="block text-xs font-semibold text-tinta">
-            Simpan percakapan Anda
-          </strong>
-          <p className="my-[7px] mb-3.5 text-[11px] leading-[1.55] text-muted-text">
-            Masuk agar riwayat dan jawaban tetap tersedia saat Anda kembali.
-          </p>
+      {session ? (
+        <div className="mt-2 border-t border-[#dce4df] pt-2">
           <button
+            ref={profileTriggerRef}
             type="button"
-            className="flex min-h-10 w-full items-center justify-center rounded-full border border-[#bdc9c2] bg-white text-xs font-semibold text-tinta transition hover:border-javanese"
-            onClick={(event) => openAuthModal(event.currentTarget)}
+            className="flex min-h-11 w-full items-center gap-[11px] rounded-lg px-2.5 text-left text-xs text-tinta transition hover:bg-[#e7eeea]"
+            aria-label={`Buka menu profil ${session.user.name}`}
+            aria-haspopup="menu"
+            aria-expanded={profileMenuOpen}
+            onClick={() => setProfileMenuOpen((open) => !open)}
           >
-            Masuk
+            <span className="grid size-[30px] shrink-0 place-items-center rounded-full bg-javanese text-[10px] font-bold text-white">
+              {session.user.name.slice(0, 2).toUpperCase()}
+            </span>
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate text-xs font-medium">
+                {session.user.name}
+              </strong>
+              <small className="mt-0.5 block text-[9px] text-muted-text">
+                {session.user.roles.join(", ")}
+              </small>
+            </span>
           </button>
         </div>
       ) : null}

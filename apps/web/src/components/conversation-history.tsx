@@ -115,22 +115,6 @@ export function ConversationHistory({
         </button>
       ) : null}
       <div className="mt-[22px] min-h-0 flex-1 overflow-y-auto" aria-busy={historyEnabled && loading}>
-        {!historyEnabled ? (
-          <div className="px-0.5 py-1">
-            <strong className="block text-xs font-semibold text-[#344139]">
-              Riwayat tamu tidak disimpan
-            </strong>
-            <p className="my-1.5 text-[11px] leading-[1.55] text-muted-text">
-              Masuk agar percakapan tetap tersedia saat Anda kembali.
-            </p>
-            <Link
-              href="/register"
-              className="inline-flex min-h-[34px] items-center rounded-[7px] border border-[#b7c9be] bg-white px-2.5 text-[11px] font-semibold text-javanese transition hover:border-javanese hover:bg-[#f3f8f5]"
-            >
-              Masuk untuk menyimpan
-            </Link>
-          </div>
-        ) : null}
         {loading ? (
           <p
             className={`px-2.5 py-1 text-xs leading-relaxed text-muted-text ${
