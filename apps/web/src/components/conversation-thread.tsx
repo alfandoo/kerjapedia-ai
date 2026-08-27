@@ -58,7 +58,8 @@ type AnswerBlock =
   | { kind: "list"; ordered: boolean; items: string[] };
 
 function inlineRendered(text: string) {
-  return text.split(/(\*\*[^*\n]+\*\*)/g).filter(Boolean).map((part, index) =>
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  return cleaned.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((part, index) =>
     part.startsWith("**") && part.endsWith("**") ? (
       <strong key={index}>{part.slice(2, -2)}</strong>
     ) : (

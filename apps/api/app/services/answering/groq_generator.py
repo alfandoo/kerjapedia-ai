@@ -200,33 +200,21 @@ def _clean_answer_text(answer: str, retrieved_chunk_ids: list[str]) -> str:
         cleaned = re.sub(rf"\[\s*{escaped_id}\s*\]", "", cleaned)
     # Normalize line endings
     cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n")
-    # Remove JSON escape sequences
     cleaned = cleaned.replace("\\n", "\n").replace("\\t", " ")
-    # Collapse multiple newlines into paragraph breaks
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    # Process line by line
-    lines = cleaned.split("\n")
-    result: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            result.append("")
-            continue
-        # Keep list items as-is
-        if re.match(r"^[-•∙]\s+", stripped) or re.match(r"^\d+[.)]\s+", stripped):
-            result.append(stripped)
-        elif result and result[-1] == "":
-            # After a blank line, treat as new paragraph
-            result.append(stripped)
-        elif result and result[-1] != "":
-            # Join with previous line (within same paragraph)
-            result[-1] = result[-1] + " " + stripped
-        else:
-            result.append(stripped)
-    cleaned = "\n".join(result)
-    # Final cleanup
-    cleaned = re.sub(r"[ \t]+([.,;:!?])", r"\1", cleaned)
-    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
-    # Remove any remaining orphaned newlines within text
-    cleaned = re.sub(r"([^\n])\n([^\n-•∙\d])", r"\1 \2", cleaned)
-    return cleaned.strip()
+    # Protect list items before joining
+    list_pattern = re.compile(r"^([-•∙]\s+|\d+[.)]\s+).+$", re.MULTILINE)
+    protected: list[str] = []
+    temp = cleaned
+    for m in list_pattern.finditer(cleaned):
+        protected.append(m.group(0))
+        temp = temp.replace(m.group(0), f"\x00LIST{len(protected) - 1}\x00")
+    # Collapse everything into flowing text
+    temp = re.sub(r"\n{2,}", "\n", temp)
+    temp = re.sub(r"\n", " ", temp)
+    temp = re.sub(r"[ \t]{2,}", " ", temp)
+    # Restore list items
+    for i, item in enumerate(protected):
+        temp = temp.replace(f"\x00LIST{i}\x00", f"\n{item}")
+    # Clean up
+    temp = re.sub(r"[ \t]+([.,;:!?])", r"\1", temp)
+    return temp.strip()

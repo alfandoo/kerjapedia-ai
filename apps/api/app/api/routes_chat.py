@@ -32,7 +32,7 @@ from app.services.retrieval.relationships import relationship_index_for_manifest
 from app.services.retrieval.store import load_artifact_documents
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-_STREAM_TOKEN_RE = re.compile(r"\S+\s*")
+_STREAM_TOKEN_RE = re.compile(r"\S[^\n]*\s*")
 
 
 def _anonymous_user(guest_id: str | None = None) -> UserRecord:
