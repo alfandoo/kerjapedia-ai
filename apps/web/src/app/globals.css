@@ -148,6 +148,115 @@
   --sidebar-border: rgba(255,255,255,0.08);
 }
 
+/* ── Dark mode overrides for hardcoded Tailwind classes ── */
+.dark body,
+.dark main,
+.dark section {
+  background-color: #0a0f0d !important;
+  color: #f3f4f6 !important;
+}
+
+.dark .bg-white {
+  background-color: #1a1f1c !important;
+}
+
+.dark .bg-\[\#f9f9f9\] {
+  background-color: #1a1f1c !important;
+}
+
+.dark .bg-\[\#f0f2f0\] {
+  background-color: #252b28 !important;
+}
+
+.dark .bg-\[rgba\(10,28,25,0\.5\)\] {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+}
+
+.dark .text-tinta {
+  color: #f3f4f6 !important;
+}
+
+.dark .text-muted-text {
+  color: #9ca3af !important;
+}
+
+.dark .text-\[\#8a928d\] {
+  color: #9ca3af !important;
+}
+
+.dark .border-\[\#e8e4dc\] {
+  border-color: #2d3530 !important;
+}
+
+.dark .border-border {
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+.dark .hover\:bg-\[\#f0f2f0\]:hover {
+  background-color: #252b28 !important;
+}
+
+.dark .border-t-\[\#e8e4dc\] {
+  border-color: #2d3530 !important;
+}
+
+.dark .border-b-\[\#e8e4dc\] {
+  border-color: #2d3530 !important;
+}
+
+/* Topbar dark */
+.dark header {
+  background-color: #111827 !important;
+  border-color: #2d3530 !important;
+}
+
+/* Sidebar dark */
+.dark nav {
+  background-color: transparent !important;
+}
+
+.dark aside {
+  background-color: #111827 !important;
+  border-color: #2d3530 !important;
+}
+
+/* Input area dark */
+.dark textarea,
+.dark input {
+  background-color: #1a1f1c !important;
+  color: #f3f4f6 !important;
+  border-color: #2d3530 !important;
+}
+
+.dark textarea::placeholder,
+.dark input::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Suggestion cards dark */
+.dark .shadow-sm {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Icon buttons dark */
+.dark button svg {
+  color: #9ca3af !important;
+}
+
+.dark button:hover svg {
+  color: #f3f4f6 !important;
+}
+
+/* Links in dark */
+.dark a {
+  color: inherit;
+}
+
+/* Modal backdrop dark */
+.dark [role="dialog"] ~ button {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
