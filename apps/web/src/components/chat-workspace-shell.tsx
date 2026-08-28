@@ -644,7 +644,7 @@ export function ChatWorkspaceShell({
           ) : null}
         </header>
         {session && profileMenuOpen ? profileMenu : null}
-        <main className="min-h-0 flex-1 overflow-hidden bg-white max-[760px]:h-full">
+        <main className="chat-workspace-surface min-h-0 flex-1 overflow-hidden bg-white max-[760px]:h-full">
           {children}
         </main>
       </div>

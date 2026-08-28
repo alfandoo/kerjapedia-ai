@@ -44,7 +44,7 @@ export function ChatComposer({
       >
         {translate("chat.inputLabel")}
       </label>
-      <div className="relative rounded-2xl border border-[#dce4df] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition focus-within:border-emas/50 focus-within:shadow-[0_0_0_3px_rgba(201,162,39,0.08)]">
+      <div className="chat-composer-surface relative rounded-2xl border border-[#dce4df] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition focus-within:border-emas/50 focus-within:shadow-[0_0_0_3px_rgba(201,162,39,0.08)]">
         <textarea
           ref={inputRef}
           id="question-input"

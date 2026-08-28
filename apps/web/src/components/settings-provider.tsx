@@ -42,18 +42,10 @@ function getSystemLanguage(): "id" | "en" {
 
 function applyDarkClass(resolved: "dark" | "light") {
   const root = document.documentElement;
-  const body = document.body;
-  if (resolved === "dark") {
-    root.classList.add("dark");
-    root.classList.remove("light");
-    body.style.backgroundColor = "#000000";
-    body.style.color = "#f3f4f6";
-  } else {
-    root.classList.remove("dark");
-    root.classList.add("light");
-    body.style.backgroundColor = "";
-    body.style.color = "";
-  }
+  root.classList.toggle("dark", resolved === "dark");
+  root.classList.toggle("light", resolved === "light");
+  root.style.colorScheme = resolved;
+  root.dataset.theme = resolved;
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -89,7 +81,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const translate = useCallback((key: TranslationKey) => t(key, resolvedLanguage), [resolvedLanguage]);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("settings-theme") as Theme | null;
+    const storedTheme = localStorage.getItem("settings-theme");
+    const savedTheme: Theme | null =
+      storedTheme === "system" || storedTheme === "dark" || storedTheme === "light"
+        ? storedTheme
+        : null;
     const savedLang = localStorage.getItem("settings-language") as "auto" | "id" | "en" | null;
     if (savedTheme) {
       setThemeState(savedTheme);
