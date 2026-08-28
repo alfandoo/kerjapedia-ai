@@ -15,7 +15,6 @@ import {
   LogOut,
   Menu,
   PanelLeftClose,
-  Pencil,
   Plus,
   Search,
   Scale,
@@ -206,7 +205,7 @@ export function ChatWorkspaceShell({
         {session ? (
           <Link
             href="/chat"
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-1 text-tinta transition hover:bg-[#e9efeb]"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-1 text-tinta transition hover:bg-[#ececec]"
             aria-label="KerjaPedia AI beranda"
           >
             <Scale className="size-[23px]" />
@@ -217,7 +216,7 @@ export function ChatWorkspaceShell({
         ) : (
           <Link
             href="/"
-            className="grid size-10 place-items-center rounded-[9px] text-tinta transition hover:bg-[#e9efeb]"
+            className="grid size-10 place-items-center rounded-[9px] text-tinta transition hover:bg-[#ececec]"
             aria-label="KerjaPedia AI beranda"
           >
             <Scale className="size-[23px]" />
@@ -226,7 +225,7 @@ export function ChatWorkspaceShell({
         <div className="flex flex-none items-center gap-0.5">
           <button
             type="button"
-            className="grid size-[38px] place-items-center rounded-lg text-[#48534d] transition hover:bg-[#e9efeb]"
+            className="grid size-[38px] place-items-center rounded-lg text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-foreground"
             aria-label={translate("sidebar.search")}
             aria-expanded={chatSearchOpen}
             onClick={(event) => openChatSearch(event.currentTarget)}
@@ -235,7 +234,7 @@ export function ChatWorkspaceShell({
           </button>
           <button
             type="button"
-            className="grid size-[38px] place-items-center rounded-lg text-[#48534d] transition hover:bg-[#e9efeb] max-[760px]:hidden"
+            className="grid size-[38px] place-items-center rounded-lg text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-foreground max-[760px]:hidden"
             aria-label="Tutup sidebar"
             onClick={() => onSidebarExpandedChange(false)}
           >
@@ -243,7 +242,7 @@ export function ChatWorkspaceShell({
           </button>
           <button
             type="button"
-            className="grid size-[38px] place-items-center rounded-lg text-[#48534d] transition hover:bg-[#e9efeb] hidden max-[760px]:grid"
+            className="grid size-[38px] place-items-center rounded-lg text-[#676767] transition hover:bg-[#ececec] hidden max-[760px]:grid"
             ref={mobileCloseRef}
             aria-label="Tutup riwayat"
             onClick={() => {
@@ -256,7 +255,7 @@ export function ChatWorkspaceShell({
         </div>
       </div>
       {chatSearchOpen ? (
-        <div className="relative mb-2 mt-1 grid min-h-[42px] grid-cols-[20px_minmax(0,1fr)_34px] items-center gap-[7px] rounded-[9px] border border-[#bdc9c2] bg-white py-0 pl-2.5 pr-[3px]">
+        <div className="relative mb-2 mt-1 grid min-h-[42px] grid-cols-[20px_minmax(0,1fr)_34px] items-center gap-[7px] rounded-[9px] border border-[#e5e5e5] bg-white py-0 pl-2.5 pr-[3px]">
           <Search className="size-[17px]" />
           <label htmlFor="sidebar-chat-search" className="sr-only">
             {translate("sidebar.search")}
@@ -268,7 +267,7 @@ export function ChatWorkspaceShell({
             placeholder={`${translate("sidebar.search")}...`}
             value={chatSearchQuery}
             onChange={(event) => setChatSearchQuery(event.target.value)}
-            className="min-w-0 bg-transparent text-[11px] text-tinta outline-none placeholder:text-[#8a928d]"
+            className="min-w-0 bg-transparent text-[11px] text-tinta outline-none placeholder:text-[#676767]"
           />
           <button
             type="button"
@@ -277,19 +276,19 @@ export function ChatWorkspaceShell({
               setChatSearchOpen(false);
               setChatSearchQuery("");
             }}
-            className="grid size-[34px] place-items-center rounded-md text-[#637168] transition hover:bg-[#edf2ef]"
+            className="grid size-[34px] place-items-center rounded-md text-[#676767] transition hover:bg-[#ececec]"
           >
             <X className="size-4" />
           </button>
         </div>
       ) : null}
       <nav
-        className={`grid gap-[3px] ${session ? "border-b border-[#dce4df] pb-3.5" : ""}`}
+        className={`grid gap-[3px] ${session ? "border-b border-[#e5e5e5] pb-3.5" : ""}`}
         aria-label={session ? "Navigasi pengguna" : "Navigasi guest"}
       >
         <button
           type="button"
-          className="flex min-h-11 items-center gap-[11px] rounded-lg bg-[#e8eeea] px-2.5 text-left text-xs font-semibold text-tinta transition hover:bg-[#e3ebe6]"
+          className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-left text-xs font-semibold text-tinta transition hover:bg-[#ececec]"
           onClick={() => {
             onNewConversation();
             onMobileSidebarOpenChange(false);
@@ -300,14 +299,14 @@ export function ChatWorkspaceShell({
         </button>
         <Link
           href="/search"
-          className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#e3ebe6]"
+          className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#ececec]"
         >
           <Search className="size-[18px]" />
           <span>{translate("sidebar.searchRegulations")}</span>
         </Link>
         <Link
           href="/legal/disclaimer"
-          className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#e3ebe6]"
+          className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#ececec]"
         >
           <FileText className="size-[18px]" />
           <span>{translate("sidebar.legal")}</span>
@@ -339,11 +338,11 @@ export function ChatWorkspaceShell({
         />
       </div>
       {session ? (
-        <div className="mt-2 border-t border-[#dce4df] pt-2">
+        <div className="mt-2 border-t border-[#e5e5e5] pt-2">
           <button
             ref={profileTriggerRef}
             type="button"
-            className="flex min-h-11 w-full items-center gap-[11px] rounded-lg px-2.5 text-left text-xs text-tinta transition hover:bg-[#e7eeea]"
+            className="flex min-h-11 w-full items-center gap-[11px] rounded-lg px-2.5 text-left text-xs text-tinta transition hover:bg-[#ececec]"
             aria-label={`Buka menu profil ${session.user.name}`}
             aria-haspopup="menu"
             aria-expanded={profileMenuOpen}
@@ -353,9 +352,7 @@ export function ChatWorkspaceShell({
               {session.user.name.slice(0, 2).toUpperCase()}
             </span>
             <span className="min-w-0 flex-1">
-              <strong className="block truncate text-xs font-medium">
-                {session.user.name}
-              </strong>
+              <strong className="block truncate text-xs font-medium">{session.user.name}</strong>
               <small className="mt-0.5 block text-[9px] text-muted-text">
                 {session.user.roles.join(", ")}
               </small>
@@ -364,15 +361,23 @@ export function ChatWorkspaceShell({
         </div>
       ) : null}
       {!session ? (
-        <div className="mt-auto border-t border-[#e8e4dc]">
+        <div className="mt-auto border-t border-[#e5e5e5]">
           <nav className="grid gap-0.5 p-2" aria-label="Menu tamu">
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-[#f0f2f0]"
+              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-[#ececec]"
             >
               <span className="flex size-5 shrink-0 items-center justify-center">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-[18px]"
+                >
                   <circle cx="12" cy="12" r="3" />
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                 </svg>
@@ -381,22 +386,38 @@ export function ChatWorkspaceShell({
             </button>
             <Link
               href="/legal/disclaimer"
-              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-[#f0f2f0]"
+              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-[#ececec]"
             >
               <span className="flex size-5 shrink-0 items-center justify-center">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-[18px]"
+                >
                   <circle cx="12" cy="12" r="10" />
                   <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                   <path d="M12 17h.01" />
                 </svg>
               </span>
               <span className="flex-1">{translate("sidebar.help")}</span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 text-[#8a928d]">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="size-4 text-[#676767]"
+              >
                 <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
               </svg>
             </Link>
           </nav>
-          <div className="border-t border-[#e8e4dc] p-4">
+          <div className="border-t border-[#e5e5e5] p-4">
             <h3 className="text-[15px] font-semibold text-tinta">
               {translate("sidebar.loginTitle")}
             </h3>
@@ -405,7 +426,7 @@ export function ChatWorkspaceShell({
             </p>
             <button
               type="button"
-              className="mt-3 flex min-h-[40px] w-full items-center justify-center rounded-full border border-[#dce4df] bg-white text-[13px] font-semibold text-tinta transition hover:border-javanese hover:bg-[#f5f8f6]"
+              className="mt-3 flex min-h-[40px] w-full items-center justify-center rounded-full border border-[#e5e5e5] bg-white text-[13px] font-semibold text-tinta transition hover:border-javanese hover:bg-[#ececec]"
               onClick={(event) => openAuthModal(event.currentTarget, "login")}
             >
               {translate("sidebar.loginButton")}
@@ -472,13 +493,13 @@ export function ChatWorkspaceShell({
             className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
             onClick={() => setProfileMenuOpen(false)}
           >
-<Settings className="size-[18px]" />
+            <Settings className="size-[18px]" />
             <span>Pengaturan</span>
           </Link>
         ) : null}
       </div>
       <div className="grid gap-0.5 border-t border-[#4d524e] py-[7px]">
-          <Link
+        <Link
           href="/legal/disclaimer"
           role="menuitem"
           className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
@@ -507,26 +528,22 @@ export function ChatWorkspaceShell({
     >
       <Link
         href="/"
-        className="mb-2 grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
+        className="mb-2 grid size-11 place-items-center rounded-[10px] text-[#0d0d0d] transition hover:bg-[#ececec]"
         aria-label="KerjaPedia AI beranda"
       >
         <Scale className="size-[21px]" />
       </Link>
       <button
         type="button"
-        className={`grid size-11 place-items-center rounded-[10px] transition ${
-          !activeConversationId
-            ? "bg-[#1a1a1a] text-white"
-            : "text-[#28342d] hover:bg-[#e7eeea]"
-        }`}
+        className="grid size-11 place-items-center rounded-[10px] text-[#0d0d0d] transition hover:bg-[#ececec]"
         aria-label={translate("sidebar.newChat")}
         onClick={onNewConversation}
       >
-        <Pencil className="size-[21px]" />
+        <Plus className="size-[18px]" />
       </button>
       <button
         type="button"
-        className="grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
+        className="grid size-11 place-items-center rounded-[10px] text-[#0d0d0d] transition hover:bg-[#ececec]"
         aria-label={translate("sidebar.search")}
         onClick={(event) => openChatSearch(event.currentTarget)}
       >
@@ -534,14 +551,14 @@ export function ChatWorkspaceShell({
       </button>
       <Link
         href="/legal/disclaimer"
-        className="grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
+        className="grid size-11 place-items-center rounded-[10px] text-[#0d0d0d] transition hover:bg-[#ececec]"
         aria-label={translate("sidebar.legal")}
       >
         <FileText className="size-[21px]" />
       </Link>
       <button
         type="button"
-        className="mt-auto grid size-11 place-items-center rounded-[10px] text-[#28342d] transition hover:bg-[#e7eeea]"
+        className="mt-auto grid size-11 place-items-center rounded-[10px] text-[#0d0d0d] transition hover:bg-[#ececec]"
         aria-label={session ? translate("sidebar.profile") : translate("sidebar.login")}
         onClick={(event) => {
           if (session) {
@@ -577,21 +594,21 @@ export function ChatWorkspaceShell({
       ].join(" ")}
     >
       {sidebarExpanded ? (
-        <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#dce4df] bg-[#f6faf9] p-[14px_12px_12px] max-[760px]:hidden">
+        <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#e5e5e5] bg-[#f7f7f8] p-[14px_12px_12px] max-[760px]:hidden">
           {sidebarBody}
         </aside>
       ) : (
-        <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#dce4df] bg-[#f6faf9] p-[14px_8px_12px] max-[760px]:hidden">
+        <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#e5e5e5] bg-[#f7f7f8] p-[14px_8px_12px] max-[760px]:hidden">
           {collapsedRail}
         </aside>
       )}
       <div className="relative flex min-h-0 min-w-0 flex-col bg-white max-[760px]:h-full">
         <header
-          className={`relative z-[5] grid min-h-[58px] items-center gap-2 border-b border-[#dce4df] bg-white/95 px-3.5 py-1.5 backdrop-blur-xl ${topbarColumns}`}
+          className={`relative z-[5] grid min-h-[58px] items-center gap-2 border-b border-[#e5e5e5] bg-white/95 px-3.5 py-1.5 backdrop-blur-xl ${topbarColumns}`}
         >
           <button
             type="button"
-            className={`grid size-11 place-items-center rounded-[9px] text-[#48534d] transition hover:bg-[#e9efeb] max-[760px]:hidden ${
+            className={`grid size-11 place-items-center rounded-[9px] text-[#676767] transition hover:bg-[#ececec] max-[760px]:hidden ${
               sidebarExpanded ? "invisible pointer-events-none" : ""
             }`}
             aria-label={sidebarExpanded ? "Tutup sidebar" : "Buka sidebar"}
@@ -605,7 +622,7 @@ export function ChatWorkspaceShell({
           <button
             ref={mobileMenuRef}
             type="button"
-            className="hidden size-11 place-items-center rounded-[9px] text-[#48534d] transition hover:bg-[#e9efeb] max-[760px]:grid"
+            className="hidden size-11 place-items-center rounded-[9px] text-[#676767] transition hover:bg-[#ececec] max-[760px]:grid"
             aria-label={session ? "Buka riwayat" : "Buka menu"}
             aria-expanded={mobileSidebarOpen}
             onClick={() => onMobileSidebarOpenChange(true)}
@@ -628,14 +645,14 @@ export function ChatWorkspaceShell({
             <div className="flex items-center justify-self-end gap-2 max-[760px]:gap-1.5">
               <button
                 type="button"
-                className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-[#c8d2cc] bg-white px-4 text-xs font-semibold text-[#253029] transition hover:border-[#9dafa4] hover:bg-[#f7faf8] max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
+                className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-[#e5e5e5] bg-white px-4 text-xs font-semibold text-[#0d0d0d] transition hover:border-[#9dafa4] hover:bg-[#ececec] max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
                 onClick={(event) => openAuthModal(event.currentTarget, "login")}
               >
                 {translate("header.login")}
               </button>
               <button
                 type="button"
-                className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-[#c8d2cc] bg-white px-4 text-xs font-semibold text-[#253029] transition hover:border-[#9dafa4] hover:bg-[#f7faf8] max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
+                className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-[#e5e5e5] bg-white px-4 text-xs font-semibold text-[#0d0d0d] transition hover:border-[#9dafa4] hover:bg-[#ececec] max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
                 onClick={(event) => openAuthModal(event.currentTarget, "signup")}
               >
                 {translate("header.signup")}
@@ -650,19 +667,21 @@ export function ChatWorkspaceShell({
       </div>
       {sourceDrawerOpen && sourcePanel ? (
         <aside
-          className="min-h-0 min-w-0 overflow-auto border-l border-[#dce4df] bg-white max-[760px]:hidden"
-          aria-label="Sumber dan kutipan"
+          className="min-h-0 min-w-0 overflow-auto border-l border-border bg-background max-[760px]:hidden"
+          aria-label={translate("source.panelLabel")}
         >
-          <header className="sticky top-0 z-[3] flex min-h-[58px] items-center justify-between border-b border-[#dce4df] bg-white py-1.5 pl-[26px] pr-[18px]">
-            <h2 className="m-0 text-[15px] font-semibold text-tinta">Sumber</h2>
+          <header className="sticky top-0 z-[3] flex min-h-[58px] items-center justify-between border-b border-border bg-background py-1.5 pl-5 pr-[18px]">
+            <h2 className="m-0 text-[15px] font-semibold text-foreground">
+              {translate("source.title")}
+            </h2>
             <button
               ref={sourceCloseRef}
               type="button"
-              className="grid size-[38px] place-items-center rounded-lg text-[#48534d] transition hover:bg-[#e9efeb]"
-              aria-label="Tutup sumber"
+              className="grid size-[38px] place-items-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese"
+              aria-label={translate("source.close")}
               onClick={onSourceDrawerClose}
             >
-<X className="size-5" />
+              <X className="size-5" />
             </button>
           </header>
           {sourcePanel}
@@ -682,7 +701,7 @@ export function ChatWorkspaceShell({
             aria-modal="true"
             aria-label={session ? translate("sidebar.chatHistory") : "KerjaPedia Menu"}
             onKeyDown={keepMobileFocusInside}
-            className="relative z-[1] flex h-full w-[min(86vw,320px)] flex-col overflow-hidden bg-[#f6faf9] p-[14px_12px_12px] shadow-[16px_0_40px_rgba(17,36,26,0.18)]"
+            className="relative z-[1] flex h-full w-[min(86vw,320px)] flex-col overflow-hidden bg-[#f7f7f8] p-[14px_12px_12px] shadow-[16px_0_40px_rgba(17,36,26,0.18)]"
           >
             {sidebarBody}
           </aside>

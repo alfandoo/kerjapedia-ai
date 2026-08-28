@@ -80,7 +80,7 @@ export function AppShell({
           </main>
           {rightPanel ? (
             <aside
-              className="hidden min-h-0 min-w-0 overflow-auto border-l border-[#dce4df] bg-white min-[1181px]:block"
+              className="hidden min-h-0 min-w-0 overflow-auto border-l border-[#e5e5e5] bg-white min-[1181px]:block"
               aria-label="Sumber dan kutipan"
             >
               {rightPanel}
@@ -93,7 +93,7 @@ export function AppShell({
 
   return (
     <div className="min-h-[100svh] bg-white text-tinta">
-      <header className="sticky top-0 z-20 grid min-h-[72px] grid-cols-[280px_minmax(0,1fr)_210px] items-center gap-6 border-b border-[#dce4df] bg-white/95 px-7 backdrop-blur-xl max-[900px]:grid-cols-[1fr_auto] max-[900px]:min-h-[112px] max-[900px]:gap-x-4 max-[900px]:gap-y-2 max-[900px]:px-4 max-[900px]:pt-2.5">
+      <header className="sticky top-0 z-20 grid min-h-[72px] grid-cols-[280px_minmax(0,1fr)_210px] items-center gap-6 border-b border-[#e5e5e5] bg-white/95 px-7 backdrop-blur-xl max-[900px]:grid-cols-[1fr_auto] max-[900px]:min-h-[112px] max-[900px]:gap-x-4 max-[900px]:gap-y-2 max-[900px]:px-4 max-[900px]:pt-2.5">
         <Link
           href="/chat"
           className="flex w-fit items-center gap-2.5 font-display text-[21px] font-semibold text-tinta max-[900px]:text-lg"
@@ -151,13 +151,13 @@ export function AppShell({
       </header>
       <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] min-[1181px]:grid-cols-[300px_minmax(0,1fr)_360px]">
         <aside
-          className="flex flex-col gap-2.5 border-b border-[#dce4df] bg-white/80 p-4 lg:gap-6 lg:border-b-0 lg:border-r lg:p-6"
+          className="flex flex-col gap-2.5 border-b border-[#e5e5e5] bg-white/80 p-4 lg:gap-6 lg:border-b-0 lg:border-r lg:p-6"
           aria-label={translate("sidebar.chatHistory")}
         >
           <div className="flex items-center justify-between gap-4 lg:flex-col lg:items-stretch lg:justify-start">
             <h2 className="text-lg font-bold text-tinta">{translate("sidebar.chatHistory")}</h2>
             <button
-              className="h-11 rounded-[7px] border border-[#dce4df] bg-white px-3.5 text-sm font-semibold text-tinta transition hover:border-javanese hover:text-javanese lg:w-full"
+              className="h-11 rounded-[7px] border border-[#e5e5e5] bg-white px-3.5 text-sm font-semibold text-tinta transition hover:border-javanese hover:text-javanese lg:w-full"
               type="button"
               onClick={onNewConversation}
             >
@@ -182,7 +182,7 @@ export function AppShell({
               <button
                 key={item.conversation_id}
                 type="button"
-                className={`flex min-h-14 w-full items-center gap-2.5 rounded-[7px] border-0 bg-transparent px-3 py-2.5 text-left text-tinta transition hover:translate-x-0.5 hover:bg-[#f6faf9] ${
+                className={`flex min-h-14 w-full items-center gap-2.5 rounded-[7px] border-0 bg-transparent px-3 py-2.5 text-left text-tinta transition hover:translate-x-0.5 hover:bg-[#f7f7f8] ${
                   item.conversation_id === activeConversationId
                     ? "bg-[#dff4f1] text-forest"
                     : ""
@@ -202,7 +202,7 @@ export function AppShell({
           </div>
           <Link
             href="/search"
-            className="hidden items-center justify-center gap-2.5 rounded-[7px] border border-[#dce4df] bg-white text-sm font-semibold text-tinta transition hover:border-javanese hover:text-javanese lg:flex lg:h-11"
+            className="hidden items-center justify-center gap-2.5 rounded-[7px] border border-[#e5e5e5] bg-white text-sm font-semibold text-tinta transition hover:border-javanese hover:text-javanese lg:flex lg:h-11"
           >
             <SearchIcon className="size-[18px] [stroke-width:1.8]" />
             {translate("sidebar.viewAllRegulations")}
@@ -212,7 +212,7 @@ export function AppShell({
           {children}
         </main>
         <aside
-          className="hidden min-w-0 border-l border-[#dce4df] bg-white/80 px-4 pb-6 min-[1181px]:block"
+          className="hidden min-w-0 border-l border-[#e5e5e5] bg-white/80 px-4 pb-6 min-[1181px]:block"
           aria-label="Sumber dan kutipan"
         >
           {rightPanel}

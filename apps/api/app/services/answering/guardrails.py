@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from app.services.answering.generator import DISCLAIMER_ID, DISCLAIMER_EN, _detect_language
+from app.services.answering.generator import DISCLAIMER_EN, DISCLAIMER_ID, _detect_language
 from app.services.answering.prompts import default_prompt_template
 from app.services.answering.schemas import AnswerResponse
 

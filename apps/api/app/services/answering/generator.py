@@ -1,15 +1,11 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 
 from app.services.answering.citations import build_citations, build_related_documents, compact_text
 from app.services.answering.prompts import default_prompt_template, render_user_prompt
 from app.services.answering.schemas import AnswerResponse
 from app.services.retrieval.schemas import RetrievalResponse
-
-_ID_CHARS = set("àáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿāăąćĉċčđēĕėęěĝğġģĥħĩīĭįĳĴĵĸķĸĺļľŀłńņňŉŋōŏőœŕŗřśŝşšţťŧūŭůűųŵŷźżž")
-_EN_MIN, _EN_MAX = 97, 122
 
 DISCLAIMER_ID = (
     "KerjaPedia AI bukan pengganti advokat, konsultan hukum, mediator hubungan "
@@ -73,21 +69,115 @@ _HIGH_RISK_TERMS = {
 def _detect_language(query: str) -> str:
     """Detect if query is primarily Indonesian or English."""
     lower = query.lower()
-    _id_markers = {"apa", "bagaimana", "gimana", "kapan", "dimana", "mengapa", "kenapa",
-                   "adakah", "apakah", "berapa", "siapakah", "kah", "yang", "dan",
-                   "atau", "dalam", "untuk", "dengan", "pada", "adalah", "ini", "itu",
-                   "dari", "ke", "di", "tidak", "bukan", "belum", "akan", "dapat",
-                   "harus", "wajib", "hak", "pekerja", "perusahaan", "undang", "undang",
-                   "peraturan", "pp", "ppno", "perppu", "uu", "pkwt", "phk", "thr",
-                   "bpjs", "k3", "upah", "gaji", "komplain", "sanggahan"}
-    _en_markers = {"what", "how", "when", "where", "why", "which", "who",
-                   "is", "are", "was", "were", "do", "does", "did",
-                   "can", "could", "should", "would", "may", "might",
-                   "the", "a", "an", "and", "or", "but", "in", "on", "at",
-                   "to", "for", "of", "with", "by", "from", "this", "that",
-                   "these", "those", "not", "no", "yes", "if", "then",
-                   "employment", "worker", "labor", "labour", "wage", "salary",
-                   "contract", "termination", "bonus", "insurance", "safety"}
+    _id_markers = {
+        "apa",
+        "bagaimana",
+        "gimana",
+        "kapan",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "adakah",
+        "apakah",
+        "berapa",
+        "siapakah",
+        "kah",
+        "yang",
+        "dan",
+        "atau",
+        "dalam",
+        "untuk",
+        "dengan",
+        "pada",
+        "adalah",
+        "ini",
+        "itu",
+        "dari",
+        "ke",
+        "di",
+        "tidak",
+        "bukan",
+        "belum",
+        "akan",
+        "dapat",
+        "harus",
+        "wajib",
+        "hak",
+        "pekerja",
+        "perusahaan",
+        "undang",
+        "peraturan",
+        "pp",
+        "ppno",
+        "perppu",
+        "uu",
+        "pkwt",
+        "phk",
+        "thr",
+        "bpjs",
+        "k3",
+        "upah",
+        "gaji",
+        "komplain",
+        "sanggahan",
+    }
+    _en_markers = {
+        "what",
+        "how",
+        "when",
+        "where",
+        "why",
+        "which",
+        "who",
+        "is",
+        "are",
+        "was",
+        "were",
+        "do",
+        "does",
+        "did",
+        "can",
+        "could",
+        "should",
+        "would",
+        "may",
+        "might",
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "but",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "of",
+        "with",
+        "by",
+        "from",
+        "this",
+        "that",
+        "these",
+        "those",
+        "not",
+        "no",
+        "yes",
+        "if",
+        "then",
+        "employment",
+        "worker",
+        "labor",
+        "labour",
+        "wage",
+        "salary",
+        "contract",
+        "termination",
+        "bonus",
+        "insurance",
+        "safety",
+    }
     tokens = set(re.findall(r"[a-z]+", lower))
     id_hits = len(tokens & _id_markers)
     en_hits = len(tokens & _en_markers)
@@ -159,40 +249,40 @@ class AnswerGenerator:
 
     def _compose_grounded_answer(self, query: str, citations: list) -> str:
         lang = _detect_language(query)
-        citation_lines = []
+        grounded_sentences = []
         for citation in citations:
             legal_ref = ", ".join(
                 part
-                for part in [
-                    citation.short_title,
-                    citation.article,
-                    citation.paragraph,
-                    f"hal. {citation.page_start}-{citation.page_end}",
-                ]
+                for part in [citation.short_title, citation.article, citation.paragraph]
                 if part
             )
-            citation_lines.append(
-                f"- {compact_text(citation.quote, 220)} [{citation.citation_id}: {legal_ref}]"
-            )
+            quote = compact_text(citation.quote, 220).rstrip(" .")
+            grounded_sentences.append(f"{quote}. ({legal_ref})" if legal_ref else f"{quote}.")
 
         if lang == "id":
             if self._contains_high_risk_term(query):
                 opening = (
                     "Berdasarkan dokumen yang tersedia, berikut ringkasan awal yang perlu "
-                    "diverifikasi lebih lanjut:"
+                    "diverifikasi lebih lanjut."
                 )
             else:
-                opening = "Berdasarkan regulasi yang berlaku, berikut jawaban untuk pertanyaan Anda:"
+                opening = "Berdasarkan regulasi yang berlaku, jawabannya adalah sebagai berikut."
+            closing = (
+                "Untuk penerapan pada kasus tertentu, periksa kembali dokumen dan "
+                "sumber resmi terkait."
+            )
         else:
             if self._contains_high_risk_term(query):
                 opening = (
-                    "Based on the available documents, here is an initial summary that "
-                    "requires further verification:"
+                    "Based on the available documents, this is an initial summary that "
+                    "requires further verification."
                 )
             else:
-                opening = "Based on the applicable regulations, here is the answer to your question:"
+                opening = "Based on the applicable regulations, the answer is as follows."
+            closing = "For a specific case, verify the applicable documents and official sources."
 
-        return "\n\n".join([opening, *citation_lines])
+        body = " ".join(grounded_sentences)
+        return "\n\n".join(part for part in [opening, body, closing] if part)
 
     def _needs_clarification(self, query: str, retrieval: RetrievalResponse) -> bool:
         tokens = _TOKEN_RE.findall(query.lower())
@@ -228,7 +318,7 @@ class AnswerGenerator:
             related_documents=[],
             refusal_reason=None,
             clarification_question=question,
-            disclaimer=DISCLAIMER,
+            disclaimer=DISCLAIMER_ID if lang == "id" else DISCLAIMER_EN,
             prompt_version_id=self.prompt_template.prompt_version_id,
             retrieved_chunk_ids=[],
             warnings=retrieval.warnings,
@@ -247,10 +337,14 @@ class AnswerGenerator:
     ) -> AnswerResponse:
         lang = _detect_language(query)
         if lang == "id":
-            refusal_text = OUT_OF_SCOPE_TEXT_ID if refusal_reason == "out_of_scope_query" else REFUSAL_TEXT_ID
+            refusal_text = (
+                OUT_OF_SCOPE_TEXT_ID if refusal_reason == "out_of_scope_query" else REFUSAL_TEXT_ID
+            )
             disclaimer = DISCLAIMER_ID
         else:
-            refusal_text = OUT_OF_SCOPE_TEXT_EN if refusal_reason == "out_of_scope_query" else REFUSAL_TEXT_EN
+            refusal_text = (
+                OUT_OF_SCOPE_TEXT_EN if refusal_reason == "out_of_scope_query" else REFUSAL_TEXT_EN
+            )
             disclaimer = DISCLAIMER_EN
         return AnswerResponse(
             query=query,

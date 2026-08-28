@@ -2,18 +2,12 @@
 
 import { useEffect, useState } from "react";
 
-import {
-  AlertTriangle,
-  Copy,
-  FileText,
-  Pencil,
-  Share2,
-  ThumbsDown,
-  ThumbsUp,
-} from "lucide-react";
+import { AlertTriangle, Copy, FileText, Pencil, Share2, ThumbsDown, ThumbsUp } from "lucide-react";
 import type { ChatMessage } from "./chat-types";
 import type { FeedbackIssue, FeedbackRating } from "@/lib/api";
 import type { AnswerPayload } from "@/lib/types";
+import type { TranslationKey } from "@/lib/translations";
+import { useSettings } from "./settings-provider";
 
 type FeedbackDetail = {
   issue: FeedbackIssue;
@@ -28,44 +22,42 @@ type ConversationThreadProps = {
   onEditMessage: (message: ChatMessage) => void;
 };
 
-const FEEDBACK_ISSUE_LABELS: { value: FeedbackIssue; label: string }[] = [
-  { value: "citation_incorrect", label: "Citation tidak tepat" },
-  { value: "answer_incomplete", label: "Jawaban tidak lengkap" },
-  { value: "outdated_regulation", label: "Regulasi sudah tidak berlaku" },
-  { value: "other", label: "Lainnya" },
+const FEEDBACK_ISSUE_LABELS: { value: FeedbackIssue; labelKey: TranslationKey }[] = [
+  { value: "citation_incorrect", labelKey: "answer.feedbackCitation" },
+  { value: "answer_incomplete", labelKey: "answer.feedbackIncomplete" },
+  { value: "outdated_regulation", labelKey: "answer.feedbackOutdated" },
+  { value: "other", labelKey: "answer.feedbackOther" },
 ];
 
-const WARNING_LABELS: Record<string, string> = {
-  retrieved_source_status_needs_verification:
-    "Status hukum sumber belum diverifikasi — verifikasi sebelum digunakan.",
-  retrieved_source_contains_historical_or_revoked_document:
-    "Sebagian sumber berstatus historis atau dicabut.",
-  retrieved_source_superseded_by_newer_document:
-    "Sebagian sumber telah diubah atau diganti oleh peraturan yang lebih baru.",
-  retrieved_source_revoked_or_superseded_document:
-    "Sumber dicabut atau digantikan oleh peraturan yang lebih baru.",
+const WARNING_LABEL_KEYS: Record<string, TranslationKey> = {
+  retrieved_source_status_needs_verification: "answer.warningNeedsVerification",
+  retrieved_source_contains_historical_or_revoked_document: "answer.warningHistorical",
+  retrieved_source_superseded_by_newer_document: "answer.warningSuperseded",
+  retrieved_source_revoked_or_superseded_document: "answer.warningRevoked",
 };
 
-function formatMessageTime(value: string) {
-  return new Intl.DateTimeFormat("id-ID", {
+function formatMessageTime(value: string, language: "id" | "en") {
+  return new Intl.DateTimeFormat(language === "id" ? "id-ID" : "en-US", {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
 }
 
 type AnswerBlock =
-  | { kind: "paragraph"; text: string }
-  | { kind: "list"; ordered: boolean; items: string[] };
+  { kind: "paragraph"; text: string } | { kind: "list"; ordered: boolean; items: string[] };
 
 function inlineRendered(text: string) {
   const cleaned = text.replace(/\s+/g, " ").trim();
-  return cleaned.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((part, index) =>
-    part.startsWith("**") && part.endsWith("**") ? (
-      <strong key={index}>{part.slice(2, -2)}</strong>
-    ) : (
-      <span key={index}>{part}</span>
-    )
-  );
+  return cleaned
+    .split(/(\*\*[^*]+\*\*)/g)
+    .filter(Boolean)
+    .map((part, index) =>
+      part.startsWith("**") && part.endsWith("**") ? (
+        <strong key={index}>{part.slice(2, -2)}</strong>
+      ) : (
+        <span key={index}>{part}</span>
+      )
+    );
 }
 
 function answerBlocks(content: string): AnswerBlock[] {
@@ -122,40 +114,34 @@ function answerBlocks(content: string): AnswerBlock[] {
 function AnswerContent({ content, streaming }: { content: string; streaming: boolean }) {
   const blocks = answerBlocks(content);
   return (
-    <div className="mt-1 mb-2 text-[13.5px] leading-[1.75] text-[#2a342e] [&_strong]:font-bold [&_strong]:text-javanese">
+    <div className="mt-1 mb-2 text-[14px] leading-7 text-foreground [&_strong]:font-semibold [&_strong]:text-foreground">
       {blocks.map((block, index) =>
         block.kind === "list" ? (
           block.ordered ? (
             <ol
-              className="mb-3 mt-2 grid max-w-[76ch] list-none gap-1.5 p-0 [counter-reset:answer-point] last:mb-0"
+              className="mb-2 mt-1.5 max-w-[74ch] list-decimal space-y-1 pl-5 marker:text-muted-text last:mb-0"
               key={`list-${index}`}
             >
               {block.items.map((item) => (
-                <li
-                  key={item}
-                  className="grid grid-cols-[22px_minmax(0,1fr)] gap-2 pl-0 [counter-increment:answer-point] before:mt-0.5 before:grid before:size-[20px] before:place-items-center before:rounded-full before:bg-javanese/10 before:text-[10px] before:font-bold before:text-javanese before:content-[counter(answer-point)]"
-                >
+                <li key={item} className="pl-0.5">
                   {inlineRendered(item)}
                 </li>
               ))}
             </ol>
           ) : (
             <ul
-              className="mb-3 mt-2 grid max-w-[76ch] list-none gap-1.5 p-0 last:mb-0"
+              className="mb-2 mt-1.5 max-w-[74ch] list-disc space-y-1 pl-5 marker:text-muted-text last:mb-0"
               key={`list-${index}`}
             >
               {block.items.map((item) => (
-                <li
-                  key={item}
-                  className="grid grid-cols-[22px_minmax(0,1fr)] gap-2 pl-0 before:mt-[9px] before:ml-[7px] before:size-[6px] before:rounded-full before:bg-javanese/60"
-                >
+                <li key={item} className="pl-0.5">
                   {inlineRendered(item)}
                 </li>
               ))}
             </ul>
           )
         ) : (
-          <p className="mb-2.5 max-w-[74ch] break-words last:mb-0" key={`p-${index}`}>
+          <p className="mb-2 max-w-[74ch] break-words last:mb-0" key={`p-${index}`}>
             {inlineRendered(block.text)}
           </p>
         )
@@ -177,6 +163,7 @@ export function ConversationThread({
   onFeedback,
   onEditMessage,
 }: ConversationThreadProps) {
+  const { t: translate, resolvedLanguage } = useSettings();
   const [actionStatus, setActionStatus] = useState<{ messageId: string; text: string } | null>(
     null
   );
@@ -190,37 +177,41 @@ export function ConversationThread({
     return () => window.clearTimeout(timer);
   }, [actionStatus]);
 
-  async function copyText(messageId: string, content: string, successText = "Tersalin") {
+  async function copyText(
+    messageId: string,
+    content: string,
+    successText = translate("answer.copied")
+  ) {
     try {
       await navigator.clipboard.writeText(content);
       setActionStatus({ messageId, text: successText });
     } catch {
-      setActionStatus({ messageId, text: "Tidak dapat menyalin" });
+      setActionStatus({ messageId, text: translate("answer.copyFailed") });
     }
   }
 
   async function shareAnswer(message: ChatMessage) {
     const shareData = {
-      title: "Jawaban KerjaPedia",
+      title: translate("answer.shareTitle"),
       text: message.content,
     };
     if (navigator.share) {
       try {
         await navigator.share(shareData);
-        setActionStatus({ messageId: message.id, text: "Berhasil dibagikan" });
+        setActionStatus({ messageId: message.id, text: translate("answer.shared") });
         return;
       } catch (error) {
         if ((error as DOMException).name === "AbortError") return;
       }
     }
-    await copyText(message.id, message.content, "Jawaban disalin untuk dibagikan");
+    await copyText(message.id, message.content, translate("answer.shareCopied"));
   }
 
   return (
     <div
       className="mx-auto w-full max-w-[760px]"
       aria-live="polite"
-      aria-label="Percakapan"
+      aria-label={translate("answer.conversationLabel")}
     >
       {messages.map((message) =>
         message.role === "user" ? (
@@ -228,37 +219,40 @@ export function ConversationThread({
             className="mb-5 flex flex-col items-end pl-[68px] max-[760px]:pl-0"
             key={message.id}
           >
-            <p className="max-w-[min(82%,560px)] rounded-[18px_18px_4px_18px] bg-[#eef4f0] px-4 py-[11px] text-[13px] leading-[1.55] text-[#29332d]">
+            <p className="user-message-bubble max-w-[min(82%,560px)] rounded-[18px_18px_4px_18px] border border-border bg-accent px-4 py-[11px] text-[13px] leading-relaxed text-foreground">
               {message.content}
             </p>
             <div className="mt-1 flex min-h-[28px] items-center justify-end gap-1">
               <time
-                className="font-mono text-[10px] leading-[1.4] tabular-nums text-[#a0a8a3]"
-                title={formatMessageTime(message.createdAt)}
+                className="font-mono text-[10px] leading-normal tabular-nums text-muted-foreground"
+                title={formatMessageTime(message.createdAt, resolvedLanguage)}
               >
-                {formatMessageTime(message.createdAt)}
+                {formatMessageTime(message.createdAt, resolvedLanguage)}
               </time>
               <div className="flex min-h-7 items-center gap-0.5">
                 <button
                   type="button"
-                  className="grid size-7 place-items-center rounded-lg border border-transparent text-[#8a928d] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
-                  aria-label="Edit pesan"
-                  title="Edit pesan"
+                  className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                  aria-label={translate("answer.editMessage")}
+                  title={translate("answer.editMessage")}
                   onClick={() => onEditMessage(message)}
                 >
                   <Pencil className="size-[16px]" />
                 </button>
                 <button
                   type="button"
-                  className="grid size-7 place-items-center rounded-lg border border-transparent text-[#8a928d] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
-                  aria-label="Salin pesan"
-                  title="Salin pesan"
+                  className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                  aria-label={translate("answer.copyMessage")}
+                  title={translate("answer.copyMessage")}
                   onClick={() => void copyText(message.id, message.content)}
                 >
-                      <Copy className="size-[16px]" />
+                  <Copy className="size-[16px]" />
                 </button>
                 {actionStatus?.messageId === message.id ? (
-                  <span className="mx-1 whitespace-nowrap text-[11px] text-muted-text" role="status">
+                  <span
+                    className="mx-1 whitespace-nowrap text-[11px] text-muted-text"
+                    role="status"
+                  >
                     {actionStatus.text}
                   </span>
                 ) : null}
@@ -267,23 +261,13 @@ export function ConversationThread({
           </article>
         ) : (
           <article className="mb-6" key={message.id}>
-            <div className="rounded-xl border-l-[3px] border-javanese/20 pl-4 transition-colors group-hover:border-javanese/40 max-[760px]:pl-3">
-              <header className="mb-2 flex items-center gap-2.5">
-                <span className="grid size-[28px] place-items-center rounded-lg bg-javanese/10 text-[9px] font-bold text-javanese">
-                  KP
-                </span>
-                <strong className="text-[12px] font-semibold text-[#4a564e]">
-                  {message.streaming ? "Berpikir…" : "Jawaban KerjaPedia"}
-                </strong>
-                <time
-                  className="font-mono text-[10px] leading-[1.4] tabular-nums text-[#a0a8a3]"
-                  title={formatMessageTime(message.createdAt)}
-                >
-                  {formatMessageTime(message.createdAt)}
-                </time>
-              </header>
+            <div className="max-w-[74ch]">
               {message.status && !message.content ? (
-                <div className="inline-flex min-h-[38px] items-center gap-2 text-[13px] text-[#65726b]" role="status" aria-live="polite">
+                <div
+                  className="inline-flex min-h-9 items-center gap-2 text-sm text-muted-foreground"
+                  role="status"
+                  aria-live="polite"
+                >
                   <span
                     className="size-2 rounded-full bg-javanese [animation:editorial-thinking-pulse_1.4s_ease-in-out_infinite]"
                     aria-hidden="true"
@@ -295,29 +279,31 @@ export function ConversationThread({
               )}
               {message.answer?.citations.length ? (
                 <button
-                  className="mt-1 inline-flex min-h-[32px] items-center gap-1.5 rounded-lg border border-[#e2e8e2] bg-[#fafbf9] px-3 text-[11px] font-semibold text-javanese transition hover:border-javanese/40 hover:bg-[#f0f5f1]"
+                  className="mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-border bg-secondary px-3 text-[11px] font-medium text-foreground transition hover:bg-accent"
                   type="button"
                   onClick={() => onShowSources(message.answer as AnswerPayload)}
                 >
                   <FileText className="size-[16px]" />
-                  {message.answer.citations.length} sumber resmi
-                  <span aria-hidden="true" className="text-[10px]">→</span>
+                  {message.answer.citations.length} {translate("answer.officialSources")}
+                  <span aria-hidden="true" className="text-[10px]">
+                    →
+                  </span>
                 </button>
               ) : null}
               {message.answer?.refusal_reason ? (
-                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-[#f0e6d2] bg-[#fffcf5] p-3 text-xs leading-[1.55] text-[#88540d]">
+                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber/30 bg-amber-soft p-3 text-xs leading-relaxed text-amber">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                   <span>
                     {message.answer.refusal_reason === "out_of_scope_query"
-                      ? "KerjaPedia AI hanya menjawab topik ketenagakerjaan Indonesia."
+                      ? translate("answer.outOfScope")
                       : message.answer.refusal_reason === "prompt_injection_detected"
-                        ? "Permintaan diblokir oleh sistem keamanan."
-                        : "Dasar dokumen belum cukup untuk menjawab pertanyaan ini dengan aman."}
+                        ? translate("answer.promptBlocked")
+                        : translate("answer.insufficientSources")}
                   </span>
                 </div>
               ) : null}
               {message.answer?.clarification_question ? (
-                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-[#f0e6d2] bg-[#fffcf5] p-3 text-xs leading-[1.55] text-[#88540d]">
+                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber/30 bg-amber-soft p-3 text-xs leading-relaxed text-amber">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                   <span>{message.answer.clarification_question}</span>
                 </div>
@@ -325,40 +311,40 @@ export function ConversationThread({
               {message.answer?.warnings?.length ? (
                 <div className="mt-3 grid gap-1.5">
                   {message.answer.warnings.map((code) => {
-                    const label = WARNING_LABELS[code];
-                    if (!label) return null;
+                    const labelKey = WARNING_LABEL_KEYS[code];
+                    if (!labelKey) return null;
                     return (
                       <div
-                        className="flex items-start gap-2.5 rounded-lg border border-[#f0e6d2] bg-[#fffcf5] p-3 text-xs leading-[1.55] text-[#88540d]"
+                        className="flex items-start gap-2.5 rounded-lg border border-amber/30 bg-amber-soft p-3 text-xs leading-relaxed text-amber"
                         key={code}
                       >
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                        <span>{label}</span>
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                        <span>{translate(labelKey)}</span>
                       </div>
                     );
                   })}
                 </div>
               ) : null}
               {!message.streaming ? (
-                <footer className="mt-2 flex min-h-[30px] items-center text-[11px] text-muted-text">
+                <footer className="mt-2 flex min-h-8 items-center text-[11px] text-muted-foreground">
                   <div className="flex gap-0.5">
                     <button
                       type="button"
-                      className="grid size-7 place-items-center rounded-lg border border-transparent text-[#8a928d] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
-                      aria-label="Salin jawaban"
-                      title="Salin jawaban"
+                      className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                      aria-label={translate("answer.copyAnswer")}
+                      title={translate("answer.copyAnswer")}
                       onClick={() => void copyText(message.id, message.content)}
                     >
-                  <Copy className="size-[16px]" />
+                      <Copy className="size-[16px]" />
                     </button>
                     <button
                       type="button"
-                      className={`grid size-7 place-items-center rounded-lg border transition ${
+                      className={`grid size-8 place-items-center rounded-lg border transition ${
                         feedback[message.id] === "helpful"
-                          ? "border-javanese/30 bg-[#f0f5f1] text-javanese"
-                          : "border-transparent text-[#8a928d] hover:bg-[#eef2ef] hover:text-[#26312b]"
+                          ? "border-border bg-accent text-foreground"
+                          : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
                       }`}
-                      aria-label="Tandai jawaban membantu"
+                      aria-label={translate("answer.helpful")}
                       aria-pressed={feedback[message.id] === "helpful"}
                       onClick={() => onFeedback(message, "helpful")}
                     >
@@ -366,12 +352,12 @@ export function ConversationThread({
                     </button>
                     <button
                       type="button"
-                      className={`grid size-7 place-items-center rounded-lg border transition ${
+                      className={`grid size-8 place-items-center rounded-lg border transition ${
                         feedback[message.id] === "not_helpful"
-                          ? "border-javanese/30 bg-[#f0f5f1] text-javanese"
-                          : "border-transparent text-[#8a928d] hover:bg-[#eef2ef] hover:text-[#26312b]"
+                          ? "border-border bg-accent text-foreground"
+                          : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
                       }`}
-                      aria-label="Tandai jawaban tidak membantu"
+                      aria-label={translate("answer.notHelpful")}
                       aria-pressed={feedback[message.id] === "not_helpful"}
                       onClick={() => {
                         if (feedbackPanel?.messageId === message.id) {
@@ -387,16 +373,19 @@ export function ConversationThread({
                     </button>
                     <button
                       type="button"
-                      className="grid size-7 place-items-center rounded-lg border border-transparent text-[#8a928d] transition hover:bg-[#eef2ef] hover:text-[#26312b]"
-                      aria-label="Bagikan jawaban"
-                      title="Bagikan jawaban"
+                      className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                      aria-label={translate("answer.shareAnswer")}
+                      title={translate("answer.shareAnswer")}
                       onClick={() => void shareAnswer(message)}
                     >
                       <Share2 className="size-[16px]" />
                     </button>
                   </div>
                   {actionStatus?.messageId === message.id ? (
-                    <span className="mx-1 whitespace-nowrap text-[11px] text-muted-text" role="status">
+                    <span
+                      className="mx-1 whitespace-nowrap text-[11px] text-muted-text"
+                      role="status"
+                    >
                       {actionStatus.text}
                     </span>
                   ) : null}
@@ -405,11 +394,13 @@ export function ConversationThread({
             </div>
             {feedbackPanel?.messageId === message.id ? (
               <div
-                className="mt-3 ml-4 grid max-w-[420px] gap-2.5 rounded-xl border border-[#e2e8e2] bg-[#fafbf9] p-3.5 max-[760px]:ml-3"
+                className="mt-3 grid max-w-[420px] gap-2.5 rounded-xl border border-border bg-secondary p-3.5"
                 role="group"
-                aria-label="Detail feedback"
+                aria-label={translate("answer.feedbackQuestion")}
               >
-                <p className="text-[13px] font-bold text-[#26312b]">Apa yang perlu diperbaiki?</p>
+                <p className="text-[13px] font-semibold text-foreground">
+                  {translate("answer.feedbackQuestion")}
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {FEEDBACK_ISSUE_LABELS.map((option) => (
                     <button
@@ -417,35 +408,35 @@ export function ConversationThread({
                       type="button"
                       className={`rounded-full border px-2.5 py-1.5 text-xs transition hover:border-javanese hover:text-javanese ${
                         issueSelection === option.value
-                          ? "border-javanese bg-[#edf4f0] font-semibold text-javanese"
-                          : "border-[#dbe4db] bg-white text-[#4a564e]"
+                          ? "border-javanese bg-accent font-semibold text-javanese"
+                          : "border-border bg-background text-foreground"
                       }`}
                       aria-pressed={issueSelection === option.value}
                       onClick={() => setIssueSelection(option.value)}
                     >
-                      {option.label}
+                      {translate(option.labelKey)}
                     </button>
                   ))}
                 </div>
                 <textarea
-                  className="w-full resize-y rounded-lg border border-[#dbe4db] bg-white p-2.5 text-[13px] leading-normal text-tinta outline-none transition focus:border-javanese focus:outline-2 focus:outline-offset-1 focus:outline-javanese/40"
+                  className="w-full resize-y rounded-lg border border-border bg-background p-2.5 text-[13px] leading-normal text-foreground outline-none transition placeholder:text-muted-foreground focus:border-javanese focus:outline-2 focus:outline-offset-1 focus:outline-javanese/40"
                   rows={3}
                   maxLength={1000}
-                  placeholder="Tambahkan detail (opsional)..."
+                  placeholder={translate("answer.feedbackOptional")}
                   value={issueComment}
                   onChange={(event) => setIssueComment(event.target.value)}
                 />
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    className="rounded-lg px-3 py-[7px] text-[13px] text-[#68736c] transition hover:bg-[#eef2ef]"
+                    className="rounded-lg px-3 py-[7px] text-[13px] text-muted-foreground transition hover:bg-accent hover:text-foreground"
                     onClick={() => setFeedbackPanel(null)}
                   >
-                    Batal
+                    {translate("answer.feedbackCancel")}
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg bg-javanese px-3.5 py-[7px] text-[13px] font-semibold text-white transition hover:bg-forest disabled:cursor-not-allowed disabled:bg-[#c9d3cb]"
+                    className="rounded-lg bg-javanese px-3.5 py-[7px] text-[13px] font-semibold text-white transition hover:bg-forest disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!issueSelection}
                     onClick={() => {
                       const detail: FeedbackDetail | undefined = issueSelection
@@ -455,7 +446,7 @@ export function ConversationThread({
                       setFeedbackPanel(null);
                     }}
                   >
-                    Kirim feedback
+                    {translate("answer.feedbackSubmit")}
                   </button>
                 </div>
               </div>

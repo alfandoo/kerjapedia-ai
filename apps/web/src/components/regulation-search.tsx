@@ -94,7 +94,7 @@ export function RegulationSearch() {
   }
 
   const selectClass =
-    "h-12 rounded-xl border border-[#dce4df] bg-white px-4 text-sm text-tinta " +
+    "h-12 rounded-xl border border-[#e5e5e5] bg-white px-4 text-sm text-tinta " +
     "outline-none transition focus:border-javanese focus:ring-2 focus:ring-javanese/10";
 
   return (
@@ -114,7 +114,7 @@ export function RegulationSearch() {
 
       <div className="mb-6 flex flex-wrap items-stretch gap-3">
         <label
-          className="flex h-12 min-w-[260px] flex-1 items-center gap-3 rounded-xl border border-[#dce4df] bg-white px-4 transition focus-within:border-javanese focus-within:ring-2 focus-within:ring-javanese/10"
+          className="flex h-12 min-w-[260px] flex-1 items-center gap-3 rounded-xl border border-[#e5e5e5] bg-white px-4 transition focus-within:border-javanese focus-within:ring-2 focus-within:ring-javanese/10"
           htmlFor="regulation-search"
         >
           <SearchIcon className="size-5 [stroke-width:1.8] shrink-0 text-javanese" />
@@ -197,7 +197,7 @@ export function RegulationSearch() {
         </div>
       ) : null}
 
-      <div className="grid min-h-16 grid-cols-[1fr_auto] items-center gap-2 border-b border-[#dce4df] py-4" aria-live="polite">
+      <div className="grid min-h-16 grid-cols-[1fr_auto] items-center gap-2 border-b border-[#e5e5e5] py-4" aria-live="polite">
         <div>
           <h2 className="text-sm font-semibold text-tinta">Daftar regulasi</h2>
           <span className="mt-0.5 block text-xs text-muted-text">
@@ -233,7 +233,7 @@ export function RegulationSearch() {
         ) : null}
 
         {!loading && filtered.length > 0 ? (
-          <div className="hidden grid-cols-[170px_minmax(280px,1fr)_70px_130px_150px] items-center gap-5 border-b border-[#dce4df] py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:grid" aria-hidden="true">
+          <div className="hidden grid-cols-[170px_minmax(280px,1fr)_70px_130px_150px] items-center gap-5 border-b border-[#e5e5e5] py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:grid" aria-hidden="true">
             <span>Jenis regulasi</span>
             <span>Dokumen</span>
             <span>Tahun</span>
@@ -244,10 +244,10 @@ export function RegulationSearch() {
 
         {filtered.map((document) => (
           <article
-            className="grid grid-cols-1 items-center gap-4 border-b border-[#dce4df] px-2 py-5 transition hover:bg-[#f8faf8] md:grid-cols-[170px_minmax(280px,1fr)_70px_130px_150px] md:gap-5 md:px-0"
+            className="grid grid-cols-1 items-center gap-4 border-b border-[#e5e5e5] px-2 py-5 transition hover:bg-[#f7f7f8] md:grid-cols-[170px_minmax(280px,1fr)_70px_130px_150px] md:gap-5 md:px-0"
             key={document.document_id}
           >
-            <div className="border-r border-[#dce4df] pr-5">
+            <div className="border-r border-[#e5e5e5] pr-5">
               <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-forest">
                 {document.regulation_type}
               </span>

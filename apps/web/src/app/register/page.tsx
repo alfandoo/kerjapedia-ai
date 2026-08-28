@@ -39,7 +39,7 @@ function RegisterPageContent() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_50%_0,#f4fbfa_0,#fff_32rem)] p-6">
-      <div className="w-full max-w-[400px] rounded-2xl border border-[#dce4df] bg-white p-[44px_36px_36px] shadow-[0_16px_40px_rgba(21,32,31,0.08)]">
+      <div className="w-full max-w-[400px] rounded-2xl border border-[#e5e5e5] bg-white p-[44px_36px_36px] shadow-[0_16px_40px_rgba(21,32,31,0.08)]">
         <div className="mb-7 flex items-center gap-2.5">
           <ScaleIcon className="size-[30px] [stroke-width:2] text-javanese" />
           <span className="text-xl font-bold text-tinta">KerjaPedia AI</span>
@@ -69,7 +69,7 @@ function RegisterPageContent() {
                 required
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="h-[46px] w-full rounded-[10px] border border-[#dce4df] bg-[#f6faf9] px-3.5 text-sm text-tinta outline-none transition focus:border-javanese focus:ring-2 focus:ring-javanese/10"
+                className="h-[46px] w-full rounded-[10px] border border-[#e5e5e5] bg-[#f7f7f8] px-3.5 text-sm text-tinta outline-none transition focus:border-javanese focus:ring-2 focus:ring-javanese/10"
               />
             </>
           ) : null}
@@ -86,7 +86,7 @@ function RegisterPageContent() {
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="h-[46px] w-full rounded-[10px] border border-[#dce4df] bg-[#f6faf9] px-3.5 text-sm text-tinta outline-none transition focus:border-javanese focus:ring-2 focus:ring-javanese/10"
+            className="h-[46px] w-full rounded-[10px] border border-[#e5e5e5] bg-[#f7f7f8] px-3.5 text-sm text-tinta outline-none transition focus:border-javanese focus:ring-2 focus:ring-javanese/10"
           />
           <label
             htmlFor="reg-password"
@@ -103,7 +103,7 @@ function RegisterPageContent() {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="h-[46px] w-full rounded-[10px] border border-[#dce4df] bg-[#f6faf9] px-3.5 pr-11 text-sm text-tinta outline-none transition focus:border-javanese focus:ring-2 focus:ring-javanese/10"
+              className="h-[46px] w-full rounded-[10px] border border-[#e5e5e5] bg-[#f7f7f8] px-3.5 pr-11 text-sm text-tinta outline-none transition focus:border-javanese focus:ring-2 focus:ring-javanese/10"
             />
             <button
               type="button"

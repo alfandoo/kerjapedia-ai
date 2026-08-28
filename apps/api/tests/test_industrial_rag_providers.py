@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from app.api.state import state
 from app.core.config import settings
 from app.main import app
-from app.services.answering.groq_generator import GroqAnswerGenerator
+from app.services.answering.groq_generator import GroqAnswerGenerator, _clean_answer_text
 from app.services.ingestion.embeddings import BGEM3EmbeddingProvider
 from app.services.ingestion.schemas import Chunk, DocumentMetadata, EmbeddedChunk
 from app.services.retrieval.pinecone_store import PineconeConfig, PineconeRetrievalStore
@@ -199,9 +199,7 @@ class FakeGroqClient:
 
     def create(self, **kwargs):
         content = self.payload if isinstance(self.payload, str) else json.dumps(self.payload)
-        return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
-        )
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
 
 
 def retrieval_response() -> RetrievalResponse:
@@ -234,6 +232,34 @@ def retrieval_response() -> RetrievalResponse:
         )
     )
     return store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
+
+
+def test_clean_answer_text_preserves_paragraphs_and_compact_lists() -> None:
+    answer = (
+        "Jawaban langsung pada baris pertama.\n"
+        "Baris lanjutan tetap menjadi paragraf yang sama.\n\n"
+        "- Syarat pertama\n"
+        "- Syarat kedua\n\n"
+        "Catatan praktis penutup."
+    )
+
+    cleaned = _clean_answer_text(answer, [])
+
+    assert cleaned == (
+        "Jawaban langsung pada baris pertama. Baris lanjutan tetap menjadi paragraf yang sama.\n\n"
+        "- Syarat pertama\n- Syarat kedua\n\n"
+        "Catatan praktis penutup."
+    )
+
+
+def test_clean_answer_text_removes_chunk_ids_without_breaking_prose() -> None:
+    cleaned = _clean_answer_text(
+        "Hak pekerja diatur dalam Pasal 15 [[chunk-1]].\nLihat ketentuan terkait [chunk-1].",
+        ["chunk-1"],
+    )
+
+    assert "chunk-1" not in cleaned
+    assert cleaned == "Hak pekerja diatur dalam Pasal 15. Lihat ketentuan terkait."
 
 
 def test_groq_generator_accepts_structured_json() -> None:

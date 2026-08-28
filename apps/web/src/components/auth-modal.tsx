@@ -212,7 +212,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
 
   const labelClass = "mt-1 text-[13px] font-bold text-muted-text first:mt-0";
   const inputClass =
-    "h-11 w-full rounded-xl border border-[#dce4df] bg-[#f6faf9] px-4 text-sm text-tinta outline-none transition placeholder:text-[#9aa69f] focus:border-javanese focus:ring-2 focus:ring-javanese/10";
+    "h-11 w-full rounded-xl border border-[#e5e5e5] bg-[#f7f7f8] px-4 text-sm text-tinta outline-none transition placeholder:text-[#676767] focus:border-javanese focus:ring-2 focus:ring-javanese/10";
   const submitClass =
     "min-h-[54px] w-full rounded-full bg-javanese text-sm font-bold text-white transition hover:bg-forest disabled:cursor-wait disabled:opacity-70";
 
@@ -226,7 +226,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
       />
       <div
         ref={dialogRef}
-        className="relative w-[min(430px,100%)] max-h-[min(660px,calc(100svh-40px))] overflow-hidden rounded-[20px] border border-[#d6ddd8] bg-white shadow-[0_24px_70px_rgba(18,42,29,0.18)] max-[760px]:w-full max-[760px]:max-h-[calc(100svh_-_24px_-_env(safe-area-inset-bottom))] max-[760px]:rounded-[18px]"
+        className="relative w-[min(430px,100%)] max-h-[min(660px,calc(100svh-40px))] overflow-hidden rounded-[20px] border border-[#e5e5e5] bg-white shadow-[0_24px_70px_rgba(18,42,29,0.18)] max-[760px]:w-full max-[760px]:max-h-[calc(100svh_-_24px_-_env(safe-area-inset-bottom))] max-[760px]:rounded-[18px]"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -235,7 +235,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
       >
         <button
           type="button"
-          className="absolute right-3 top-3 z-[2] grid size-11 place-items-center rounded-full border-0 bg-white text-[#26322b] transition hover:bg-[#f1f5f2]"
+          className="absolute right-3 top-3 z-[2] grid size-11 place-items-center rounded-full border-0 bg-white text-[#0d0d0d] transition hover:bg-[#ececec]"
           aria-label="Tutup"
           disabled={submitting}
           onClick={resetAndClose}
@@ -265,7 +265,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                 type="button"
                 disabled
                 aria-disabled="true"
-                className="grid min-h-[54px] grid-cols-[28px_minmax(0,1fr)_78px] items-center rounded-full border border-[#d0d8d3] bg-[#fafcfb] px-[14px] text-sm font-semibold text-[#536058] transition hover:border-[#b7c9be] hover:bg-[#f6faf9] disabled:cursor-not-allowed max-[760px]:grid-cols-[26px_minmax(0,1fr)_70px] max-[760px]:px-2.5 max-[760px]:text-xs"
+                className="grid min-h-[54px] grid-cols-[28px_minmax(0,1fr)_78px] items-center rounded-full border border-[#e5e5e5] bg-[#f7f7f8] px-[14px] text-sm font-semibold text-[#676767] transition hover:border-[#e5e5e5] hover:bg-[#f7f7f8] disabled:cursor-not-allowed max-[760px]:grid-cols-[26px_minmax(0,1fr)_70px] max-[760px]:px-2.5 max-[760px]:text-xs"
               >
                 <span className="grid size-[22px] place-items-center text-[#111713]">
                   {provider.icon}
@@ -279,7 +279,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
           </div>
 
           <div
-            className="my-[30px] grid grid-cols-[1fr_auto_1fr] items-center gap-[18px] text-[10px] font-bold text-[#657169] before:h-px before:bg-[#d6ddd8] before:content-[''] after:h-px after:bg-[#d6ddd8] after:content-['']"
+            className="my-[30px] grid grid-cols-[1fr_auto_1fr] items-center gap-[18px] text-[10px] font-bold text-[#676767] before:h-px before:bg-[#e5e5e5] before:content-[''] after:h-px after:bg-[#e5e5e5] after:content-['']"
             aria-hidden="true"
           >
             <span>{translate("auth.or")}</span>
@@ -347,7 +347,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                 <label htmlFor="auth-modal-password" className={labelClass}>
                   {translate("auth.password")}
                 </label>
-                <div className="grid h-11 grid-cols-[minmax(0,1fr)_52px] overflow-hidden rounded-xl border border-[#dce4df] bg-[#f6faf9] transition focus-within:border-javanese focus-within:ring-2 focus-within:ring-javanese/10">
+                <div className="grid h-11 grid-cols-[minmax(0,1fr)_52px] overflow-hidden rounded-xl border border-[#e5e5e5] bg-[#f7f7f8] transition focus-within:border-javanese focus-within:ring-2 focus-within:ring-javanese/10">
                   <input
                     ref={passwordRef}
                     id="auth-modal-password"
@@ -359,7 +359,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                     minLength={mode === "signup" ? 8 : 1}
                     required
                     onChange={(event) => setPassword(event.target.value)}
-                    className="min-w-0 border-0 bg-transparent px-4 text-sm text-tinta outline-none placeholder:text-[#9aa69f]"
+                    className="min-w-0 border-0 bg-transparent px-4 text-sm text-tinta outline-none placeholder:text-[#676767]"
                   />
                   <button
                     type="button"

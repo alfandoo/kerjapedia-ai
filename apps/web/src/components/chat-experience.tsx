@@ -205,7 +205,7 @@ export function ChatExperience() {
 
         {messages.length === 0 ? (
           <div className="mt-6 flex flex-col items-center gap-3">
-            <div className="inline-flex items-center gap-2.5 rounded-full border border-[#dce4df] bg-[#f6faf9] px-4 py-2.5 text-xs text-[#26312b]">
+            <div className="inline-flex items-center gap-2.5 rounded-full border border-[#e5e5e5] bg-[#f7f7f8] px-4 py-2.5 text-xs text-[#0d0d0d]">
               <strong className="font-semibold text-javanese">
                 Jawaban berbasis dokumen, bukan tebakan.
               </strong>
@@ -219,7 +219,7 @@ export function ChatExperience() {
                 <button
                   key={item}
                   type="button"
-                  className="flex min-h-[46px] cursor-pointer items-center gap-2.5 rounded-lg border border-[#dce4df] bg-white px-3.5 text-left text-[13px] text-[#26312b] transition hover:border-[#9adbd5] hover:bg-[#f6faf9] hover:text-javanese"
+                  className="flex min-h-[46px] cursor-pointer items-center gap-2.5 rounded-lg border border-[#e5e5e5] bg-white px-3.5 text-left text-[13px] text-[#0d0d0d] transition hover:border-[#9adbd5] hover:bg-[#f7f7f8] hover:text-javanese"
                   onClick={() => void handleSubmit(item)}
                 >
                   <MessageSquare className="size-[18px] shrink-0 text-javanese" />
@@ -233,7 +233,7 @@ export function ChatExperience() {
             {messages.map((message) =>
               message.role === "user" ? (
                 <div className="flex justify-end" key={message.id}>
-                  <p className="max-w-[min(78%,560px)] rounded-[18px_18px_4px_18px] bg-[#eef4f0] px-4 py-[11px] text-[13px] leading-[1.55] text-[#29332d]">
+                  <p className="user-message-bubble max-w-[min(78%,560px)] rounded-[18px_18px_4px_18px] border border-transparent bg-[#f4f4f4] px-4 dark:!border-[#424242] dark:!bg-[#2f2f2f] dark:!text-[#ececec] py-[11px] text-[13px] leading-[1.55] text-[#0d0d0d]">
                     {message.content}
                   </p>
                 </div>
@@ -276,14 +276,16 @@ export function ChatExperience() {
                     </div>
                   ) : null}
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#edf1ee] pt-2.5">
-                    <span className="text-[11px] text-muted-text">Apakah jawaban ini membantu?</span>
+                    <span className="text-[11px] text-muted-text">
+                      Apakah jawaban ini membantu?
+                    </span>
                     <div className="flex gap-1">
                       <button
                         type="button"
                         className={`grid size-8 place-items-center rounded-lg border transition ${
                           feedback[message.id] === "helpful"
-                            ? "border-[#afc9bb] bg-[#f5f8f6] text-javanese"
-                            : "border-transparent text-[#68736c] hover:bg-[#eef2ef] hover:text-[#26312b]"
+                            ? "border-[#afc9bb] bg-[#ececec] text-javanese"
+                            : "border-transparent text-[#676767] hover:bg-[#ececec] hover:text-[#0d0d0d]"
                         }`}
                         aria-label="Tandai jawaban membantu"
                         aria-pressed={feedback[message.id] === "helpful"}
@@ -295,8 +297,8 @@ export function ChatExperience() {
                         type="button"
                         className={`grid size-8 place-items-center rounded-lg border transition ${
                           feedback[message.id] === "not_helpful"
-                            ? "border-[#afc9bb] bg-[#f5f8f6] text-javanese"
-                            : "border-transparent text-[#68736c] hover:bg-[#eef2ef] hover:text-[#26312b]"
+                            ? "border-[#afc9bb] bg-[#ececec] text-javanese"
+                            : "border-transparent text-[#676767] hover:bg-[#ececec] hover:text-[#0d0d0d]"
                         }`}
                         aria-label="Tandai jawaban tidak membantu"
                         aria-pressed={feedback[message.id] === "not_helpful"}
@@ -314,7 +316,7 @@ export function ChatExperience() {
 
         {isLoading ? (
           <div
-            className="flex items-center gap-3 rounded-xl border border-[#e8eee8] bg-[#fafbfa] p-4"
+            className="flex items-center gap-3 rounded-xl border border-[#e5e5e5] bg-[#f7f7f8] p-4"
             role="status"
             aria-live="polite"
           >
@@ -323,7 +325,7 @@ export function ChatExperience() {
               aria-hidden="true"
             />
             <div className="flex flex-col gap-0.5">
-              <strong className="text-xs font-semibold text-[#26312b]">
+              <strong className="text-xs font-semibold text-[#0d0d0d]">
                 Menelusuri regulasi yang relevan…
               </strong>
               <span className="text-[11px] text-muted-text">
@@ -344,7 +346,7 @@ export function ChatExperience() {
         <div ref={conversationEndRef} />
 
         <form
-          className="relative rounded-2xl border border-[#dce4df] bg-white p-4 shadow-sm"
+          className="relative rounded-2xl border border-[#e5e5e5] bg-white p-4 shadow-sm"
           onSubmit={(event) => {
             event.preventDefault();
             void handleSubmit();
@@ -368,15 +370,15 @@ export function ChatExperience() {
             maxLength={2000}
             rows={2}
             disabled={isLoading}
-            className="w-full resize-none rounded-xl bg-transparent text-sm leading-[1.65] text-tinta outline-none placeholder:text-[#8a928d] disabled:cursor-not-allowed"
+            className="w-full resize-none rounded-xl bg-transparent text-sm leading-[1.65] text-tinta outline-none placeholder:text-[#676767] disabled:cursor-not-allowed"
           />
-          <span className="pointer-events-none text-[10px] font-medium tracking-wide text-[#8a928d]">
+          <span className="pointer-events-none text-[10px] font-medium tracking-wide text-[#676767]">
             Ctrl + Enter untuk kirim · {question.length}/2000
           </span>
           <div className="mt-3 flex justify-end gap-2">
             {isLoading ? (
               <button
-                className="grid h-[38px] cursor-pointer items-center gap-1.5 rounded-xl border border-[#dce4df] bg-white px-3.5 text-xs font-semibold text-[#68736c] transition hover:bg-[#f2f5f2] hover:text-[#26312b]"
+                className="grid h-[38px] cursor-pointer items-center gap-1.5 rounded-xl border border-[#e5e5e5] bg-white px-3.5 text-xs font-semibold text-[#676767] transition hover:bg-[#ececec] hover:text-[#0d0d0d]"
                 type="button"
                 onClick={stopRequest}
               >

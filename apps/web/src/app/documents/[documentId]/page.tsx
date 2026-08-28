@@ -98,7 +98,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
           </p>
         ) : null}
         <div className="grid grid-cols-1 gap-4 min-[840px]:grid-cols-[320px_minmax(0,1fr)]">
-          <article className="border-t border-[#dce4df] py-[22px]">
+          <article className="border-t border-[#e5e5e5] py-[22px]">
             <h2 className="mb-3 text-base font-bold text-tinta">Metadata</h2>
             <dl className="my-4 grid gap-2.5">
               <div className="grid grid-cols-1 gap-0.5 min-[840px]:grid-cols-[88px_minmax(0,1fr)]">
@@ -143,14 +143,14 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
               ) : null}
             </dl>
           </article>
-          <article className="border-t border-[#dce4df] py-[22px]">
+          <article className="border-t border-[#e5e5e5] py-[22px]">
             <h2 className="mb-3 text-base font-bold text-tinta">Source viewer</h2>
             {document.available_chunks?.length ? (
               <ul className="m-0 grid list-none gap-2.5 p-0">
                 {document.available_chunks.map((chunk) => (
                   <li
                     key={chunk.chunk_id}
-                    className="rounded-md border border-[#dce4df] bg-[linear-gradient(#fff,#fbfdfd)] p-5"
+                    className="rounded-md border border-[#e5e5e5] bg-[linear-gradient(#fff,#ffffff)] p-5"
                   >
                     <FileIcon className="size-[18px] [stroke-width:1.8] mb-2.5 text-javanese" />
                     <strong className="block text-[13px] text-tinta">{chunk.article}</strong>
@@ -163,7 +163,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
                 ))}
               </ul>
             ) : (
-              <div className="rounded-md border border-[#dce4df] bg-[linear-gradient(#fff,#fbfdfd)] p-7">
+              <div className="rounded-md border border-[#e5e5e5] bg-[linear-gradient(#fff,#ffffff)] p-7">
                 <FileIcon className="mb-5 size-7 [stroke-width:1.8] text-javanese" />
                 <p className="m-0 leading-[1.8] text-tinta">
                   Dokumen belum terindeks — jalankan ingestion dari panel admin.

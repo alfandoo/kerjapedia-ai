@@ -3,6 +3,7 @@
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { SourcePanel } from "./source-panel";
+import { useSettings } from "./settings-provider";
 import type { Citation } from "@/lib/types";
 
 type SourceSheetProps = {
@@ -13,6 +14,7 @@ type SourceSheetProps = {
 };
 
 export function SourceSheet({ open, citations, question, onClose }: SourceSheetProps) {
+  const { t: translate } = useSettings();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
 
@@ -56,8 +58,8 @@ export function SourceSheet({ open, citations, question, onClose }: SourceSheetP
     <div className="fixed inset-0 z-[110]">
       <button
         type="button"
-        className="absolute inset-0 w-full border-0 bg-[rgba(10,28,25,0.5)]"
-        aria-label="Tutup panel sumber"
+        className="absolute inset-0 w-full border-0 bg-black/50 backdrop-blur-[1px]"
+        aria-label={translate("source.closePanel")}
         onClick={onClose}
       />
       <section
@@ -66,27 +68,24 @@ export function SourceSheet({ open, citations, question, onClose }: SourceSheetP
         aria-modal="true"
         aria-labelledby="source-sheet-title"
         onKeyDown={keepFocusInside}
-        className="absolute inset-x-0 bottom-0 max-h-[min(82vh,760px)] w-full overflow-y-auto rounded-t-[20px] bg-white p-5 shadow-[0_-24px_70px_rgba(10,28,25,0.2)] max-[760px]:max-h-[72svh] max-[760px]:rounded-t-[14px] max-[760px]:shadow-[0_-12px_32px_rgba(18,42,31,0.14)] max-[560px]:max-h-[88vh] max-[560px]:p-4"
+        className="absolute inset-x-0 bottom-0 max-h-[min(82vh,760px)] w-full overflow-y-auto rounded-t-[20px] border-t border-border bg-background shadow-[0_-24px_70px_rgba(0,0,0,0.22)] max-[760px]:max-h-[72svh] max-[760px]:rounded-t-[14px] max-[760px]:shadow-[0_-12px_32px_rgba(0,0,0,0.2)] max-[560px]:max-h-[88vh]"
       >
         <span
-          className="mx-auto mb-0.5 mt-1 hidden h-1 w-[42px] rounded-[10px] bg-[#c5cec9] max-[760px]:block"
+          className="mx-auto mb-0.5 mt-3 hidden h-1 w-[42px] rounded-full bg-muted-foreground/35 max-[760px]:block"
           aria-hidden="true"
         />
-        <div className="mb-3 flex items-center justify-between border-b border-[#e8e4dc] pb-3.5">
+        <div className="sticky top-0 z-10 flex min-h-[58px] items-center justify-between border-b border-border bg-background px-5 py-2 max-[560px]:px-4">
           <div>
-            <h2
-              id="source-sheet-title"
-              className="m-0 font-display text-xl font-semibold text-tinta"
-            >
-              Sumber dan kutipan
+            <h2 id="source-sheet-title" className="m-0 text-[15px] font-semibold text-foreground">
+              {translate("source.title")}
             </h2>
           </div>
           <button
             ref={closeButtonRef}
             type="button"
-            className="grid size-[42px] place-items-center rounded-full border border-[#e8e4dc] bg-[#f6faf9] text-2xl leading-none text-tinta transition hover:border-javanese hover:text-javanese"
+            className="grid size-9 place-items-center rounded-lg text-2xl leading-none text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese"
             onClick={onClose}
-            aria-label="Tutup sumber dan kutipan"
+            aria-label={translate("source.close")}
           >
             ×
           </button>

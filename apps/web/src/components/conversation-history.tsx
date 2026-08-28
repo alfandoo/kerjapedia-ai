@@ -100,13 +100,13 @@ export function ConversationHistory({
 
   return (
     <aside
-      className="flex flex-col border-r border-[#dce4df] bg-white p-[32px_22px_20px_32px] max-[760px]:hidden"
+      className="flex flex-col border-r border-[#e5e5e5] bg-white p-[32px_22px_20px_32px] max-[760px]:hidden"
       aria-label={translate("sidebar.chatHistory")}
     >
       <h2 className="mb-5 font-display text-lg font-semibold text-tinta">{translate("sidebar.chatHistory")}</h2>
       {showNewConversation ? (
         <button
-          className="flex min-h-11 items-center gap-2.5 rounded-lg border border-[#bfd0c6] bg-white px-3.5 text-[13px] font-semibold text-javanese transition hover:border-javanese hover:bg-[#f3f8f5]"
+          className="flex min-h-11 items-center gap-2.5 rounded-lg border border-[#e5e5e5] bg-white px-3.5 text-[13px] font-semibold text-javanese transition hover:border-javanese hover:bg-[#ececec]"
           type="button"
           onClick={onNewConversation}
         >
@@ -139,7 +139,7 @@ export function ConversationHistory({
           <div
             key={item.conversation_id}
             className={`group relative grid grid-cols-[minmax(0,1fr)_34px] items-center border-b border-[#edf1ee] transition ${
-              item.conversation_id === activeConversationId ? "bg-[#f5f8f6]" : ""
+              item.conversation_id === activeConversationId ? "bg-[#ececec]" : ""
             } ${historyEnabled ? "" : "hidden"}`}
           >
             {editingId === item.conversation_id ? (
@@ -205,7 +205,7 @@ export function ConversationHistory({
                 >
                   <button
                     type="button"
-                    className={`grid size-8 place-items-center rounded-[7px] text-[#66716b] transition hover:bg-[#dce7e1] hover:text-tinta ${
+                    className={`grid size-8 place-items-center rounded-[7px] text-[#676767] transition hover:bg-[#ececec] hover:text-tinta ${
                       item.conversation_id === activeConversationId
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 aria-expanded:opacity-100"
@@ -229,7 +229,7 @@ export function ConversationHistory({
                       <button
                         type="button"
                         role="menuitem"
-                        className="flex min-h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-xs text-tinta transition hover:bg-[#edf3ef]"
+                        className="flex min-h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-xs text-tinta transition hover:bg-[#ececec]"
                         onClick={() => {
                           setDraftTitle(item.title);
                           setEditingId(item.conversation_id);

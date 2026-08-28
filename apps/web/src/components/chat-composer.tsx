@@ -44,7 +44,7 @@ export function ChatComposer({
       >
         {translate("chat.inputLabel")}
       </label>
-      <div className="chat-composer-surface relative rounded-2xl border border-[#dce4df] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition focus-within:border-emas/50 focus-within:shadow-[0_0_0_3px_rgba(201,162,39,0.08)]">
+      <div className="chat-composer-surface relative rounded-2xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition focus-within:border-emas/50 focus-within:shadow-[0_0_0_3px_rgba(201,162,39,0.08)]">
         <textarea
           ref={inputRef}
           id="question-input"
@@ -63,7 +63,7 @@ export function ChatComposer({
           </span>
           {loading ? (
             <button
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#e8e4dc] bg-white px-3.5 text-xs font-semibold text-[#68736c] transition hover:bg-[#f5f3ef] hover:text-[#26312b]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#e5e5e5] bg-white px-3.5 text-xs font-semibold text-[#676767] transition hover:bg-[#ececec] hover:text-[#0d0d0d]"
               type="button"
               onClick={onCancel}
             >

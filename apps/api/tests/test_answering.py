@@ -62,7 +62,10 @@ def test_answer_generation_returns_structured_citations() -> None:
     assert response.citations[0].article == "Pasal 15"
     assert response.confidence > 0
     assert response.related_documents[0].short_title == "PP 35/2021"
-    assert response.prompt_version_id == "kerjapedia-grounded-answer-v3"
+    assert response.prompt_version_id == "kerjapedia-grounded-answer-v4"
+    assert "\n-" not in response.answer
+    assert "cit_001" not in response.answer
+    assert "PP 35/2021" in response.answer
     assert "bukan pengganti advokat" in response.disclaimer
 
 

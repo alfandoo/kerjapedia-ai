@@ -5,7 +5,12 @@ import re
 from typing import Any
 
 from app.services.answering.citations import build_citations, build_related_documents
-from app.services.answering.generator import DISCLAIMER_ID, DISCLAIMER_EN, _detect_language, AnswerGenerator
+from app.services.answering.generator import (
+    DISCLAIMER_EN,
+    DISCLAIMER_ID,
+    AnswerGenerator,
+    _detect_language,
+)
 from app.services.answering.prompts import render_user_prompt
 from app.services.answering.schemas import AnswerResponse
 from app.services.retrieval.schemas import RetrievalResponse
@@ -64,9 +69,7 @@ class GroqAnswerGenerator(AnswerGenerator):
             if not set(cited_chunk_ids).issubset(set(retrieved_chunk_ids)):
                 raise ValueError("Groq cited chunks that were not retrieved.")
             cited_ids = set(cited_chunk_ids)
-            cited_results = [
-                item for item in selected if item.document.chunk_id in cited_ids
-            ]
+            cited_results = [item for item in selected if item.document.chunk_id in cited_ids]
             citations = build_citations(cited_results)
             related_documents = build_related_documents(cited_results)
             confidence = _coerce_confidence(
@@ -126,31 +129,31 @@ class GroqAnswerGenerator(AnswerGenerator):
         lang = _detect_language(query)
         if lang == "id":
             lang_instruction = (
-                "Tulis answer dalam bahasa Indonesia dengan format yang rapi:\n"
-                "1. Paragraf pembuka 1-2 kalimat langsung menjawab\n"
-                "2. Poin-poin bullet dengan **bold** istilah kunci dan rujukan [1: Pasal, PP]\n"
-                "3. Catatan praktis penutup jika relevan\n"
-                "Total 3-6 poin, 150-350 kata. Tanpa heading, tabel, atau blok kode."
+                "Tulis answer dalam bahasa Indonesia sebagai 1-3 paragraf ringkas dan mengalir. "
+                "Gunakan maksimal 4 bullet hanya untuk syarat, tahapan, pengecualian, atau "
+                "perbandingan. Panjang umumnya 80-220 kata; pertanyaan sederhana boleh lebih "
+                "singkat dan pertanyaan kompleks boleh lebih panjang. Sebut pasal/peraturan "
+                "secara alami. Tanpa heading, tabel, blok kode, atau daftar sumber."
             )
         else:
             lang_instruction = (
-                "Write the answer in clear English with clean formatting:\n"
-                "1. Opening paragraph 1-2 sentences directly answering the question\n"
-                "2. Bullet points with **bold** key terms and references [1: Article, Regulation]\n"
-                "3. Practical note at the end if relevant\n"
-                "Total 3-6 points, 150-350 words. No headings, tables, or code blocks."
+                "Write the answer in clear English as 1-3 concise, flowing paragraphs. Use at "
+                "most 4 bullets only for requirements, steps, exceptions, or comparisons. Aim "
+                "for 80-220 words; simple questions may be shorter and complex questions may "
+                "be longer. Mention articles and regulations naturally. No headings, tables, "
+                "code blocks, or source lists."
             )
         user_prompt = "\n\n".join(
             [
                 render_user_prompt(query, retrieval),
                 "Return valid JSON only in this format:",
                 '{"answer":"...","confidence":0.0,"cited_chunk_ids":["..."]}',
-                "cited_chunk_ids must use only these chunks: "
-                + ", ".join(retrieved_chunk_ids),
+                "cited_chunk_ids must use only these chunks: " + ", ".join(retrieved_chunk_ids),
                 (
                     f"{lang_instruction}\n"
                     "Do NOT write chunk IDs, citation IDs, reference tags like [chunk-id], "
-                    "or source lists inside the answer body; sources are displayed separately by the app."
+                    "or source lists inside the answer body; sources are displayed "
+                    "separately by the app."
                 ),
             ]
         )
@@ -198,23 +201,39 @@ def _clean_answer_text(answer: str, retrieved_chunk_ids: list[str]) -> str:
         escaped_id = re.escape(chunk_id)
         cleaned = re.sub(rf"\[\[\s*{escaped_id}\s*\]\]", "", cleaned)
         cleaned = re.sub(rf"\[\s*{escaped_id}\s*\]", "", cleaned)
-    # Normalize line endings
+
     cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n")
     cleaned = cleaned.replace("\\n", "\n").replace("\\t", " ")
-    # Protect list items before joining
-    list_pattern = re.compile(r"^([-•∙]\s+|\d+[.)]\s+).+$", re.MULTILINE)
-    protected: list[str] = []
-    temp = cleaned
-    for m in list_pattern.finditer(cleaned):
-        protected.append(m.group(0))
-        temp = temp.replace(m.group(0), f"\x00LIST{len(protected) - 1}\x00")
-    # Collapse everything into flowing text
-    temp = re.sub(r"\n{2,}", "\n", temp)
-    temp = re.sub(r"\n", " ", temp)
-    temp = re.sub(r"[ \t]{2,}", " ", temp)
-    # Restore list items
-    for i, item in enumerate(protected):
-        temp = temp.replace(f"\x00LIST{i}\x00", f"\n{item}")
-    # Clean up
-    temp = re.sub(r"[ \t]+([.,;:!?])", r"\1", temp)
-    return temp.strip()
+
+    blocks: list[str] = []
+    paragraph_lines: list[str] = []
+    list_items: list[str] = []
+    list_pattern = re.compile(r"^(?:[-•∙]\s+|\d+[.)]\s+).+")
+
+    def flush_paragraph() -> None:
+        if paragraph_lines:
+            paragraph = " ".join(paragraph_lines)
+            blocks.append(re.sub(r"\s+", " ", paragraph).strip())
+            paragraph_lines.clear()
+
+    def flush_list() -> None:
+        if list_items:
+            blocks.append("\n".join(list_items))
+            list_items.clear()
+
+    for raw_line in cleaned.split("\n"):
+        line = re.sub(r"[ \t]+", " ", raw_line).strip()
+        if not line:
+            flush_paragraph()
+            flush_list()
+        elif list_pattern.match(line):
+            flush_paragraph()
+            list_items.append(line)
+        else:
+            flush_list()
+            paragraph_lines.append(line)
+
+    flush_paragraph()
+    flush_list()
+    normalized = "\n\n".join(block for block in blocks if block)
+    return re.sub(r"[ \t]+([.,;:!?])", r"\1", normalized).strip()

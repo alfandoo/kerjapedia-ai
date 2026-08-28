@@ -21,7 +21,7 @@ export function ChatAppHeader() {
   ];
 
   return (
-    <header className="grid h-[78px] grid-cols-[260px_minmax(0,1fr)_220px] items-center gap-6 border-b border-[#dce4df] bg-white px-8 max-[760px]:h-auto max-[760px]:grid-cols-[1fr_auto] max-[760px]:gap-x-4 max-[760px]:gap-y-2 max-[760px]:px-4 max-[760px]:pt-2.5">
+    <header className="grid h-[78px] grid-cols-[260px_minmax(0,1fr)_220px] items-center gap-6 border-b border-[#e5e5e5] bg-white px-8 max-[760px]:h-auto max-[760px]:grid-cols-[1fr_auto] max-[760px]:gap-x-4 max-[760px]:gap-y-2 max-[760px]:px-4 max-[760px]:pt-2.5">
       <Link
         href="/chat"
         className="flex w-fit items-center gap-[13px] font-display text-[21px] font-semibold leading-none tracking-[-0.02em] text-tinta transition hover:text-forest max-[760px]:text-lg"
@@ -58,7 +58,7 @@ export function ChatAppHeader() {
           href={session.user.roles.includes("admin") ? "/admin/dashboard" : "/chat"}
           className="flex min-h-11 items-center justify-self-end gap-2.5"
         >
-          <span className="grid size-9 shrink-0 place-items-center rounded-full border border-[#cad7d0] bg-[#f5f8f6] text-xs font-bold text-javanese">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full border border-[#e5e5e5] bg-[#ececec] text-xs font-bold text-javanese">
             {session.user.name.slice(0, 2).toUpperCase()}
           </span>
           <span className="max-[760px]:hidden">
@@ -72,7 +72,7 @@ export function ChatAppHeader() {
         </Link>
       ) : (
         <Link href="/register" className="flex min-h-11 items-center justify-self-end gap-2.5">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full border border-[#cad7d0] bg-[#f5f8f6] text-xs font-bold text-javanese">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full border border-[#e5e5e5] bg-[#ececec] text-xs font-bold text-javanese">
             TM
           </span>
           <span className="max-[760px]:hidden">

@@ -20,12 +20,24 @@ import {
   submitFeedback,
 } from "@/lib/api";
 import type { AnswerPayload, Citation, ConversationSummary } from "@/lib/types";
+import type { TranslationKey } from "@/lib/translations";
 
 const SIDEBAR_STORAGE_KEY = "kerjapedia.chat.sidebar.v1";
 
+const STREAM_STATUS_KEYS: Record<string, TranslationKey> = {
+  analyzing_question: "chat.loading.analyzing",
+  "Menganalisis pertanyaan": "chat.loading.analyzing",
+  checking_request_safety: "chat.loading.security",
+  "Memeriksa keamanan permintaan": "chat.loading.security",
+  searching_official_regulations: "chat.loading.searching",
+  "Menelusuri regulasi resmi": "chat.loading.searching",
+  composing_grounded_answer: "chat.loading.composing",
+  "Menyusun jawaban berdasarkan sumber": "chat.loading.composing",
+};
+
 export function EditorialChatExperience() {
   const session = useStoredSession();
-  const { t: translate, resolvedLanguage } = useSettings();
+  const { t: translate } = useSettings();
   const [question, setQuestion] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -202,18 +214,22 @@ export function EditorialChatExperience() {
         content: "",
         createdAt: new Date().toISOString(),
         streaming: true,
-        status: "Menganalisis pertanyaan",
+        status: translate("chat.loading.analyzing"),
       },
     ]);
     try {
       const response = await askQuestionStream(trimmed, conversationId, controller.signal, {
         onStart: setConversationId,
-        onThinking: (status) =>
+        onThinking: (status) => {
+          const statusKey = STREAM_STATUS_KEYS[status] ?? "chat.loading.title";
           setMessages((current) =>
             current.map((message) =>
-              message.id === assistantMessageId ? { ...message, status } : message
+              message.id === assistantMessageId
+                ? { ...message, status: translate(statusKey) }
+                : message
             )
-          ),
+          );
+        },
         onDelta: (content) =>
           setMessages((current) =>
             current.map((message) =>
@@ -251,7 +267,10 @@ export function EditorialChatExperience() {
   async function handleFeedback(
     message: ChatMessage,
     rating: "helpful" | "not_helpful",
-    detail?: { issue: "citation_incorrect" | "answer_incomplete" | "outdated_regulation" | "other"; comment: string }
+    detail?: {
+      issue: "citation_incorrect" | "answer_incomplete" | "outdated_regulation" | "other";
+      comment: string;
+    }
   ) {
     setFeedback((current) => ({ ...current, [message.id]: rating }));
     await submitFeedback({
@@ -323,7 +342,7 @@ export function EditorialChatExperience() {
                     key={item.text}
                     type="button"
                     onClick={() => void handleSubmit(item.text)}
-                    className="group flex min-h-[90px] w-full flex-col justify-between rounded-xl border border-[#e8e4dc] bg-white px-4 py-3.5 text-left transition hover:border-emas/40 hover:shadow-[0_2px_12px_rgba(201,162,39,0.08)] max-[760px]:min-h-[auto] max-[760px]:py-3"
+                    className="group flex min-h-[90px] w-full flex-col justify-between rounded-xl border border-[#e5e5e5] bg-white px-4 py-3.5 text-left transition hover:border-emas/40 hover:shadow-[0_2px_12px_rgba(201,162,39,0.08)] max-[760px]:min-h-[auto] max-[760px]:py-3"
                   >
                     <span className="mb-2 inline-flex self-start rounded-md bg-[#faf8f4] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#8a7a5e]">
                       {item.tag}
@@ -349,7 +368,7 @@ export function EditorialChatExperience() {
           )}
           {isLoading && !messages.some((message) => message.streaming) ? (
             <div
-              className="mx-auto mb-5 flex max-w-[760px] items-start gap-3 rounded-xl border-l-[3px] border-javanese/20 bg-[#fafbf9] py-3 pl-4 pr-3 text-xs leading-[1.55] text-tinta"
+              className="mx-auto mb-5 flex max-w-[760px] items-start gap-3 rounded-xl border-l-[3px] border-javanese/20 bg-[#f4f4f4] py-3 pl-4 pr-3 text-xs leading-[1.55] text-tinta"
               role="status"
               aria-live="polite"
             >

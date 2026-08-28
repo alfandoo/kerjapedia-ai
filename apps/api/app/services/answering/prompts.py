@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.services.answering.schemas import PromptTemplate
 from app.services.retrieval.schemas import RetrievalResponse
 
-PROMPT_VERSION_ID = "kerjapedia-grounded-answer-v3"
+PROMPT_VERSION_ID = "kerjapedia-grounded-answer-v4"
 
 SYSTEM_PROMPT = "\n".join(
     [
@@ -31,16 +31,19 @@ SYSTEM_PROMPT = "\n".join(
             "Gunakan bahasa yang mudah dipahami pekerja, HR, UMKM, dan mahasiswa."
         ),
         (
-            "Struktur jawaban yang WAJIB diikuti:\n"
-            "1. Paragraf pembuka: 1-2 kalimat yang langsung menjawab pertanyaan.\n"
-            "2. Poin-poin penting: gunakan format bullet \"- \" dengan **bold** pada "
-            "istilah kunci. Setiap poin maksimal 2 kalimat.\n"
-            "3. Penutup: 1 kalimat catatan praktis jika relevan.\n"
-            "Total jawaban: 3-6 poin, 150-350 kata."
+            "Gunakan gaya prosa adaptif seperti percakapan: jawab langsung dalam 1-3 "
+            "paragraf ringkas. Gunakan bullet hanya jika informasi memang berupa syarat, "
+            "tahapan, pengecualian, atau perbandingan, dan batasi maksimal 4 bullet."
         ),
         (
-            "Gunakan markdown sederhana: **bold** untuk istilah kunci, bullet \"- \" untuk "
-            "daftar. Jangan gunakan tabel, heading (#), atau blok kode."
+            "Panjang jawaban umumnya 80-220 kata. Pertanyaan sederhana boleh lebih singkat "
+            "dan pertanyaan kompleks boleh lebih panjang jika diperlukan untuk akurasi."
+        ),
+        (
+            "Sebut pasal dan peraturan secara alami di dalam kalimat. Gunakan markdown "
+            'sederhana: **bold** untuk istilah kunci dan bullet "- " hanya bila membantu. '
+            "Jangan gunakan tabel, heading (#), blok kode, chunk ID, citation ID, "
+            "atau daftar sumber."
         ),
     ]
 )
@@ -51,16 +54,12 @@ USER_TEMPLATE = """Pertanyaan pengguna:
 Konteks terpilih (sumber hukum):
 {context}
 
-Tulis jawaban dengan struktur:
-1. Paragraf pembuka langsung menjawab
-2. Poin-poin penting dengan bold istilah kunci dan rujukan pasal/peraturan
-3. Catatan praktis penutup jika relevan
+Tulis jawaban langsung dalam 1-3 paragraf yang mengalir. Gunakan maksimal 4 bullet hanya
+jika pertanyaan memang memerlukan daftar syarat, tahapan, pengecualian, atau perbandingan.
+Sebut pasal/peraturan secara alami dan gunakan **bold** hanya untuk istilah penting.
 
-Contoh format poin:
-- **Istilah kunci**: penjelasan singkat [1: PP Nomor 35 Tahun 2021, Pasal 5]
-
-Jangan tulis chunk ID, citation ID, atau daftar sumber di dalam answer body. 
-Gunakan markdown bullet \"- \" dan bold \"**\" saja, tanpa tabel atau judul."""
+Jangan tulis chunk ID, citation ID, reference tag, atau daftar sumber di dalam answer body.
+Tanpa tabel, heading, atau blok kode."""
 
 
 def default_prompt_template() -> PromptTemplate:

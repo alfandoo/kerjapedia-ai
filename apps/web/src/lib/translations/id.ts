@@ -1,7 +1,8 @@
 const id = {
   // Chat
   "chat.title": "Apa yang ingin Anda pahami?",
-  "chat.subtitle": "Tanyakan regulasi ketenagakerjaan Indonesia. Jawaban dilengkapi dasar hukum dan kutipan resmi.",
+  "chat.subtitle":
+    "Tanyakan regulasi ketenagakerjaan Indonesia. Jawaban dilengkapi dasar hukum dan kutipan resmi.",
   "chat.badge": "Asisten Hukum Ketenagakerjaan",
   "chat.inputLabel": "Ketik pertanyaan Anda",
   "chat.placeholder": "Tanyakan regulasi ketenagakerjaan...",
@@ -9,6 +10,10 @@ const id = {
   "chat.cancel": "Batalkan",
   "chat.loading.title": "Menelusuri regulasi yang relevan...",
   "chat.loading.subtitle": "Memeriksa pasal, status, dan sumber pendukung.",
+  "chat.loading.analyzing": "Menganalisis pertanyaan",
+  "chat.loading.security": "Memeriksa keamanan permintaan",
+  "chat.loading.searching": "Menelusuri regulasi resmi",
+  "chat.loading.composing": "Menyusun jawaban berdasarkan sumber",
 
   // Sidebar
   "sidebar.newChat": "Percakapan baru",
@@ -20,7 +25,8 @@ const id = {
   "sidebar.help": "Bantuan",
   "sidebar.logout": "Keluar",
   "sidebar.loginTitle": "Dapatkan jawaban yang sesuai untuk Anda",
-  "sidebar.loginDescription": "Masuk untuk menyimpan percakapan, serta mengakses fitur lengkap KerjaPedia AI.",
+  "sidebar.loginDescription":
+    "Masuk untuk menyimpan percakapan, serta mengakses fitur lengkap KerjaPedia AI.",
   "sidebar.loginButton": "Masuk",
   "sidebar.loadingHistory": "Memuat riwayat...",
   "sidebar.emptyHistory": "Belum ada percakapan. Ajukan pertanyaan pertama Anda.",
@@ -78,6 +84,63 @@ const id = {
   "category.pkwt": "PKWT",
   "category.phk": "PHK",
 
+  // Answer UI
+  "answer.conversationLabel": "Percakapan",
+  "answer.thinking": "Berpikir…",
+  "answer.officialSources": "sumber resmi",
+  "answer.editMessage": "Edit pesan",
+  "answer.copyMessage": "Salin pesan",
+  "answer.copyAnswer": "Salin jawaban",
+  "answer.shareAnswer": "Bagikan jawaban",
+  "answer.helpful": "Tandai jawaban membantu",
+  "answer.notHelpful": "Tandai jawaban tidak membantu",
+  "answer.copied": "Tersalin",
+  "answer.copyFailed": "Tidak dapat menyalin",
+  "answer.shareTitle": "Jawaban KerjaPedia",
+  "answer.shareCopied": "Jawaban disalin untuk dibagikan",
+  "answer.shared": "Berhasil dibagikan",
+  "answer.outOfScope": "KerjaPedia AI hanya menjawab topik ketenagakerjaan Indonesia.",
+  "answer.promptBlocked": "Permintaan diblokir oleh sistem keamanan.",
+  "answer.insufficientSources":
+    "Dasar dokumen belum cukup untuk menjawab pertanyaan ini dengan aman.",
+  "answer.feedbackQuestion": "Apa yang perlu diperbaiki?",
+  "answer.feedbackOptional": "Tambahkan detail (opsional)...",
+  "answer.feedbackCancel": "Batal",
+  "answer.feedbackSubmit": "Kirim feedback",
+  "answer.feedbackCitation": "Citation tidak tepat",
+  "answer.feedbackIncomplete": "Jawaban tidak lengkap",
+  "answer.feedbackOutdated": "Regulasi sudah tidak berlaku",
+  "answer.feedbackOther": "Lainnya",
+  "answer.warningNeedsVerification":
+    "Status hukum sumber belum diverifikasi — verifikasi sebelum digunakan.",
+  "answer.warningHistorical": "Sebagian sumber berstatus historis atau dicabut.",
+  "answer.warningSuperseded":
+    "Sebagian sumber telah diubah atau diganti oleh peraturan yang lebih baru.",
+  "answer.warningRevoked": "Sumber dicabut atau digantikan oleh peraturan yang lebih baru.",
+  // Sources
+  "source.title": "Sumber",
+  "source.panelLabel": "Daftar sumber resmi",
+  "source.countSingular": "sumber resmi",
+  "source.countPlural": "sumber resmi",
+  "source.close": "Tutup sumber",
+  "source.closePanel": "Tutup panel sumber",
+  "source.emptyTitle": "Belum ada sumber",
+  "source.emptyDescription":
+    "Sumber resmi akan muncul setelah KerjaPedia menjawab pertanyaan Anda.",
+  "source.article": "Pasal",
+  "source.page": "Halaman",
+  "source.section": "Bagian",
+  "source.statusActive": "Berlaku",
+  "source.statusNeedsVerification": "Perlu verifikasi",
+  "source.showMore": "Tampilkan selengkapnya",
+  "source.showLess": "Tampilkan lebih sedikit",
+  "source.openPdf": "Buka PDF",
+  "source.verificationNote": "Periksa status dan versi regulasi sebelum digunakan.",
+  "source.feedbackQuestion": "Apakah sumber ini membantu?",
+  "source.helpful": "Membantu",
+  "source.notHelpful": "Tidak membantu",
+  "source.disclaimer": "Baca disclaimer hukum",
+  "source.feedbackFallback": "Feedback panel sumber",
   // Footer
   "footer.disclaimer": "KerjaPedia dapat membuat kekeliruan. Periksa selalu sumber resmi.",
 };
