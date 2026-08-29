@@ -1,5 +1,5 @@
-import { AdminShell } from "@/components/admin-shell";
-import { AdminUpload } from "@/components/admin-upload";
+import { AdminShell } from "@/features/admin";
+import { AdminUpload } from "@/features/admin";
 
 export default function AdminUploadPage() {
   return (

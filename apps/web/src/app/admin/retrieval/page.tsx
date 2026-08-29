@@ -1,5 +1,5 @@
-import { AdminRetrieval } from "@/components/admin-retrieval";
-import { AdminShell } from "@/components/admin-shell";
+import { AdminRetrieval } from "@/features/admin";
+import { AdminShell } from "@/features/admin";
 
 export default function AdminRetrievalPage() {
   return (

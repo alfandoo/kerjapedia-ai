@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
-import { login, register, SESSION_STORAGE_KEY } from "@/lib/api";
+import { login, register, SESSION_STORAGE_KEY } from "@/features/auth/api";
 
 function RegisterPageContent() {
   const router = useRouter();

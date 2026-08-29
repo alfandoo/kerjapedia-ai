@@ -4,7 +4,7 @@ import { ScaleIcon } from "@/components/icons";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { login, SESSION_STORAGE_KEY } from "@/lib/api";
+import { login, SESSION_STORAGE_KEY } from "@/features/auth/api";
 
 export default function LoginPage() {
   const router = useRouter();

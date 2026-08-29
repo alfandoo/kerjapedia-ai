@@ -1,5 +1,5 @@
-import { AdminIngestion } from "@/components/admin-ingestion";
-import { AdminShell } from "@/components/admin-shell";
+import { AdminIngestion } from "@/features/admin";
+import { AdminShell } from "@/features/admin";
 
 export default function AdminIngestionPage() {
   return (

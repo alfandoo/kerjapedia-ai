@@ -1,5 +1,5 @@
-import { AdminFeedback } from "@/components/admin-feedback";
-import { AdminShell } from "@/components/admin-shell";
+import { AdminFeedback } from "@/features/admin";
+import { AdminShell } from "@/features/admin";
 
 export default function AdminFeedbackPage() {
   return (

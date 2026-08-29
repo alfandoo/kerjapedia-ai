@@ -1,0 +1,40 @@
+import type { DocumentSummary } from "./types";
+
+export const fallbackDocuments: DocumentSummary[] = [
+  {
+    document_id: "UU-13-2003",
+    title: "Undang-Undang Nomor 13 Tahun 2003 tentang Ketenagakerjaan",
+    short_title: "UU 13/2003",
+    regulation_type: "UU",
+    number: 13,
+    year: 2003,
+    legal_status: "needs_verification",
+    topics: ["cuti", "upah", "phk", "hubungan_kerja"],
+    source_url: "https://peraturan.bpk.go.id/",
+    pdf_url: "/documents/UU-13-2003/pdf",
+  },
+  {
+    document_id: "PP-35-2021",
+    title: "Peraturan Pemerintah Nomor 35 Tahun 2021",
+    short_title: "PP 35/2021",
+    regulation_type: "PP",
+    number: 35,
+    year: 2021,
+    legal_status: "needs_verification",
+    topics: ["pkwt", "phk", "alih_daya", "waktu_kerja"],
+    source_url: "https://peraturan.bpk.go.id/",
+    pdf_url: "/documents/PP-35-2021/pdf",
+  },
+  {
+    document_id: "UU-21-2000",
+    title: "Undang-Undang Nomor 21 Tahun 2000 tentang Serikat Pekerja",
+    short_title: "UU 21/2000",
+    regulation_type: "UU",
+    number: 21,
+    year: 2000,
+    legal_status: "needs_verification",
+    topics: ["serikat_pekerja", "hubungan_industrial"],
+    source_url: "https://peraturan.bpk.go.id/",
+    pdf_url: "/documents/UU-21-2000/pdf",
+  },
+];

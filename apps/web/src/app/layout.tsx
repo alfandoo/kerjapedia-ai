@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
-import { SettingsProvider } from "@/components/settings-provider";
+import { SettingsProvider } from "@/features/settings";
 
 const inter = Inter({
   variable: "--font-inter",

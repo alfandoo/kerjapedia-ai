@@ -1,4 +1,4 @@
-import { EditorialChatExperience } from "@/components/editorial-chat-experience";
+import { EditorialChatExperience } from "@/features/chat";
 
 export default function ChatPage() {
   return <EditorialChatExperience />;

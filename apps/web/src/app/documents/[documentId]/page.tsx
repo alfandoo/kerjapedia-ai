@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { AppShell } from "@/components/app-shell";
+import { AppShell } from "@/components/layout/app-shell";
 import { ExternalIcon, FileIcon } from "@/components/icons";
-import { documentPdfUrl, fetchDocumentDetail } from "@/lib/api";
-import { fallbackCitation, fallbackDocuments } from "@/lib/sample-data";
+import { documentPdfUrl, fetchDocumentDetail } from "@/features/documents/api";
+import { fallbackCitation } from "@/features/chat";
+import { fallbackDocuments } from "@/features/documents";
 
 type DocumentDetailPageProps = {
   params: Promise<{ documentId: string }>;
@@ -25,7 +26,13 @@ type DocumentDetail = {
   file_name: string;
   verification_status: string;
   chunk_count: number;
-  available_chunks: { chunk_id: string; article: string; paragraph: string; page_start: number; page_end: number }[];
+  available_chunks: {
+    chunk_id: string;
+    article: string;
+    paragraph: string;
+    page_start: number;
+    page_end: number;
+  }[];
 };
 
 function formatStatus(status: string) {

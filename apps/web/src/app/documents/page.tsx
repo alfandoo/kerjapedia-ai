@@ -1,5 +1,5 @@
-import { AdminDashboard } from "@/components/admin-dashboard";
-import { AdminShell } from "@/components/admin-shell";
+import { AdminDashboard } from "@/features/admin";
+import { AdminShell } from "@/features/admin";
 
 export default function DocumentsPage() {
   return (

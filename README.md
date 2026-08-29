@@ -9,7 +9,7 @@ Project sudah memiliki MVP RAG lokal dan jalur RAG industri berbasis provider:
 - Mode lokal/offline: artifact ingestion + hash embedding + answer composer deterministik.
 - Mode industri: Pinecone vector database + local BGE-M3 embedding + Groq chat completions.
 
-Dokumen produk utama tersedia di `docs/PRD_KerjaPedia_AI.md`, roadmap pengerjaan tersedia di `task.md`, dan arsitektur RAG provider tersedia di `docs/RAG_PIPELINE.md`.
+Dokumen produk utama tersedia di `docs/PRD_KerjaPedia_AI.md`, roadmap pengerjaan tersedia di `docs/project/ROADMAP.md`, dan arsitektur RAG provider tersedia di `docs/RAG_PIPELINE.md`.
 
 ## Stack Awal
 

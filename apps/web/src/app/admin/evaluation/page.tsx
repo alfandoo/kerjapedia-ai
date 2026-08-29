@@ -1,5 +1,5 @@
-import { AdminEvaluation } from "@/components/admin-evaluation";
-import { AdminShell } from "@/components/admin-shell";
+import { AdminEvaluation } from "@/features/admin";
+import { AdminShell } from "@/features/admin";
 
 export default function AdminEvaluationPage() {
   return (
