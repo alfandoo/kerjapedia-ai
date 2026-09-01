@@ -14,6 +14,7 @@ const id = {
   "chat.loading.security": "Memeriksa keamanan permintaan",
   "chat.loading.searching": "Menelusuri regulasi resmi",
   "chat.loading.composing": "Menyusun jawaban berdasarkan sumber",
+  "chat.scrollRegion": "Isi percakapan",
 
   // Sidebar
   "sidebar.newChat": "Percakapan baru",
@@ -30,7 +31,21 @@ const id = {
   "sidebar.loginButton": "Masuk",
   "sidebar.loadingHistory": "Memuat riwayat...",
   "sidebar.emptyHistory": "Belum ada percakapan. Ajukan pertanyaan pertama Anda.",
-  "sidebar.chatHistory": "Riwayat percakapan",
+  "sidebar.chatHistory": "Percakapan",
+  "sidebar.historyToday": "Hari ini",
+  "sidebar.historyYesterday": "Kemarin",
+  "sidebar.historyPrevious7Days": "7 hari sebelumnya",
+  "sidebar.historyPrevious30Days": "30 hari sebelumnya",
+  "sidebar.historyOlder": "Lebih lama",
+  "sidebar.renameTitle": "Ubah judul percakapan",
+  "sidebar.rename": "Ubah judul",
+  "sidebar.delete": "Hapus percakapan",
+  "sidebar.cancel": "Batal",
+  "sidebar.save": "Simpan",
+  "sidebar.actionsFor": "Tindakan untuk",
+  "sidebar.deleteConfirm": "Hapus percakapan",
+  "sidebar.deleteWarning": "Tindakan ini tidak dapat dibatalkan.",
+  "sidebar.noSearchResults": "Tidak ada percakapan yang cocok.",
   "sidebar.viewAllRegulations": "Lihat semua regulasi",
   "sidebar.searchRegulations": "Cari Regulasi",
 
@@ -103,6 +118,8 @@ const id = {
   "answer.promptBlocked": "Permintaan diblokir oleh sistem keamanan.",
   "answer.insufficientSources":
     "Dasar dokumen belum cukup untuk menjawab pertanyaan ini dengan aman.",
+  "answer.temporarilyUnavailable":
+    "Maaf, jawaban terverifikasi belum dapat disusun saat ini. Silakan coba lagi beberapa saat atau periksa sumber resmi yang ditemukan.",
   "answer.feedbackQuestion": "Apa yang perlu diperbaiki?",
   "answer.feedbackOptional": "Tambahkan detail (opsional)...",
   "answer.feedbackCancel": "Batal",

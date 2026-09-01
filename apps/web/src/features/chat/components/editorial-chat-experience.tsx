@@ -54,9 +54,11 @@ export function EditorialChatExperience() {
   const [feedback, setFeedback] = useState<Record<string, "helpful" | "not_helpful">>({});
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const conversationScrollRef = useRef<HTMLDivElement>(null);
   const conversationEndRef = useRef<HTMLDivElement>(null);
   const sourceTriggerRef = useRef<HTMLElement | null>(null);
   const streamingMessageRef = useRef<string | null>(null);
+  const shouldStickToBottomRef = useRef(true);
 
   const closeSourceSheet = useCallback(() => {
     setIsSourceSheetOpen(false);
@@ -90,13 +92,26 @@ export function EditorialChatExperience() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  const latestMessageContent = messages.at(-1)?.content ?? "";
+
   useEffect(() => {
-    if (messages.length === 0 && !isLoading) return;
-    conversationEndRef.current?.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-      block: "nearest",
+    if ((messages.length === 0 && !isLoading) || !shouldStickToBottomRef.current) return;
+    const scrollRegion = conversationScrollRef.current;
+    if (!scrollRegion) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollRegion.scrollTop = scrollRegion.scrollHeight;
     });
-  }, [isLoading, messages.length]);
+    return () => window.cancelAnimationFrame(frame);
+  }, [isLoading, latestMessageContent, messages.length]);
+
+  function handleConversationScroll() {
+    const scrollRegion = conversationScrollRef.current;
+    if (!scrollRegion) return;
+    const distanceFromBottom =
+      scrollRegion.scrollHeight - scrollRegion.scrollTop - scrollRegion.clientHeight;
+    shouldStickToBottomRef.current = distanceFromBottom < 96;
+  }
 
   function stopRequest() {
     abortRef.current?.abort();
@@ -144,6 +159,7 @@ export function EditorialChatExperience() {
         ];
       });
       const latest = [...nextMessages].reverse().find((item) => item.answer)?.answer;
+      shouldStickToBottomRef.current = true;
       setConversationId(detail.conversation_id);
       setMessages(nextMessages);
       setCitations(latest?.citations ?? []);
@@ -165,6 +181,7 @@ export function EditorialChatExperience() {
     setError(null);
     setIsSourceSheetOpen(false);
     setIsSourceDrawerOpen(false);
+    shouldStickToBottomRef.current = true;
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
   async function handleConversationRename(id: string, title: string) {
@@ -200,6 +217,7 @@ export function EditorialChatExperience() {
     abortRef.current = controller;
     const assistantMessageId = crypto.randomUUID();
     streamingMessageRef.current = assistantMessageId;
+    shouldStickToBottomRef.current = true;
     setMessages((current) => [
       ...current,
       {
@@ -319,7 +337,13 @@ export function EditorialChatExperience() {
           messages.length === 0 ? "is-empty" : ""
         }`}
       >
-        <div className="min-h-0 flex-1 overflow-y-auto px-[clamp(24px,7vw,100px)] pb-[60px] pt-[36px] [scroll-padding-bottom:20px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [@media(max-height:680px)]:min-[761px]:pt-5 max-[760px]:px-4 max-[760px]:pb-[50px] max-[760px]:pt-[22px]">
+        <div
+          ref={conversationScrollRef}
+          className="chat-scroll-region min-h-0 flex-1 overflow-y-auto overscroll-contain px-[clamp(24px,7vw,100px)] pb-[60px] pt-[36px] [scroll-padding-bottom:20px] [scrollbar-gutter:stable] [@media(max-height:680px)]:min-[761px]:pt-5 max-[760px]:px-4 max-[760px]:pb-[50px] max-[760px]:pt-[22px]"
+          aria-label={translate("chat.scrollRegion")}
+          tabIndex={0}
+          onScroll={handleConversationScroll}
+        >
           {messages.length === 0 ? (
             <div className="mx-auto mt-[clamp(24px,6vh,72px)] flex max-w-[680px] flex-col items-center text-center max-[760px]:mt-[clamp(28px,7vh,56px)]">
               <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#e2ddd3] bg-[#faf8f4] px-4 py-1.5 text-[11px] font-medium tracking-wide text-[#8a7a5e]">

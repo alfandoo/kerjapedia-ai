@@ -1,11 +1,12 @@
 import { API_URL, parseJsonResponse } from "@/lib/api-client";
-import { getStoredSession } from "@/features/auth";
+import { fetchWithAuthRetry, getStoredSession } from "@/features/auth";
 import type { AskResponse, ConversationDetail, ConversationSummary } from "./types";
 const GUEST_STORAGE_KEY = "kerjapedia-guest-v1";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function getGuestId(): string {
   const existing = window.localStorage.getItem(GUEST_STORAGE_KEY);
-  if (existing) return existing;
+  if (existing && UUID_PATTERN.test(existing)) return existing;
   const guestId = crypto.randomUUID();
   window.localStorage.setItem(GUEST_STORAGE_KEY, guestId);
   return guestId;
@@ -26,16 +27,19 @@ export async function askQuestion(
   conversationId: string | null,
   signal: AbortSignal
 ): Promise<AskResponse> {
-  const response = await fetch(`${API_URL}/chat/ask`, {
-    method: "POST",
-    headers: chatHeaders(true),
-    body: JSON.stringify({
-      question,
-      conversation_id: conversationId,
-      top_k: 5,
-    }),
-    signal,
-  });
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/chat/ask`,
+    {
+      method: "POST",
+      headers: chatHeaders(true),
+      body: JSON.stringify({
+        question,
+        conversation_id: conversationId,
+        top_k: 5,
+      }),
+    },
+    signal
+  );
   return parseJsonResponse<AskResponse>(response);
 }
 
@@ -58,16 +62,19 @@ export async function askQuestionStream(
   signal: AbortSignal,
   handlers: StreamHandlers
 ): Promise<AskResponse> {
-  const response = await fetch(`${API_URL}/chat/ask/stream`, {
-    method: "POST",
-    headers: chatHeaders(true),
-    body: JSON.stringify({
-      question,
-      conversation_id: conversationId,
-      top_k: 5,
-    }),
-    signal,
-  });
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/chat/ask/stream`,
+    {
+      method: "POST",
+      headers: chatHeaders(true),
+      body: JSON.stringify({
+        question,
+        conversation_id: conversationId,
+        top_k: 5,
+      }),
+    },
+    signal
+  );
   if (!response.ok || !response.body) return parseJsonResponse<AskResponse>(response);
 
   const reader = response.body.getReader();
@@ -103,10 +110,11 @@ export async function askQuestionStream(
 }
 
 export async function fetchConversations(signal?: AbortSignal): Promise<ConversationSummary[]> {
-  const response = await fetch(`${API_URL}/chat/conversations`, {
-    headers: chatHeaders(),
-    signal,
-  });
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/chat/conversations`,
+    { headers: chatHeaders() },
+    signal
+  );
   return parseJsonResponse<ConversationSummary[]>(response);
 }
 
@@ -114,10 +122,11 @@ export async function fetchConversation(
   conversationId: string,
   signal?: AbortSignal
 ): Promise<ConversationDetail> {
-  const response = await fetch(`${API_URL}/chat/conversations/${conversationId}`, {
-    headers: chatHeaders(),
-    signal,
-  });
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/chat/conversations/${conversationId}`,
+    { headers: chatHeaders() },
+    signal
+  );
   return parseJsonResponse<ConversationDetail>(response);
 }
 
@@ -125,7 +134,7 @@ export async function renameConversation(
   conversationId: string,
   title: string
 ): Promise<ConversationSummary> {
-  const response = await fetch(`${API_URL}/chat/conversations/${conversationId}`, {
+  const response = await fetchWithAuthRetry(`${API_URL}/chat/conversations/${conversationId}`, {
     method: "PATCH",
     headers: chatHeaders(true),
     body: JSON.stringify({ title }),
@@ -134,7 +143,7 @@ export async function renameConversation(
 }
 
 export async function deleteConversation(conversationId: string): Promise<void> {
-  const response = await fetch(`${API_URL}/chat/conversations/${conversationId}`, {
+  const response = await fetchWithAuthRetry(`${API_URL}/chat/conversations/${conversationId}`, {
     method: "DELETE",
     headers: chatHeaders(),
   });

@@ -27,17 +27,70 @@ logger = logging.getLogger("kerjapedia.api")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    try:
-        from app.db.session import ensure_schema
+    from app.services.telemetry import configure_telemetry
 
-        ensure_schema()
-    except Exception:
-        logger.warning("Schema initialization failed — check database connectivity")
+    if settings.telemetry_enabled:
+        configure_telemetry(
+            settings.app_name,
+            settings.otel_exporter_otlp_endpoint,
+        )
+    if settings.app_env.lower() != "test":
+        from app.db.session import assert_schema_current
+
+        assert_schema_current()
+    if settings.app_env.lower() == "production":
+        from app.db.session import create_session
+        from app.services.answering.prompts import PROMPT_VERSION_ID
+        from app.services.ingestion.embeddings import embed_hybrid
+        from app.services.providers import (
+            answer_generator_from_settings,
+            embedding_provider_from_settings,
+        )
+        from app.services.retrieval.governance import load_retrieval_governance
+
+        embed_hybrid(
+            embedding_provider_from_settings(settings),
+            ["regulasi ketenagakerjaan"],
+        )
+        answer_generator_from_settings(settings)
+
+        with create_session() as session:
+            governance = load_retrieval_governance(
+                session,
+                allow_unpublished=False,
+            )
+            if not governance.active_namespace:
+                raise RuntimeError("Production requires an active validated RAG index release.")
+            if not governance.eligible_versions:
+                raise RuntimeError("Production has no published, legally reviewed documents.")
+            if not governance.release_consistent:
+                raise RuntimeError("The active RAG release is stale and must be replaced.")
+            if governance.active_models != {
+                "embedding": settings.embedding_model,
+                "reranker": settings.reranker_model,
+                "generator": settings.groq_model,
+                "verifier": settings.claim_verifier_model,
+                "prompt": PROMPT_VERSION_ID,
+            }:
+                raise RuntimeError(
+                    "The active RAG release model provenance does not match runtime."
+                )
+            from app.services.providers import pinecone_store_from_settings
+
+            if not pinecone_store_from_settings(
+                settings,
+                namespace=governance.active_namespace,
+                relationship_index=governance.relationship_index,
+                allow_unpublished=False,
+            ).is_ready():
+                raise RuntimeError("The production Pinecone index is not ready.")
     try:
         get_supabase()
         ensure_bucket()
     except Exception:
         logger.warning("Supabase init failed — check credentials")
+        if settings.app_env.lower() == "production":
+            raise
     yield
 
 

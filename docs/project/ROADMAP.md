@@ -121,7 +121,7 @@ Dokumen arsitektur tersedia di `docs/ARCHITECTURE.md`.
 
 Pipeline tersedia melalui `python -m app.services.ingestion.cli` dari `apps/api`. Artifact lokal disimpan di `storage/ingestion/` dan dokumentasi tersedia di `docs/INGESTION_PIPELINE.md`.
 
-Catatan: OCR fallback saat ini menandai halaman minim teks sebagai `requires_ocr` dan membuat job `review_required`; engine OCR seperti Tesseract belum dikonfigurasi karena belum ada kebutuhan scan yang terverifikasi.
+Catatan: OCRmyPDF/Tesseract `ind+eng` dijalankan untuk halaman minim teks. Halaman yang tetap berkualitas rendah sesudah OCR berstatus `review_required` dan tidak dapat dipublikasikan.
 
 - [x] Buat script ekstraksi teks PDF.
 - [x] Tambahkan validasi file:

@@ -18,7 +18,7 @@ def lexical_score(query: str, document: RetrievalDocument) -> float:
     if not query_terms:
         return 0.0
 
-    term_counts = Counter(tokenize(document.text))
+    term_counts = Counter(tokenize(document.retrieval_text or document.text))
     length_norm = math.sqrt(max(1, len(term_counts)))
     score = 0.0
     for term in query_terms:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ApiModel(BaseModel):
@@ -56,7 +56,7 @@ class MessageResponse(ApiModel):
 class AskRequest(ApiModel):
     question: str = Field(min_length=4, max_length=2000)
     conversation_id: str | None = Field(default=None, max_length=80)
-    top_k: int = Field(default=5, ge=1, le=10)
+    top_k: int = Field(default=5, ge=1, le=8)
 
 
 class AskResponse(ApiModel):
@@ -108,9 +108,50 @@ class DocumentUpdateRequest(ApiModel):
 
 class DocumentRelationshipRequest(ApiModel):
     to_document_id: str = Field(min_length=3, max_length=80)
-    relationship_type: Literal["amended_by", "implements", "implemented_by", "related_to"]
+    relationship_type: Literal[
+        "amended_by",
+        "revoked_by",
+        "replaced_by",
+        "implements",
+        "implemented_by",
+        "related_to",
+    ]
     confidence: Literal["low", "medium", "high"] = "medium"
     notes: str | None = Field(default=None, max_length=1000)
+    from_article: str | None = Field(default=None, max_length=80)
+    to_article: str | None = Field(default=None, max_length=80)
+    evidence_url: str | None = Field(default=None, max_length=1000)
+
+
+class DocumentVerificationRequest(ApiModel):
+    verification_type: Literal["source", "legal"]
+    status: Literal["verified", "rejected", "pending"]
+    evidence_url: str | None = Field(default=None, max_length=1000)
+    notes: str = Field(default="", max_length=2000)
+
+
+class IngestionBuildReviewRequest(ApiModel):
+    status: Literal["approved", "rejected"]
+    page_dispositions: dict[
+        str,
+        Literal[
+            "intentionally_blank",
+            "ocr_verified",
+            "table_verified",
+            "accepted_with_reason",
+        ],
+    ] = Field(default_factory=dict)
+    notes: str = Field(default="", max_length=4000)
+
+
+class RagIndexReleaseRequest(ApiModel):
+    namespace: str | None = Field(default=None, min_length=3, max_length=160)
+
+
+class RagIndexTransitionRequest(ApiModel):
+    action: Literal["validate", "promote", "retire"]
+    evaluation_run_id: str | None = Field(default=None, max_length=160)
+    metrics: dict[str, float] = Field(default_factory=dict)
 
 
 class PublicationRequest(ApiModel):
@@ -128,6 +169,7 @@ class RetrievalPlaygroundRequest(ApiModel):
 class IngestionJobRequest(ApiModel):
     document_id: str = Field(min_length=3, max_length=80)
     persist_db: bool = False
+    release_candidate: bool = False
 
 
 class FeedbackRequest(ApiModel):
@@ -135,12 +177,15 @@ class FeedbackRequest(ApiModel):
     answer_id: str | None = Field(default=None, max_length=120)
     conversation_id: str | None = Field(default=None, max_length=80)
     rating: Literal["helpful", "not_helpful"]
-    issue_category: Literal[
-        "citation_incorrect",
-        "answer_incomplete",
-        "outdated_regulation",
-        "other",
-    ] | None = Field(default=None, max_length=80)
+    issue_category: (
+        Literal[
+            "citation_incorrect",
+            "answer_incomplete",
+            "outdated_regulation",
+            "other",
+        ]
+        | None
+    ) = Field(default=None, max_length=80)
     comment: str | None = Field(default=None, max_length=1000)
 
 
@@ -156,15 +201,46 @@ class EvaluationQuestionInput(ApiModel):
     hard_negative: bool = False
     verified_by: str = Field(default="unknown", max_length=120)
     status: str = Field(default="needs_human_review", max_length=80)
+    split: Literal["development", "test"] = "development"
+    scenario_tags: list[
+        Literal[
+            "follow_up",
+            "typo",
+            "bilingual",
+            "topic_switch",
+            "historical",
+            "complex",
+            "hard_negative",
+            "prompt_injection",
+        ]
+    ] = Field(default_factory=list)
 
 
 class EvaluationDatasetRequest(ApiModel):
     name: str = Field(min_length=3, max_length=120)
     questions: list[EvaluationQuestionInput] = Field(min_length=1, max_length=500)
 
+    @model_validator(mode="after")
+    def validate_unique_questions(self) -> EvaluationDatasetRequest:
+        question_ids = [question.question_id for question in self.questions]
+        normalized_texts = [
+            " ".join(question.question.lower().split()) for question in self.questions
+        ]
+        if len(set(question_ids)) != len(question_ids):
+            raise ValueError("Evaluation question_id values must be unique.")
+        if len(set(normalized_texts)) != len(normalized_texts):
+            raise ValueError("Evaluation question texts must be unique.")
+        return self
+
+
+class EvaluationQuestionReviewRequest(ApiModel):
+    status: Literal["verified", "rejected"]
+    notes: str = Field(default="", max_length=2000)
+
 
 class EvaluationRunRequest(ApiModel):
     dataset_id: str = Field(min_length=3, max_length=120)
+    release_id: str | None = Field(default=None, min_length=3, max_length=160)
     top_k: int = Field(default=5, ge=1, le=10)
     experiment_modes: list[Literal["baseline", "dense", "hybrid", "rerank"]] = Field(
         default_factory=lambda: ["baseline", "dense", "hybrid", "rerank"]

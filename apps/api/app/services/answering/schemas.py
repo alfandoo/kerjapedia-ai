@@ -30,6 +30,15 @@ class Citation:
     local_file: str | None
     retrieval_score: float
     rerank_score: float
+    document_version: int | None = None
+
+
+@dataclass(frozen=True)
+class GroundedClaim:
+    text: str
+    cited_chunk_ids: list[str]
+    supported: bool
+    support_score: float
 
 
 @dataclass(frozen=True)
@@ -55,3 +64,7 @@ class AnswerResponse:
     retrieved_chunk_ids: list[str]
     warnings: list[str] = field(default_factory=list)
     debug: dict[str, Any] = field(default_factory=dict)
+    claims: list[GroundedClaim] = field(default_factory=list)
+    trace_id: str | None = None
+    answer_status: str = "answered"
+    answer_version: str = "grounded-verified-answer-v3"

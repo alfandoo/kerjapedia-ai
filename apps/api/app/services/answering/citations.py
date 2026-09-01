@@ -45,6 +45,7 @@ def build_citations(ranked: list[RankedChunk]) -> list[Citation]:
                 local_file=metadata.get("local_file"),
                 retrieval_score=item.final_score,
                 rerank_score=item.rerank_score,
+                document_version=document.document_version,
             )
         )
 

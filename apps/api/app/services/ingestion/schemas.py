@@ -61,6 +61,13 @@ class ExtractedPage:
     text: str
     text_length: int
     requires_ocr: bool
+    quality_score: float = 1.0
+    quality_flags: list[str] = field(default_factory=list)
+    raw_text: str | None = None
+    rotation: int = 0
+    table_count: int = 0
+    removed_margin_lines: list[str] = field(default_factory=list)
+    disposition: str | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +81,7 @@ class LegalSegment:
     page_start: int
     page_end: int
     text: str
+    segment_type: str = "substantive"
 
 
 @dataclass(frozen=True)
@@ -91,6 +99,13 @@ class Chunk:
     topics: list[str]
     legal_status: str
     source_url: str
+    parent_text: str | None = None
+    char_start: int = 0
+    char_end: int = 0
+    build_id: str | None = None
+    retrieval_text: str | None = None
+    chunk_type: str = "substantive"
+    artifact_checksum: str | None = None
 
 
 @dataclass(frozen=True)
@@ -98,6 +113,9 @@ class EmbeddedChunk:
     chunk: Chunk
     embedding_model: str
     embedding: list[float]
+    sparse_embedding: dict[int, float] | None = None
+    embedding_revision: str = "unversioned"
+    retrieval_text_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -110,3 +128,7 @@ class IngestionResult:
     pages_processed: int
     requires_review: bool
     warnings: list[str]
+    build_id: str | None = None
+    config_hash: str | None = None
+    quality_report: dict[str, Any] = field(default_factory=dict)
+    artifact_manifest: dict[str, Any] = field(default_factory=dict)

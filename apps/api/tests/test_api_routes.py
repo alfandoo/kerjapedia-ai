@@ -1,5 +1,6 @@
 import json
 from collections.abc import Iterator
+from dataclasses import replace
 from statistics import median
 from unittest.mock import MagicMock
 
@@ -13,16 +14,30 @@ from app.models.business import (
     Conversation,
     DocumentAdmin,
     EvaluationDataset,
+    EvaluationQuestionReview,
     EvaluationRun,
     Feedback,
     Message,
     UploadedDocument,
     UserProfile,
 )
+from app.models.ingestion import (
+    ChunkEmbedding,
+    Document,
+    DocumentChunk,
+    DocumentRelationship,
+    DocumentVerificationAudit,
+    DocumentVersion,
+    IngestionJob,
+    RagIndexRelease,
+)
+from app.services.answering.generator import AnswerGenerator
 from app.services.ingestion.embeddings import HashEmbeddingProvider
 from app.services.retrieval.schemas import RetrievalDocument
 
 _TEST_COUNTER = [0]
+_DEFAULT_GUEST_HEADERS = {"X-KerjaPedia-Guest-ID": "00000000-0000-4000-8000-000000000001"}
+pytestmark = pytest.mark.usefixtures("verify_test_schema")
 
 
 @pytest.fixture(autouse=True)
@@ -36,7 +51,16 @@ def reset_api_state() -> Iterator[None]:
         session.query(Message).delete()
         session.query(Conversation).delete()
         session.query(EvaluationRun).delete()
+        session.query(EvaluationQuestionReview).delete()
         session.query(EvaluationDataset).delete()
+        session.query(DocumentVerificationAudit).delete()
+        session.query(DocumentRelationship).delete()
+        session.query(ChunkEmbedding).delete()
+        session.query(DocumentChunk).delete()
+        session.query(IngestionJob).delete()
+        session.query(DocumentVersion).delete()
+        session.query(Document).delete()
+        session.query(RagIndexRelease).delete()
         session.query(DocumentAdmin).delete()
         session.query(UploadedDocument).delete()
         session.query(UserProfile).delete()
@@ -45,7 +69,7 @@ def reset_api_state() -> Iterator[None]:
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(app)
+    return TestClient(app, headers=_DEFAULT_GUEST_HEADERS)
 
 
 def make_document() -> RetrievalDocument:
@@ -116,9 +140,7 @@ def _mock_supabase_auth(
             existing = session.get(UserProfile, uid)
             if existing is None:
                 session.add(
-                    UserProfile(
-                        user_id=uid, email=email, name="Admin", roles=roles or ["user"]
-                    )
+                    UserProfile(user_id=uid, email=email, name="Admin", roles=roles or ["user"])
                 )
                 session.commit()
 
@@ -145,7 +167,7 @@ def admin_headers(client: TestClient, monkeypatch=None) -> dict[str, str]:
 
 
 def test_auth_login_and_current_user(client: TestClient, monkeypatch) -> None:
-    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin", "legal_reviewer"])
     login = client.post(
         "/auth/login",
         json={"email": "admin@example.com", "password": "secret"},
@@ -204,15 +226,18 @@ def test_auth_registers_and_logs_in_regular_user(client: TestClient, monkeypatch
 
 def test_auth_rejects_duplicate_registration(client: TestClient, monkeypatch) -> None:
     mock_client = MagicMock()
-    mock_client.auth.sign_up.side_effect = [MagicMock(
-        user=MagicMock(
-            id="uid-1", email="budi@example.com", user_metadata={"name": "Budi Pekerja"}
+    mock_client.auth.sign_up.side_effect = [
+        MagicMock(
+            user=MagicMock(
+                id="uid-1", email="budi@example.com", user_metadata={"name": "Budi Pekerja"}
+            ),
+            session=MagicMock(
+                access_token="token-1",
+                refresh_token="refresh-1",
+            ),
         ),
-        session=MagicMock(
-            access_token="token-1",
-            refresh_token="refresh-1",
-        ),
-    ), Exception("Duplicate")]
+        Exception("Duplicate"),
+    ]
     monkeypatch.setattr("app.services.supabase.get_supabase_anon", lambda: mock_client)
     monkeypatch.setattr(
         "app.services.supabase.get_supabase",
@@ -242,8 +267,8 @@ def test_chat_ask_returns_structured_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.api.routes_chat.load_artifact_documents",
-        lambda _: [make_document()],
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
     )
     response = client.post(
         "/chat/ask",
@@ -261,15 +286,18 @@ def test_follow_up_question_uses_conversation_memory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.api.routes_chat.load_artifact_documents",
-        lambda _: [make_document()],
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
     )
     first = client.post(
         "/chat/ask",
         json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
     )
     assert first.status_code == 200
-    assert first.json()["answer"]["debug"]["memory"]["used"] is False
+    assert set(first.json()["answer"]["debug"]) == {
+        "trace_id",
+        "prompt_version_id",
+    }
     conversation_id = first.json()["conversation_id"]
 
     second = client.post(
@@ -281,10 +309,33 @@ def test_follow_up_question_uses_conversation_memory(
         },
     )
     assert second.status_code == 200
-    memory = second.json()["answer"]["debug"]["memory"]
+    with create_session() as session:
+        row = (
+            session.query(Message)
+            .filter(
+                Message.conversation_id == conversation_id,
+                Message.role == "user",
+                Message.content == "berapa besar kompensasinya?",
+            )
+            .one()
+        )
+        memory = row.meta_data["rag_trace"]["memory"]
     assert memory["used"] is True
     assert memory["source_turns"] == 1
-    assert "Pertanyaan lanjutan" in memory["retrieval_query"]
+    assert len(memory["retrieval_query_sha256"]) == 64
+    assert memory["activation_reason"] == "referential_term"
+    assert second.json()["answer"]["refusal_reason"] is None
+    with create_session() as session:
+        sequences = [
+            row.sequence_no
+            for row in (
+                session.query(Message)
+                .filter(Message.conversation_id == conversation_id)
+                .order_by(Message.sequence_no)
+                .all()
+            )
+        ]
+    assert sequences == [1, 2, 3, 4]
 
 
 def test_guest_conversations_are_isolated_by_guest_id(
@@ -292,8 +343,8 @@ def test_guest_conversations_are_isolated_by_guest_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.api.routes_chat.load_artifact_documents",
-        lambda _: [make_document()],
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
     )
     first_guest = {"X-KerjaPedia-Guest-ID": "11111111-1111-4111-8111-111111111111"}
     second_guest = {"X-KerjaPedia-Guest-ID": "22222222-2222-4222-8222-222222222222"}
@@ -323,8 +374,8 @@ def test_authenticated_user_conversation_is_saved_to_history(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.api.routes_chat.load_artifact_documents",
-        lambda _: [make_document()],
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
     )
     _mock_supabase_auth(monkeypatch, email="pekerja@example.com", insert_profile=False)
 
@@ -359,13 +410,64 @@ def test_guest_id_must_be_uuid(client: TestClient) -> None:
     assert response.status_code == 400
 
 
+def test_guest_id_is_required_for_unauthenticated_chat() -> None:
+    anonymous_client = TestClient(app)
+
+    response = anonymous_client.get("/chat/conversations")
+
+    assert response.status_code == 400
+    assert "is required" in response.json()["detail"]
+
+
+def test_concurrent_turn_for_same_conversation_is_rejected(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
+    )
+    created = client.post(
+        "/chat/ask",
+        json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
+    )
+    conversation_id = created.json()["conversation_id"]
+    with create_session() as session:
+        session.add(
+            Message(
+                message_id="msg-pending-concurrent",
+                conversation_id=conversation_id,
+                sequence_no=3,
+                role="user",
+                content="Pertanyaan yang masih diproses",
+                meta_data={
+                    "turn_status": "processing",
+                    "memory_eligible": False,
+                },
+            )
+        )
+        session.commit()
+
+    response = client.post(
+        "/chat/ask",
+        json={
+            "conversation_id": conversation_id,
+            "question": "bagaimana dengan haknya?",
+            "top_k": 1,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "conversation_turn_in_progress"
+
+
 def test_guest_can_rename_and_delete_own_conversation(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.api.routes_chat.load_artifact_documents",
-        lambda _: [make_document()],
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
     )
     owner = {"X-KerjaPedia-Guest-ID": "11111111-1111-4111-8111-111111111111"}
     other_guest = {"X-KerjaPedia-Guest-ID": "22222222-2222-4222-8222-222222222222"}
@@ -409,8 +511,8 @@ def test_chat_stream_emits_thinking_deltas_and_final_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.api.routes_chat.load_artifact_documents",
-        lambda _: [make_document()],
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
     )
     with client.stream(
         "POST",
@@ -425,19 +527,116 @@ def test_chat_stream_emits_thinking_deltas_and_final_response(
         "Menelusuri regulasi resmi",
         "Menyusun jawaban berdasarkan sumber",
     ]
-    streamed_answer = "".join(
-        event["content"] for event in events if event["event"] == "delta"
-    )
+    streamed_answer = "".join(event["content"] for event in events if event["event"] == "delta")
     completed = next(event["response"] for event in events if event["event"] == "done")
     assert streamed_answer == completed["answer"]["answer"]
     assert completed["conversation_id"].startswith("conv_")
+
+
+def test_chat_stream_only_emits_verified_or_fail_closed_answer(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
+    )
+
+    def unavailable_generator():
+        generator = AnswerGenerator()
+
+        def generate(question, retrieval):
+            grounded = generator.generate(question, retrieval)
+            return replace(
+                grounded,
+                answer=(
+                    "Maaf, jawaban terverifikasi belum dapat disusun saat ini. "
+                    "Silakan periksa sumber resmi yang ditemukan."
+                ),
+                answer_status="temporarily_unavailable",
+                confidence=0,
+                claims=[],
+                warnings=[*grounded.warnings, "answer_generation_unavailable"],
+            )
+
+        return type("UnavailableGenerator", (), {"generate": staticmethod(generate)})()
+
+    monkeypatch.setattr(
+        "app.api.routes_chat.answer_generator_from_settings",
+        lambda *_: unavailable_generator(),
+    )
+
+    with client.stream(
+        "POST",
+        "/chat/ask/stream",
+        json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
+    ) as response:
+        events = [json.loads(line) for line in response.iter_lines() if line]
+
+    streamed_answer = "".join(event["content"] for event in events if event["event"] == "delta")
+    completed = next(event["response"] for event in events if event["event"] == "done")
+    assert completed["answer"]["answer_status"] == "temporarily_unavailable"
+    assert completed["answer"]["citations"]
+    assert streamed_answer == ""
+    assert "Pasal 15 pekerja PKWT" not in completed["answer"]["answer"]
+
+
+def test_streaming_follow_up_uses_the_same_memory_resolver(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
+    )
+    first = client.post(
+        "/chat/ask",
+        json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
+    )
+    conversation_id = first.json()["conversation_id"]
+
+    with client.stream(
+        "POST",
+        "/chat/ask/stream",
+        json={
+            "conversation_id": conversation_id,
+            "question": "kompensasinya dibayar kepada siapa?",
+            "top_k": 1,
+        },
+    ) as response:
+        events = [json.loads(line) for line in response.iter_lines() if line]
+
+    completed = next(event["response"] for event in events if event["event"] == "done")
+    assert response.status_code == 200
+    assert set(completed["answer"]["debug"]) == {
+        "trace_id",
+        "prompt_version_id",
+    }
+    with create_session() as session:
+        row = (
+            session.query(Message)
+            .filter(
+                Message.conversation_id == conversation_id,
+                Message.role == "user",
+                Message.content == "kompensasinya dibayar kepada siapa?",
+            )
+            .one()
+        )
+        memory = row.meta_data["rag_trace"]["memory"]
+    assert memory["used"] is True
+    assert memory["activation_reason"] == "referential_term"
+    assert len(memory["retrieval_query_sha256"]) == 64
+    assert completed["answer"]["refusal_reason"] is None
 
 
 def test_chat_refuses_when_no_document_supports_the_question(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.api.routes_chat.load_artifact_documents", lambda _: [])
+    monkeypatch.setattr(
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [],
+    )
 
     response = client.post(
         "/chat/ask",
@@ -455,8 +654,8 @@ def test_chat_median_response_time_meets_prd_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.api.routes_chat.load_artifact_documents",
-        lambda _: [make_document()],
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
     )
     responses = [
         client.post(
@@ -494,7 +693,7 @@ def test_chat_guardrail_blocks_prompt_injection_before_retrieval(client: TestCli
     assert answer["refusal_reason"] == "prompt_injection_detected"
     assert answer["citations"] == []
     assert "input_guardrail_triggered" in answer["warnings"]
-    assert answer["debug"]["guardrail"]["allowed"] is False
+    assert set(answer["debug"]) == {"trace_id", "prompt_version_id"}
 
 
 def test_dataset_pdf_is_served_inline(client: TestClient) -> None:
@@ -508,7 +707,7 @@ def test_admin_document_workflow_requires_admin(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin", "legal_reviewer"])
     unauthorized = client.get("/admin/documents")
     headers = admin_headers(client)
     documents = client.get("/admin/documents", headers=headers)
@@ -522,6 +721,69 @@ def test_admin_document_workflow_requires_admin(
         headers=headers,
         json={"legal_status": "active", "verification_status": "verified"},
     )
+    with create_session() as session:
+        session.merge(
+            Document(
+                document_id="PP-35-2021",
+                title="Peraturan Pemerintah Nomor 35 Tahun 2021",
+                short_title="PP 35/2021",
+                regulation_type="PP",
+                number=35,
+                year=2021,
+                issuer="Pemerintah Republik Indonesia",
+                topics=["pkwt"],
+            )
+        )
+        session.merge(
+            Document(
+                document_id="UU-6-2023",
+                title="Undang-Undang Nomor 6 Tahun 2023",
+                short_title="UU 6/2023",
+                regulation_type="UU",
+                number=6,
+                year=2023,
+                issuer="Pemerintah Republik Indonesia",
+                topics=["pkwt"],
+            )
+        )
+        session.merge(
+            DocumentVersion(
+                version_id="PP-35-2021-v1",
+                document_id="PP-35-2021",
+                version=1,
+                sha256="a" * 64,
+                size_bytes=100,
+                local_file="dataset/PP-35-2021.pdf",
+                source_url="https://peraturan.bpk.go.id/",
+                legal_status="active",
+                verification_status="verified",
+                source_verification_status="pending",
+                legal_review_status="pending",
+                publication_status="draft",
+                ingestion_status="review_required",
+                is_current=False,
+                artifact_paths={},
+            )
+        )
+        session.commit()
+    source_verification = client.post(
+        "/admin/documents/PP-35-2021/verification",
+        headers=headers,
+        json={
+            "verification_type": "source",
+            "status": "verified",
+            "evidence_url": "https://peraturan.bpk.go.id/",
+        },
+    )
+    legal_verification = client.post(
+        "/admin/documents/PP-35-2021/verification",
+        headers=headers,
+        json={
+            "verification_type": "legal",
+            "status": "verified",
+            "evidence_url": "https://peraturan.bpk.go.id/",
+        },
+    )
     relationship = client.put(
         "/admin/documents/PP-35-2021/relationships",
         headers=headers,
@@ -530,9 +792,19 @@ def test_admin_document_workflow_requires_admin(
                 "to_document_id": "UU-6-2023",
                 "relationship_type": "amended_by",
                 "confidence": "high",
+                "evidence_url": "https://peraturan.bpk.go.id/",
             }
         ],
     )
+    blocked_publication = client.post(
+        "/admin/documents/PP-35-2021/publication",
+        headers=headers,
+        json={"action": "publish"},
+    )
+    with create_session() as session:
+        version = session.get(DocumentVersion, "PP-35-2021-v1")
+        version.ingestion_status = "completed"
+        session.commit()
     publication = client.post(
         "/admin/documents/PP-35-2021/publication",
         headers=headers,
@@ -540,8 +812,11 @@ def test_admin_document_workflow_requires_admin(
     )
 
     assert update.status_code == 200
+    assert source_verification.status_code == 200
+    assert legal_verification.status_code == 200
     assert relationship.status_code == 200
     assert relationship.json()["relationships"][0]["to_document_id"] == "UU-6-2023"
+    assert blocked_publication.status_code == 409
     assert publication.status_code == 200
     assert publication.json()["status"] == "published"
 
@@ -588,8 +863,8 @@ def test_feedback_resolves_real_answer_id_and_stores_details(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.api.routes_chat.load_artifact_documents",
-        lambda _: [make_document()],
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
     )
     created = client.post(
         "/chat/ask",
@@ -658,6 +933,21 @@ def test_evaluation_dataset_and_experiment_run(
             ],
         },
     )
+    assert dataset.json()["questions"][0]["status"] == "needs_human_review"
+    blocked_review = client.post(
+        f"/evaluation/datasets/{dataset.json()['dataset_id']}/questions/API-EVAL-001/review",
+        headers=headers,
+        json={"status": "verified", "notes": "Checked against the official regulation."},
+    )
+    assert blocked_review.status_code == 403
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin", "legal_reviewer"])
+    reviewed = client.post(
+        f"/evaluation/datasets/{dataset.json()['dataset_id']}/questions/API-EVAL-001/review",
+        headers=headers,
+        json={"status": "verified", "notes": "Checked against the official regulation."},
+    )
+    assert reviewed.status_code == 200
+    assert reviewed.json()["verified_by"] != "unknown"
     monkeypatch.setattr(
         "app.api.routes_evaluation.load_artifact_documents",
         lambda _: [make_document()],
@@ -793,7 +1083,7 @@ def test_create_ingestion_job_for_uploaded_document_passes_extra_manifest(
     )
 
     assert response.status_code == 200
-    assert response.json()["status"] == "completed"
+    assert response.json()["status"] == "queued"
     assert calls["extra_manifest_path"] == storage_root / "uploads" / "manifest.json"
 
 
@@ -879,7 +1169,7 @@ def test_admin_audit_logs_record_admin_actions(
         headers=headers,
         json={"legal_status": "active"},
     )
-    client.post(
+    publication = client.post(
         "/admin/documents/PP-35-2021/publication",
         headers=headers,
         json={"action": "publish"},
@@ -888,9 +1178,10 @@ def test_admin_audit_logs_record_admin_actions(
     logs = client.get("/admin/audit-logs", headers=headers)
 
     assert logs.status_code == 200
+    assert publication.status_code == 409
     actions = [item["action"] for item in logs.json()]
     assert "document.metadata_updated" in actions
-    assert "document.published" in actions
+    assert "document.published" not in actions
     assert any(item["target_id"] == "PP-35-2021" for item in logs.json())
 
 

@@ -12,8 +12,12 @@ from app.models.ingestion import (
     ChunkEmbedding,
     Document,
     DocumentChunk,
+    DocumentRelationship,
+    DocumentVerificationAudit,
     DocumentVersion,
+    IngestionBuild,
     IngestionJob,
+    RagIndexRelease,
 )
 
 __all__ = [
@@ -23,10 +27,14 @@ __all__ = [
     "DocumentAdmin",
     "DocumentChunk",
     "DocumentVersion",
+    "DocumentRelationship",
+    "DocumentVerificationAudit",
+    "IngestionBuild",
     "EvaluationDataset",
     "EvaluationRun",
     "Feedback",
     "IngestionJob",
+    "RagIndexRelease",
     "Message",
     "UploadedDocument",
     "UserProfile",

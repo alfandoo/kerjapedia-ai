@@ -5,15 +5,32 @@ import { useMemo, useSyncExternalStore } from "react";
 export const SESSION_STORAGE_KEY = "kerjapedia-session-v1";
 import type { UserSession } from "./types";
 
-export function getStoredSession(): UserSession | null {
-  if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+function parseStoredSession(raw: string | null): UserSession | null {
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as UserSession;
+    const value = JSON.parse(raw) as Partial<UserSession>;
+    const user = value.user;
+    if (
+      typeof value.access_token !== "string" ||
+      !value.access_token.trim() ||
+      !user ||
+      typeof user.user_id !== "string" ||
+      typeof user.email !== "string" ||
+      typeof user.name !== "string" ||
+      !Array.isArray(user.roles) ||
+      !user.roles.every((role) => typeof role === "string")
+    ) {
+      return null;
+    }
+    return value as UserSession;
   } catch {
     return null;
   }
+}
+
+export function getStoredSession(): UserSession | null {
+  if (typeof window === "undefined") return null;
+  return parseStoredSession(window.localStorage.getItem(SESSION_STORAGE_KEY));
 }
 
 export function clearStoredSession(): void {
@@ -41,13 +58,5 @@ function getServerSnapshot() {
 
 export function useStoredSession(): UserSession | null {
   const serializedSession = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot);
-
-  return useMemo(() => {
-    if (!serializedSession) return null;
-    try {
-      return JSON.parse(serializedSession) as UserSession;
-    } catch {
-      return null;
-    }
-  }, [serializedSession]);
+  return useMemo(() => parseStoredSession(serializedSession), [serializedSession]);
 }

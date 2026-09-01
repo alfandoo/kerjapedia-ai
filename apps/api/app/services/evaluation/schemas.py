@@ -19,6 +19,8 @@ class EvaluationQuestion:
     hard_negative: bool = False
     verified_by: str = "unknown"
     status: str = "needs_human_review"
+    split: Literal["development", "test"] = "development"
+    scenario_tags: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> EvaluationQuestion:
@@ -34,6 +36,8 @@ class EvaluationQuestion:
             hard_negative=bool(data.get("hard_negative", False)),
             verified_by=data.get("verified_by", "unknown"),
             status=data.get("status", "needs_human_review"),
+            split=data.get("split", "development"),
+            scenario_tags=list(data.get("scenario_tags", [])),
         )
 
 
@@ -46,6 +50,13 @@ class QuestionEvaluation:
     reciprocal_rank: float | None
     citation_correctness: float | None
     faithfulness: float | None
+    ragas_faithfulness: float | None
+    recall_at_10: float | None
+    ndcg_at_10: float | None
+    unsupported_claim_rate: float | None
+    stale_source_count: int
+    language_correct: bool
+    best_score: float
     refusal_correct: bool
     actual_refuse: bool
     retrieved_document_ids: list[str]
@@ -62,8 +73,18 @@ class AggregateMetrics:
     mean_reciprocal_rank: float
     citation_correctness: float
     faithfulness: float
+    ragas_faithfulness: float
     refusal_accuracy: float
     hard_negative_recall_at_5: float
+    recall_at_10: float
+    ndcg_at_10: float
+    citation_precision: float
+    unsupported_claim_rate: float
+    stale_source_rate: float
+    refusal_precision: float
+    refusal_recall: float
+    language_accuracy: float
+    recommended_refusal_threshold: float
 
 
 @dataclass(frozen=True)

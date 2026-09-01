@@ -2,6 +2,8 @@ import { API_URL, parseJsonResponse } from "@/lib/api-client";
 import type { UserSession } from "./types";
 import { clearStoredSession, getStoredSession, SESSION_STORAGE_KEY } from "./session";
 
+let refreshInFlight: Promise<UserSession | null> | null = null;
+
 export async function login(email: string, password: string): Promise<UserSession> {
   const response = await fetch(`${API_URL}/auth/login`, {
     method: "POST",
@@ -24,20 +26,42 @@ export async function register(
   return parseJsonResponse<UserSession>(response);
 }
 
-async function refreshStoredSession(): Promise<UserSession | null> {
+async function performSessionRefresh(): Promise<UserSession | null> {
   const session = getStoredSession();
-  if (!session?.refresh_token) return null;
+  if (!session?.refresh_token) {
+    clearStoredSession();
+    return null;
+  }
   const response = await fetch(`${API_URL}/auth/refresh`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: session.refresh_token }),
   });
-  if (!response.ok) return null;
-  const fresh = await response.json();
-  if (!fresh.access_token) return null;
-  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(fresh));
+  if (!response.ok) {
+    if ([400, 401, 403].includes(response.status)) clearStoredSession();
+    return null;
+  }
+  const fresh = (await response.json()) as UserSession;
+  if (!fresh.access_token || !fresh.user) {
+    clearStoredSession();
+    return null;
+  }
+  const nextSession: UserSession = {
+    ...fresh,
+    refresh_token: fresh.refresh_token ?? session.refresh_token,
+  };
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession));
   window.dispatchEvent(new Event("kerjapedia-session-change"));
-  return fresh as UserSession;
+  return nextSession;
+}
+
+function refreshStoredSession(): Promise<UserSession | null> {
+  if (!refreshInFlight) {
+    refreshInFlight = performSessionRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
 }
 
 export async function fetchWithAuthRetry(

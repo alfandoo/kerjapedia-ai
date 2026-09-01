@@ -5,9 +5,13 @@ import re
 from app.services.ingestion.schemas import ExtractedPage, LegalSegment
 
 CHAPTER_RE = re.compile(r"^BAB\s+([IVXLCDM]+)\b", re.IGNORECASE)
-SECTION_RE = re.compile(r"^Bagian\s+([A-Za-z]+)\b", re.IGNORECASE)
-ARTICLE_RE = re.compile(r"^Pasal\s+([0-9]+[A-Z]?)\s*$", re.IGNORECASE)
-PARAGRAPH_RE = re.compile(r"^\(?([0-9]+)\)\s+")
+SECTION_RE = re.compile(r"^Bagian\s+(.+)$", re.IGNORECASE)
+SUBSECTION_RE = re.compile(r"^Paragraf\s+(.+)$", re.IGNORECASE)
+ARTICLE_RE = re.compile(r"^Pasal\s+([0-9]+[A-Z]?)\s*[.:]?\s*$", re.IGNORECASE)
+PARAGRAPH_RE = re.compile(r"^\(?([0-9]+)\)\s+(.+)$")
+LETTER_RE = re.compile(r"^([a-z])\.\s+(.+)$", re.IGNORECASE)
+APPENDIX_RE = re.compile(r"^LAMPIRAN\b", re.IGNORECASE)
+EXPLANATION_RE = re.compile(r"^PENJELASAN\b", re.IGNORECASE)
 COMPACT_CHAPTER_RE = re.compile(r"^BAB([IVXLCDM]+)\b", re.IGNORECASE)
 OCR_ARTICLE_TEN_PLUS_RE = re.compile(r"\bPasa[l1i][l1i]([0-9]+[A-Z]?)\b", re.IGNORECASE)
 OCR_ARTICLE_RE = re.compile(r"\bPasa[1i]([0-9]+[A-Z]?)\b", re.IGNORECASE)
@@ -40,8 +44,11 @@ def parse_legal_segments(document_id: str, pages: list[ExtractedPage]) -> list[L
     segments: list[LegalSegment] = []
     chapter: str | None = None
     section: str | None = None
+    subsection: str | None = None
     current_article: str | None = None
     current_paragraph: str | None = None
+    paragraph_base: str | None = None
+    segment_type = "preamble"
     buffer: list[str] = []
     page_start: int | None = None
     page_end: int | None = None
@@ -59,12 +66,13 @@ def parse_legal_segments(document_id: str, pages: list[ExtractedPage]) -> list[L
                 segment_id=f"{document_id}-seg-{counter:05d}",
                 document_id=document_id,
                 chapter=chapter,
-                section=section,
+                section=" / ".join(value for value in (section, subsection) if value) or None,
                 article=current_article,
                 paragraph=current_paragraph,
                 page_start=page_start,
                 page_end=page_end,
                 text=text,
+                segment_type=segment_type,
             )
         )
         counter += 1
@@ -80,25 +88,67 @@ def parse_legal_segments(document_id: str, pages: list[ExtractedPage]) -> list[L
 
             chapter_match = CHAPTER_RE.match(line)
             section_match = SECTION_RE.match(line)
+            subsection_match = SUBSECTION_RE.match(line)
             article_match = ARTICLE_RE.match(line)
             paragraph_match = PARAGRAPH_RE.match(line)
+            letter_match = LETTER_RE.match(line)
 
+            if APPENDIX_RE.match(line):
+                flush()
+                segment_type = "appendix"
+                chapter = "LAMPIRAN"
+                section = None
+                subsection = None
+                current_article = None
+                current_paragraph = None
+                paragraph_base = None
+                continue
+            if EXPLANATION_RE.match(line):
+                flush()
+                segment_type = "explanation"
+                chapter = "PENJELASAN"
+                section = None
+                subsection = None
+                current_article = None
+                current_paragraph = None
+                paragraph_base = None
+                continue
             if chapter_match:
                 flush()
                 chapter = f"BAB {chapter_match.group(1).upper()}"
                 section = None
+                subsection = None
                 current_paragraph = None
-            elif section_match:
+                paragraph_base = None
+                continue
+            if section_match:
                 flush()
-                section = f"Bagian {section_match.group(1).title()}"
+                section = f"Bagian {section_match.group(1).strip()}"
+                subsection = None
                 current_paragraph = None
-            elif article_match:
+                paragraph_base = None
+                continue
+            if subsection_match:
+                flush()
+                subsection = f"Paragraf {subsection_match.group(1).strip()}"
+                current_paragraph = None
+                paragraph_base = None
+                continue
+            if article_match:
                 flush()
                 current_article = f"Pasal {article_match.group(1).upper()}"
                 current_paragraph = None
-            elif paragraph_match and current_article:
+                paragraph_base = None
+                if segment_type == "preamble":
+                    segment_type = "substantive"
+                continue
+            if paragraph_match and current_article:
                 flush()
-                current_paragraph = f"Ayat ({paragraph_match.group(1)})"
+                paragraph_base = f"Ayat ({paragraph_match.group(1)})"
+                current_paragraph = paragraph_base
+            elif letter_match and current_article and paragraph_base:
+                flush()
+                current_paragraph = f"{paragraph_base}, Huruf {letter_match.group(1).lower()}"
 
             if page_start is None:
                 page_start = page.page_number
@@ -121,6 +171,7 @@ def parse_legal_segments(document_id: str, pages: list[ExtractedPage]) -> list[L
             page_start=page.page_number,
             page_end=page.page_number,
             text=page.text,
+            segment_type="unstructured",
         )
         for page in pages
         if page.text

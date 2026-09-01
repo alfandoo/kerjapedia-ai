@@ -1,49 +1,59 @@
 # Backend API
 
-Task 7 menyediakan baseline FastAPI untuk MVP KerjaPedia AI. Dokumentasi OpenAPI
-otomatis tersedia saat server berjalan di `/docs` dan `/openapi.json`.
+OpenAPI tersedia di `/docs` dan `/openapi.json` ketika API dijalankan.
 
-## Menjalankan Lokal
+## System dan chat
 
-```bash
-cd apps/api
-.venv\Scripts\python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
+- `GET /health`: liveness dan konfigurasi provider nonsecret.
+- `GET /ready`: readiness database, Pinecone, Supabase, Redis, dan active immutable
+  release.
+- `GET /metrics`: Prometheus exporter (tidak masuk OpenAPI).
+- `POST /chat/ask`: jawaban terverifikasi nonstreaming.
+- `POST /chat/ask/stream`: status proses, lalu answer delta hanya setelah verification.
+- Endpoint conversation tetap kompatibel dengan frontend.
 
-Health check:
+Request chat tanpa bearer token wajib mengirim `X-KerjaPedia-Guest-ID` berupa UUID.
+Header yang hilang atau tidak valid menghasilkan HTTP 400; conversation milik guest lain
+menghasilkan HTTP 403. Hanya satu turn per conversation dapat diproses sekaligus dan
+request yang bertabrakan menghasilkan HTTP 409 `conversation_turn_in_progress`.
 
-```bash
-curl http://127.0.0.1:8000/health
-```
+Kegagalan provider RAG mengembalikan HTTP 503 dengan `code`, pesan generik, dan
+`trace_id`. Public answer debug tidak mengungkap prompt atau internal retrieval trace.
 
-## Endpoint Utama
+## Dokumen dan ingestion
 
-- `GET /health`: status service.
-- `POST /auth/login`: login development. Email yang diawali `admin@` mendapat role
-  `admin`.
-- `POST /auth/logout`: revoke token development.
-- `GET /auth/me`: user saat ini berdasarkan bearer token.
-- `POST /chat/ask`: menjalankan retrieval dan answer generation.
-- `GET /chat/conversations`: daftar conversation milik user/guest.
-- `GET /chat/conversations/{conversation_id}`: detail conversation.
-- `GET /documents`: daftar regulasi dari `dataset/metadata.json`.
-- `GET /documents/{document_id}`: detail dokumen dan chunk yang sudah tersedia.
-- `GET /documents/{document_id}/citations/{chunk_id}`: detail citation chunk.
-- `PATCH /documents/{document_id}`: validasi update metadata admin.
-- `POST /ingestion/jobs`: jalankan ingestion sinkron untuk admin.
-- `GET /ingestion/jobs`: daftar ingestion job.
-- `POST /evaluation/datasets`: buat dataset evaluasi admin.
-- `POST /evaluation/runs`: jalankan evaluasi retrieval sederhana.
-- `POST /feedback`: simpan feedback pengguna.
+- Endpoint `/documents` menyediakan registry dan PDF/citation publik.
+- Lookup governance admin menggunakan registry gabungan dataset resmi dan upload
+  manifest, sehingga candidate hasil upload mengikuti verification/publication gate
+  yang sama.
+- `POST /ingestion/jobs` membuat job checksum-idempotent; `GET /ingestion/jobs` dan
+  `GET /ingestion/jobs/{id}` membaca status.
+- `POST /admin/documents/{id}/verification` mencatat source/legal verification audit.
+- `POST /admin/documents/{id}/publication` mengubah publication status; publish hanya
+  untuk candidate version yang source-verified dan legal-reviewed. Candidate baru
+  menjadi current saat release dipromosikan.
+- `PUT /admin/documents/{id}/relationships` mengganti normalized legal relationships
+  beserta reviewer, pasal, dan evidence URL.
 
-## Guardrail dan Observability
+## Immutable RAG releases
 
-Request body divalidasi dengan Pydantic. Middleware menambahkan rate limit dasar per IP
-dan header `X-Request-Latency-Ms`. Endpoint chat mengembalikan `retrieval_score` dan
-`token_usage`; token usage masih `0` sampai integrasi LLM aktif.
+- `GET/POST /admin/rag/releases`: list atau buat snapshot release.
+- `POST /admin/rag/releases/{id}/build`: queue pembangunan namespace.
+- `POST /admin/rag/releases/{id}/transition`: `validate`, `promote`, atau `retire`.
 
-## Catatan Implementasi
+Validation membutuhkan evaluation run milik release yang sama dan seluruh gate harus
+lulus. Promotion mengganti active namespace secara atomik; mempromosikan release retired
+menjadi mekanisme rollback.
 
-Auth, conversation history, feedback, ingestion job, dan evaluation run masih memakai
-in-memory store untuk MVP awal. Data akan hilang ketika proses API restart. Persistensi
-database dan session production perlu dikerjakan pada tahap hardening berikutnya.
+## Evaluation
+
+- `POST /evaluation/datasets`: buat dataset maksimal 500 kasus.
+- `POST /evaluation/datasets/{dataset_id}/questions/{question_id}/review`: append-only
+  review event oleh role `legal_reviewer`.
+- `POST /evaluation/datasets/seed`: impor 150 seed nonproduksi.
+- `POST /evaluation/runs`: tanpa `release_id` menjalankan eksperimen artifact; dengan
+  `release_id` menjalankan stack production terhadap namespace tersebut.
+
+Release evaluation membutuhkan minimal 300 kasus human-verified dengan split
+`development` dan `test`, serta audit event review terbaru yang verified untuk setiap
+pertanyaan.

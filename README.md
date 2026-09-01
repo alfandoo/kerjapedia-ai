@@ -52,7 +52,7 @@ Untuk mode industri, isi minimal variabel berikut di `.env`:
 ```bash
 VECTOR_STORE=pinecone
 PINECONE_API_KEY=...
-PINECONE_INDEX_NAME=kerjapedia-regulations
+PINECONE_INDEX_NAME=kerjapedia-regulations-v2
 PINECONE_NAMESPACE=production
 EMBEDDING_PROVIDER=bge_m3
 EMBEDDING_MODEL=BAAI/bge-m3
@@ -127,11 +127,13 @@ cd apps/api
 .venv\Scripts\python -m app.services.ingestion.cli --document-id PP-35-2021
 ```
 
-Ingest seluruh dataset ke Pinecone dengan BGE-M3:
+Untuk production, ingestion hanya menghasilkan artifact dan registry version. Namespace
+Pinecone dibangun dari dokumen published/verified melalui immutable release admin; job
+ingestion tidak pernah menulis langsung ke namespace aktif.
 
 ```bash
 cd apps/api
-.venv\Scripts\python -m app.services.ingestion.cli --all --vector-store pinecone --embedding-provider bge_m3
+.venv\Scripts\python -m app.services.ingestion.cli --all --embedding-provider bge_m3 --persist-db
 ```
 
 Artifact ingestion tetap disimpan di `storage/ingestion/`. Lihat `docs/INGESTION_PIPELINE.md` untuk detail pipeline dan opsi `--persist-db`.
@@ -172,10 +174,12 @@ cd apps/api
 
 ```bash
 cd apps/api
-.venv\Scripts\python -m app.services.evaluation.cli --dataset ../../evaluation/golden_questions.json --storage-root ../../storage/ingestion --output ../../storage/evaluation/report.json --top-k 5
+.venv\Scripts\python -m app.services.evaluation.cli --dataset ../../evaluation/golden_questions.json --storage-root ../../storage/ingestion --output ../../storage/evaluation/report.json --top-k 10
 ```
 
-Evaluasi membandingkan mode baseline, dense, hybrid, dan rerank pada 150 pertanyaan seed. Dataset masih memerlukan verifikasi hukum manusia sebelum dipakai sebagai klaim kualitas produksi. Lihat `docs/EVALUATION.md` untuk metrik dan quality gate.
+Evaluasi CLI membandingkan mode development pada 150 pertanyaan seed. Promotion release
+membutuhkan minimal 300 pertanyaan human-verified dengan development/held-out split dan
+evaluation run yang terikat ke namespace release. Lihat `docs/EVALUATION.md`.
 
 ### Pre-commit
 

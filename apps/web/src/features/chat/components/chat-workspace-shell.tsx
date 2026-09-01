@@ -194,156 +194,157 @@ export function ChatWorkspaceShell({
     }
   }
 
-  const historyWrapperClass = `min-h-0 flex-1 [&_aside]:flex [&_aside]:min-h-0 [&_aside]:flex-1 [&_aside]:overflow-y-auto [&_aside]:bg-transparent [&_aside]:border-0 [&_aside]:p-0 [&_aside>div]:mt-0 ${
-    session
-      ? "[&_h2]:mx-2.5 [&_h2]:mb-2 [&_h2]:font-sans [&_h2]:text-[10px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.04em] [&_h2]:text-[#718078]"
-      : "[&_h2]:hidden"
-  }`;
+  const historyWrapperClass = session ? "min-w-0" : "hidden";
 
   const sidebarBody = (
     <>
-      <div className="flex min-h-11 items-center justify-between pb-2.5">
-        {session ? (
-          <Link
-            href="/chat"
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-1 text-tinta transition hover:bg-[#ececec]"
-            aria-label="KerjaPedia AI beranda"
+      <div className="sidebar-scroll-region min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div className="px-3 pt-[14px]">
+          <div className="flex min-h-11 items-center justify-between pb-2.5">
+            {session ? (
+              <Link
+                href="/chat"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-1 text-sidebar-foreground transition hover:bg-sidebar-accent"
+                aria-label="KerjaPedia AI beranda"
+              >
+                <Scale className="size-[23px]" />
+                <strong className="whitespace-nowrap font-display text-sm font-semibold">
+                  KerjaPedia AI
+                </strong>
+              </Link>
+            ) : (
+              <Link
+                href="/"
+                className="grid size-10 place-items-center rounded-[9px] text-sidebar-foreground transition hover:bg-sidebar-accent"
+                aria-label="KerjaPedia AI beranda"
+              >
+                <Scale className="size-[23px]" />
+              </Link>
+            )}
+            <div className="flex flex-none items-center gap-0.5">
+              <button
+                type="button"
+                className="grid size-[38px] place-items-center rounded-lg text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                aria-label={translate("sidebar.search")}
+                aria-expanded={chatSearchOpen}
+                onClick={(event) => openChatSearch(event.currentTarget)}
+              >
+                <Search className="size-5" />
+              </button>
+              <button
+                type="button"
+                className="grid size-[38px] place-items-center rounded-lg text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-foreground max-[760px]:hidden"
+                aria-label="Tutup sidebar"
+                onClick={() => onSidebarExpandedChange(false)}
+              >
+                <PanelLeftClose className="size-5" />
+              </button>
+              <button
+                type="button"
+                className="grid size-[38px] place-items-center rounded-lg text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-foreground hidden max-[760px]:grid"
+                ref={mobileCloseRef}
+                aria-label="Tutup riwayat"
+                onClick={() => {
+                  onMobileSidebarOpenChange(false);
+                  window.setTimeout(() => mobileMenuRef.current?.focus(), 0);
+                }}
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+          </div>
+          {chatSearchOpen ? (
+            <div className="relative mb-2 mt-1 grid min-h-[42px] grid-cols-[20px_minmax(0,1fr)_34px] items-center gap-[7px] rounded-[9px] border border-sidebar-border bg-sidebar-accent py-0 pl-2.5 pr-[3px] text-sidebar-foreground">
+              <Search className="size-[17px]" />
+              <label htmlFor="sidebar-chat-search" className="sr-only">
+                {translate("sidebar.search")}
+              </label>
+              <input
+                ref={chatSearchInputRef}
+                id="sidebar-chat-search"
+                type="search"
+                placeholder={`${translate("sidebar.search")}...`}
+                value={chatSearchQuery}
+                onChange={(event) => setChatSearchQuery(event.target.value)}
+                className="min-w-0 bg-transparent text-[11px] text-sidebar-foreground outline-none placeholder:text-muted-foreground"
+              />
+              <button
+                type="button"
+                aria-label="Tutup pencarian chat"
+                onClick={() => {
+                  setChatSearchOpen(false);
+                  setChatSearchQuery("");
+                }}
+                className="grid size-[34px] place-items-center rounded-md text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          ) : null}
+          <nav
+            className={`grid gap-[3px] ${session ? "pb-2" : ""}`}
+            aria-label={session ? "Navigasi pengguna" : "Navigasi guest"}
           >
-            <Scale className="size-[23px]" />
-            <strong className="whitespace-nowrap font-display text-sm font-semibold">
-              KerjaPedia AI
-            </strong>
-          </Link>
-        ) : (
-          <Link
-            href="/"
-            className="grid size-10 place-items-center rounded-[9px] text-tinta transition hover:bg-[#ececec]"
-            aria-label="KerjaPedia AI beranda"
-          >
-            <Scale className="size-[23px]" />
-          </Link>
-        )}
-        <div className="flex flex-none items-center gap-0.5">
-          <button
-            type="button"
-            className="grid size-[38px] place-items-center rounded-lg text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-foreground"
-            aria-label={translate("sidebar.search")}
-            aria-expanded={chatSearchOpen}
-            onClick={(event) => openChatSearch(event.currentTarget)}
-          >
-            <Search className="size-5" />
-          </button>
-          <button
-            type="button"
-            className="grid size-[38px] place-items-center rounded-lg text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-foreground max-[760px]:hidden"
-            aria-label="Tutup sidebar"
-            onClick={() => onSidebarExpandedChange(false)}
-          >
-            <PanelLeftClose className="size-5" />
-          </button>
-          <button
-            type="button"
-            className="grid size-[38px] place-items-center rounded-lg text-[#676767] transition hover:bg-[#ececec] hidden max-[760px]:grid"
-            ref={mobileCloseRef}
-            aria-label="Tutup riwayat"
-            onClick={() => {
+            <button
+              type="button"
+              className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-left text-xs font-semibold text-sidebar-foreground transition hover:bg-sidebar-accent"
+              onClick={() => {
+                onNewConversation();
+                onMobileSidebarOpenChange(false);
+              }}
+            >
+              <Plus className="size-[18px]" />
+              <span>{translate("sidebar.newChat")}</span>
+            </button>
+            <Link
+              href="/search"
+              className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-sidebar-foreground transition hover:bg-sidebar-accent"
+            >
+              <Search className="size-[18px]" />
+              <span>{translate("sidebar.searchRegulations")}</span>
+            </Link>
+            <Link
+              href="/legal/disclaimer"
+              className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-sidebar-foreground transition hover:bg-sidebar-accent"
+            >
+              <FileText className="size-[18px]" />
+              <span>{translate("sidebar.legal")}</span>
+            </Link>
+          </nav>
+        </div>
+        <div className={historyWrapperClass}>
+          <ConversationHistory
+            conversations={visibleConversations}
+            activeConversationId={activeConversationId}
+            loading={historyLoading}
+            onConversationSelect={(id) => {
+              onConversationSelect(id);
               onMobileSidebarOpenChange(false);
-              window.setTimeout(() => mobileMenuRef.current?.focus(), 0);
             }}
-          >
-            <X className="size-5" />
-          </button>
-        </div>
-      </div>
-      {chatSearchOpen ? (
-        <div className="relative mb-2 mt-1 grid min-h-[42px] grid-cols-[20px_minmax(0,1fr)_34px] items-center gap-[7px] rounded-[9px] border border-[#e5e5e5] bg-white py-0 pl-2.5 pr-[3px]">
-          <Search className="size-[17px]" />
-          <label htmlFor="sidebar-chat-search" className="sr-only">
-            {translate("sidebar.search")}
-          </label>
-          <input
-            ref={chatSearchInputRef}
-            id="sidebar-chat-search"
-            type="search"
-            placeholder={`${translate("sidebar.search")}...`}
-            value={chatSearchQuery}
-            onChange={(event) => setChatSearchQuery(event.target.value)}
-            className="min-w-0 bg-transparent text-[11px] text-tinta outline-none placeholder:text-[#676767]"
+            onNewConversation={() => {
+              onNewConversation();
+              onMobileSidebarOpenChange(false);
+            }}
+            onConversationRename={onConversationRename}
+            onConversationDelete={onConversationDelete}
+            historyEnabled={Boolean(session)}
+            showNewConversation={false}
+            mobileVisible
+            embedded
+            emptyMessage={
+              chatSearchQuery.trim()
+                ? `${translate("sidebar.noSearchResults")} “${chatSearchQuery.trim()}”`
+                : undefined
+            }
           />
-          <button
-            type="button"
-            aria-label="Tutup pencarian chat"
-            onClick={() => {
-              setChatSearchOpen(false);
-              setChatSearchQuery("");
-            }}
-            className="grid size-[34px] place-items-center rounded-md text-[#676767] transition hover:bg-[#ececec]"
-          >
-            <X className="size-4" />
-          </button>
         </div>
-      ) : null}
-      <nav
-        className={`grid gap-[3px] ${session ? "border-b border-[#e5e5e5] pb-3.5" : ""}`}
-        aria-label={session ? "Navigasi pengguna" : "Navigasi guest"}
-      >
-        <button
-          type="button"
-          className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-left text-xs font-semibold text-tinta transition hover:bg-[#ececec]"
-          onClick={() => {
-            onNewConversation();
-            onMobileSidebarOpenChange(false);
-          }}
-        >
-          <Plus className="size-[18px]" />
-          <span>{translate("sidebar.newChat")}</span>
-        </button>
-        <Link
-          href="/search"
-          className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#ececec]"
-        >
-          <Search className="size-[18px]" />
-          <span>{translate("sidebar.searchRegulations")}</span>
-        </Link>
-        <Link
-          href="/legal/disclaimer"
-          className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-tinta transition hover:bg-[#ececec]"
-        >
-          <FileText className="size-[18px]" />
-          <span>{translate("sidebar.legal")}</span>
-        </Link>
-      </nav>
-      {!session ? <div className="min-h-7 flex-1" /> : null}
-      <div className={historyWrapperClass}>
-        <ConversationHistory
-          conversations={visibleConversations}
-          activeConversationId={activeConversationId}
-          loading={historyLoading}
-          onConversationSelect={(id) => {
-            onConversationSelect(id);
-            onMobileSidebarOpenChange(false);
-          }}
-          onNewConversation={() => {
-            onNewConversation();
-            onMobileSidebarOpenChange(false);
-          }}
-          onConversationRename={onConversationRename}
-          onConversationDelete={onConversationDelete}
-          historyEnabled={Boolean(session)}
-          showNewConversation={false}
-          emptyMessage={
-            chatSearchQuery.trim()
-              ? `Tidak ada chat yang cocok dengan “${chatSearchQuery.trim()}”.`
-              : undefined
-          }
-        />
       </div>
       {session ? (
-        <div className="mt-2 border-t border-[#e5e5e5] pt-2">
+        <div className="shrink-0 border-t border-sidebar-border bg-sidebar px-3 pb-3 pt-2">
           <button
             ref={profileTriggerRef}
             type="button"
-            className="flex min-h-11 w-full items-center gap-[11px] rounded-lg px-2.5 text-left text-xs text-tinta transition hover:bg-[#ececec]"
+            className="flex min-h-11 w-full items-center gap-[11px] rounded-lg px-2.5 text-left text-xs text-sidebar-foreground transition hover:bg-sidebar-accent"
             aria-label={`Buka menu profil ${session.user.name}`}
             aria-haspopup="menu"
             aria-expanded={profileMenuOpen}
@@ -362,7 +363,7 @@ export function ChatWorkspaceShell({
         </div>
       ) : null}
       {!session ? (
-        <div className="mt-auto border-t border-[#e5e5e5]">
+        <div className="shrink-0 border-t border-sidebar-border bg-sidebar pb-3">
           <nav className="grid gap-0.5 p-2" aria-label="Menu tamu">
             <button
               type="button"
@@ -698,7 +699,7 @@ export function ChatWorkspaceShell({
             aria-modal="true"
             aria-label={session ? translate("sidebar.chatHistory") : "KerjaPedia Menu"}
             onKeyDown={keepMobileFocusInside}
-            className="relative z-[1] flex h-full w-[min(86vw,320px)] flex-col overflow-hidden bg-[#f7f7f8] p-[14px_12px_12px] shadow-[16px_0_40px_rgba(17,36,26,0.18)]"
+            className="relative z-[1] flex h-full w-[min(86vw,320px)] flex-col overflow-hidden bg-sidebar shadow-[16px_0_40px_rgba(17,36,26,0.18)]"
           >
             {sidebarBody}
           </aside>

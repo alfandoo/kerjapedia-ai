@@ -1,16 +1,23 @@
+import os
 from collections.abc import Iterator
+
+os.environ["APP_ENV"] = "test"
+os.environ["DATABASE_URL"] = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+psycopg://postgres:postgres@127.0.0.1:5433/kerjapedia_test",
+)
 
 import pytest
 
 from app.core.config import settings
 
 
-@pytest.fixture(scope="session", autouse=True)
-def ensure_test_schema() -> Iterator[None]:
-    """Create missing tables (e.g. audit_logs) without touching existing rows."""
-    from app.db.session import ensure_schema
+@pytest.fixture(scope="session")
+def verify_test_schema() -> Iterator[None]:
+    """Require the isolated test database to be migrated before tests run."""
+    from app.db.session import assert_schema_current
 
-    ensure_schema()
+    assert_schema_current()
     yield
 
 

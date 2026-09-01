@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 
 from app.services.answering.citations import build_citations, build_related_documents, compact_text
-from app.services.answering.prompts import default_prompt_template, render_user_prompt
+from app.services.answering.claim_verifier import verify_claims_deterministically
+from app.services.answering.prompts import default_prompt_template
 from app.services.answering.schemas import AnswerResponse
 from app.services.retrieval.schemas import RetrievalResponse
 
@@ -81,6 +82,7 @@ def _detect_language(query: str) -> str:
         "apakah",
         "berapa",
         "siapakah",
+        "siapa",
         "kah",
         "yang",
         "dan",
@@ -94,6 +96,9 @@ def _detect_language(query: str) -> str:
         "itu",
         "dari",
         "ke",
+        "kepada",
+        "bayar",
+        "dibayar",
         "di",
         "tidak",
         "bukan",
@@ -118,6 +123,13 @@ def _detect_language(query: str) -> str:
         "k3",
         "upah",
         "gaji",
+        "denda",
+        "dendanya",
+        "pembayaran",
+        "kompensasi",
+        "sanksi",
+        "ketentuan",
+        "berlaku",
         "komplain",
         "sanggahan",
     }
@@ -168,11 +180,18 @@ def _detect_language(query: str) -> str:
         "then",
         "employment",
         "worker",
+        "employee",
+        "employer",
         "labor",
         "labour",
         "wage",
         "salary",
         "contract",
+        "compensation",
+        "payment",
+        "penalty",
+        "deadline",
+        "entitlement",
         "termination",
         "bonus",
         "insurance",
@@ -223,6 +242,10 @@ class AnswerGenerator:
             )
 
         answer = self._compose_grounded_answer(query, citations)
+        raw_claims = [
+            (compact_text(citation.quote, 220), [citation.chunk_id]) for citation in citations
+        ]
+        claims = verify_claims_deterministically(raw_claims, citations)
         confidence = self._estimate_confidence(retrieval)
         related_documents = build_related_documents(selected)
         lang = _detect_language(query)
@@ -241,10 +264,10 @@ class AnswerGenerator:
             retrieved_chunk_ids=[item.document.chunk_id for item in selected],
             warnings=retrieval.warnings,
             debug={
-                "system_prompt": self.prompt_template.system_prompt,
-                "rendered_user_prompt": render_user_prompt(query, retrieval),
+                "prompt_version_id": self.prompt_template.prompt_version_id,
                 "query_understanding": retrieval.query.normalized_query,
             },
+            claims=claims,
         )
 
     def _compose_grounded_answer(self, query: str, citations: list) -> str:
@@ -323,10 +346,10 @@ class AnswerGenerator:
             retrieved_chunk_ids=[],
             warnings=retrieval.warnings,
             debug={
-                "system_prompt": self.prompt_template.system_prompt,
-                "rendered_user_prompt": render_user_prompt(query, retrieval),
+                "prompt_version_id": self.prompt_template.prompt_version_id,
                 "query_understanding": retrieval.query.normalized_query,
             },
+            answer_status="clarification",
         )
 
     def _refusal_response(
@@ -359,10 +382,10 @@ class AnswerGenerator:
             retrieved_chunk_ids=[],
             warnings=retrieval.warnings,
             debug={
-                "system_prompt": self.prompt_template.system_prompt,
-                "rendered_user_prompt": render_user_prompt(query, retrieval),
+                "prompt_version_id": self.prompt_template.prompt_version_id,
                 "query_understanding": retrieval.query.normalized_query,
             },
+            answer_status="refused",
         )
 
     def _estimate_confidence(self, retrieval: RetrievalResponse) -> float:

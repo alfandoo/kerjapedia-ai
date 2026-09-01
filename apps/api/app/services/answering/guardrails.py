@@ -12,6 +12,10 @@ GUARDRAIL_REFUSAL = (
     "mengungkap konfigurasi internal, atau mengambil kredensial. Silakan ajukan "
     "pertanyaan tentang regulasi ketenagakerjaan."
 )
+GUARDRAIL_REFUSAL_EN = (
+    "I cannot follow instructions that attempt to change system rules, reveal internal "
+    "configuration, or obtain credentials. Please ask about Indonesian employment regulations."
+)
 
 _INJECTION_PATTERNS = (
     re.compile(r"\babaikan (semua )?instruksi (sebelumnya|di atas)\b", re.IGNORECASE),
@@ -48,7 +52,7 @@ def build_guardrail_refusal(query: str, reason: str) -> AnswerResponse:
     disclaimer = DISCLAIMER_ID if lang == "id" else DISCLAIMER_EN
     return AnswerResponse(
         query=query,
-        answer=GUARDRAIL_REFUSAL,
+        answer=GUARDRAIL_REFUSAL if lang == "id" else GUARDRAIL_REFUSAL_EN,
         citations=[],
         confidence=0.0,
         related_documents=[],
@@ -59,4 +63,5 @@ def build_guardrail_refusal(query: str, reason: str) -> AnswerResponse:
         retrieved_chunk_ids=[],
         warnings=["input_guardrail_triggered"],
         debug={"guardrail": {"blocked": True, "reason": reason}},
+        answer_status="refused",
     )

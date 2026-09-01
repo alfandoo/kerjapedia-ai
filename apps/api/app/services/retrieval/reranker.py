@@ -13,7 +13,7 @@ def rerank_score(
 ) -> tuple[float, list[str]]:
     reasons: list[str] = []
     query_terms = set(tokenize(" ".join(query.rewritten_queries)))
-    text_terms = set(tokenize(document.text))
+    text_terms = set(tokenize(document.retrieval_text or document.text))
     overlap = len(query_terms.intersection(text_terms))
     overlap_score = overlap / max(1, len(query_terms))
 
@@ -26,6 +26,14 @@ def rerank_score(
     if query.filters.get("article") and query.filters.get("article") == document.article:
         article_boost = 0.25
         reasons.append("article_match")
+
+    context_boost = 0.0
+    if document.document_id in query.context_document_ids:
+        context_boost += 0.08
+        reasons.append("conversation_document_match")
+    if document.article and document.article in query.context_articles:
+        context_boost += 0.02
+        reasons.append("conversation_article_hint")
 
     status_penalty = 0.0
     if document.legal_status in {"revoked", "historical"}:
@@ -42,6 +50,7 @@ def rerank_score(
         + overlap_score * 0.15
         + topic_boost
         + article_boost
+        + context_boost
         - status_penalty
     )
     return score, reasons

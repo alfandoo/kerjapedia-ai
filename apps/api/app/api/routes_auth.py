@@ -39,19 +39,25 @@ def _session_tokens(session) -> tuple[str, str]:
 def _sync_user_profile(
     uid: str, email: str, name: str, roles: list[str] | None = None
 ) -> UserRecord:
-    resolved_roles = roles or (["admin", "user"] if email == settings.admin_email else ["user"])
+    default_roles = (
+        ["admin", "legal_reviewer", "user"] if email == settings.admin_email else ["user"]
+    )
     with create_session() as session:
         profile = session.get(UserProfile, uid)
         if profile is None:
-            existing = session.query(UserProfile).filter(
-                UserProfile.email == email
-            ).first()
+            existing = session.query(UserProfile).filter(UserProfile.email == email).first()
             if existing:
+                resolved_roles = roles or list(existing.roles) or default_roles
+                if email == settings.admin_email:
+                    resolved_roles = sorted(
+                        set(resolved_roles).union({"admin", "legal_reviewer", "user"})
+                    )
                 existing.user_id = uid
                 existing.name = name
                 existing.roles = resolved_roles
                 profile = existing
             else:
+                resolved_roles = roles or default_roles
                 profile = UserProfile(
                     user_id=uid,
                     email=email,
@@ -60,6 +66,11 @@ def _sync_user_profile(
                 )
                 session.add(profile)
         else:
+            resolved_roles = roles or list(profile.roles) or default_roles
+            if email == settings.admin_email:
+                resolved_roles = sorted(
+                    set(resolved_roles).union({"admin", "legal_reviewer", "user"})
+                )
             profile.email = email
             profile.name = name
             profile.roles = resolved_roles
@@ -132,9 +143,7 @@ def refresh(payload: RefreshRequest) -> LoginResponse:
 @router.post("/register", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest) -> LoginResponse:
     with create_session() as session:
-        existing = session.query(UserProfile).filter(
-            UserProfile.email == payload.email
-        ).first()
+        existing = session.query(UserProfile).filter(UserProfile.email == payload.email).first()
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

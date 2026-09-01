@@ -27,6 +27,24 @@ jobs:
   api:
     name: API
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kerjapedia_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d kerjapedia_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5433/kerjapedia_test
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5433/kerjapedia_test
     defaults:
       run:
         working-directory: apps/api
@@ -36,7 +54,13 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ghostscript qpdf tesseract-ocr tesseract-ocr-eng tesseract-ocr-ind unpaper
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.txt
       - run: python -m ruff check app tests
+      - run: python -m alembic upgrade head
+      - run: python -m alembic downgrade 20260807_0003
+      - run: python -m alembic upgrade head
       - run: python -m pytest

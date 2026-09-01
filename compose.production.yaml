@@ -1,6 +1,18 @@
 name: kerjapedia-ai-production
 
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
@@ -11,7 +23,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-kerjapedia}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-kerjapedia}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,11 +50,87 @@ services:
     volumes:
       - ./dataset:/workspace/dataset:ro
       - production_storage:/workspace/storage
+      - model_cache:/workspace/model-cache
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5)",
+        ]
+      interval: 15s
+      timeout: 7s
+      retries: 5
+      start_period: 30s
+
+  ingestion-preflight:
+    build:
+      context: ./apps/api
+    restart: "no"
+    command: ["python", "-m", "app.services.ingestion.preflight"]
+    env_file: .env.production
+    volumes:
+      - ./dataset:/workspace/dataset:ro
+      - production_storage:/workspace/storage
+      - model_cache:/workspace/model-cache
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+  worker:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    command:
+      [
+        "python",
+        "-m",
+        "celery",
+        "-A",
+        "app.services.ingestion.tasks.celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--concurrency=1",
+      ]
+    env_file: .env.production
+    volumes:
+      - ./dataset:/workspace/dataset:ro
+      - production_storage:/workspace/storage
+      - model_cache:/workspace/model-cache
+    depends_on:
+      ingestion-preflight:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+  scheduler:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    command:
+      [
+        "python",
+        "-m",
+        "celery",
+        "-A",
+        "app.services.ingestion.tasks.celery_app",
+        "beat",
+        "--loglevel=INFO",
+      ]
+    env_file: .env.production
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
   web:
     build:
@@ -55,3 +147,5 @@ services:
 volumes:
   postgres_data:
   production_storage:
+  redis_data:
+  model_cache:

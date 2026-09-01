@@ -6,9 +6,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        ghostscript \
+        qpdf \
+        tesseract-ocr \
+        tesseract-ocr-eng \
+        tesseract-ocr-ind \
+        unpaper \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system kerjapedia \
     && useradd --system --gid kerjapedia kerjapedia \
-    && mkdir -p /workspace/storage \
+    && mkdir -p /workspace/storage /workspace/model-cache \
     && chown -R kerjapedia:kerjapedia /workspace
 
 COPY requirements.txt .
@@ -22,6 +32,6 @@ USER kerjapedia
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"
 
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]

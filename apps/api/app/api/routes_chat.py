@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import logging
 import re
 import time
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, replace
+from datetime import timedelta
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import DbSession, OptionalUser
@@ -21,39 +25,60 @@ from app.api.schemas import (
     MessageResponse,
 )
 from app.api.state import UserRecord, now_utc
-from app.api.utils import dataset_metadata_path, storage_root
+from app.api.utils import storage_root
 from app.core.config import settings
+from app.db.session import create_session
 from app.models.business import Conversation, Message
-from app.services.answering.guardrails import build_guardrail_refusal, evaluate_input_guardrail
-from app.services.answering.memory import MemoryContext, build_memory_context
-from app.services.providers import answer_generator_from_settings, pinecone_store_from_settings
+from app.services.answering.guardrails import (
+    build_guardrail_refusal,
+    evaluate_input_guardrail,
+)
+from app.services.answering.memory_hardening import MemoryContext, build_memory_context
+from app.services.answering.prompts import PROMPT_VERSION_ID
+from app.services.providers import (
+    answer_generator_from_settings,
+    pinecone_store_from_settings,
+)
 from app.services.retrieval.engine import RetrievalEngine
-from app.services.retrieval.relationships import relationship_index_for_manifest
-from app.services.retrieval.store import load_artifact_documents
+from app.services.retrieval.governance import load_retrieval_governance
+from app.services.retrieval.store import load_artifact_documents_snapshot
+from app.services.telemetry import (
+    observe_rag_completion,
+    observe_stage,
+    record_outcome,
+    record_provider_error,
+    trace_stage,
+)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+logger = logging.getLogger("kerjapedia.rag")
 _STREAM_TOKEN_RE = re.compile(r"\S[^\n]*\s*")
+_PENDING_TURN_TTL = timedelta(minutes=5)
+
+
+@dataclass(frozen=True)
+class _PendingTurn:
+    user_message_id: str
+    previous_messages: list[dict]
 
 
 def _anonymous_user(guest_id: str | None = None) -> UserRecord:
-    if guest_id:
-        try:
-            normalized_guest_id = str(UUID(guest_id))
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="X-KerjaPedia-Guest-ID must be a valid UUID.",
-            ) from exc
-        return UserRecord(
-            user_id=f"guest:{normalized_guest_id}",
-            email=f"{normalized_guest_id}@guest.local",
-            name="Tamu",
-            roles=["guest"],
+    if not guest_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-KerjaPedia-Guest-ID is required for unauthenticated chat.",
         )
+    try:
+        normalized_guest_id = str(UUID(guest_id))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-KerjaPedia-Guest-ID must be a valid UUID.",
+        ) from exc
     return UserRecord(
-        user_id="anonymous",
-        email="anonymous@local",
-        name="anonymous",
+        user_id=f"guest:{normalized_guest_id}",
+        email=f"{normalized_guest_id}@guest.local",
+        name="Tamu",
         roles=["guest"],
     )
 
@@ -84,6 +109,11 @@ def _get_or_create_conversation(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Conversation belongs to another user.",
                 )
+        elif not conversation.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Legacy unowned conversations cannot be accessed.",
+            )
         return conversation
 
     conversation_id = f"conv_{uuid4().hex}"
@@ -124,6 +154,11 @@ def _get_owned_conversation(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Conversation belongs to another user.",
             )
+    elif not conversation.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Legacy unowned conversations cannot be accessed.",
+        )
     return conversation
 
 
@@ -150,32 +185,198 @@ def _recent_messages(
     conversation: Conversation,
     session: Session,
     limit: int = 8,
-) -> list[dict[str, str]]:
+) -> list[dict]:
     rows = (
         session.query(Message)
         .filter(Message.conversation_id == conversation.conversation_id)
-        .order_by(Message.created_at.desc())
+        .order_by(Message.sequence_no.desc(), Message.message_id.desc())
         .limit(limit)
         .all()
     )
-    return [{"role": row.role, "content": row.content} for row in reversed(rows)]
+    return [
+        {
+            "role": row.role,
+            "content": row.content,
+            "metadata": row.meta_data or {},
+            "message_id": row.message_id,
+            "sequence_no": row.sequence_no,
+        }
+        for row in reversed(rows)
+    ]
 
 
-def _retrieve(question: str, top_k: int):
+def _retrieve(memory: MemoryContext, top_k: int, session: Session):
+    governance = load_retrieval_governance(
+        session,
+        allow_unpublished=settings.rag_allow_unpublished,
+    )
+    # Release the read transaction before calling external retrieval providers.
+    session.rollback()
     if settings.vector_store == "pinecone":
-        return pinecone_store_from_settings(settings).search(question, top_k=top_k)
-    documents = load_artifact_documents(storage_root())
-    index = relationship_index_for_manifest(dataset_metadata_path())
-    return RetrievalEngine(
-        documents=documents,
+        if settings.app_env.lower() == "production" and not governance.active_namespace:
+            raise RuntimeError("No validated active RAG index release is available.")
+        if settings.app_env.lower() == "production" and not governance.release_consistent:
+            raise RuntimeError("The active RAG release is stale and must be replaced.")
+        expected_models = {
+            "embedding": settings.embedding_model,
+            "reranker": settings.reranker_model,
+            "generator": settings.groq_model,
+            "verifier": settings.claim_verifier_model,
+            "prompt": PROMPT_VERSION_ID,
+        }
+        if settings.app_env.lower() == "production" and governance.active_models != expected_models:
+            raise RuntimeError("The active RAG release model provenance does not match runtime.")
+        retrieval = pinecone_store_from_settings(
+            settings,
+            namespace=governance.active_namespace,
+            relationship_index=governance.relationship_index,
+            allow_unpublished=settings.rag_allow_unpublished,
+        ).search(
+            memory.original_question,
+            top_k=top_k,
+            min_final_score=governance.min_final_score,
+            retrieval_query=memory.retrieval_query,
+            context_topics=memory.context_topics,
+            context_document_ids=memory.context_document_ids,
+            context_articles=memory.context_articles,
+        )
+        return replace(
+            retrieval,
+            index_release_id=governance.active_release_id,
+            index_namespace=governance.active_namespace,
+        )
+    eligible_versions = tuple(sorted(governance.eligible_versions.items()))
+    if settings.rag_allow_unpublished and not eligible_versions:
+        eligible_versions = None
+    eligible_builds = tuple(sorted(governance.eligible_builds.items())) or None
+    documents = load_artifact_documents_snapshot(
+        storage_root(),
+        eligible_versions,
+        eligible_builds,
+    )
+    retrieval = RetrievalEngine(
+        documents=list(documents),
+        min_final_score=governance.min_final_score,
         top_k=top_k,
-        relationship_index=index,
-    ).search(question, top_k=top_k)
+        relationship_index=governance.relationship_index,
+    ).search(
+        memory.original_question,
+        top_k=top_k,
+        retrieval_query=memory.retrieval_query,
+        context_topics=memory.context_topics,
+        context_document_ids=memory.context_document_ids,
+        context_articles=memory.context_articles,
+    )
+    return replace(
+        retrieval,
+        index_release_id=governance.active_release_id,
+        index_namespace=governance.active_namespace,
+    )
+
+
+def _retrieve_with_isolated_session(memory: MemoryContext, top_k: int):
+    """Run threaded retrieval without sharing the request SQLAlchemy session."""
+    with create_session() as isolated_session:
+        return _retrieve(memory, top_k, isolated_session)
+
+
+def _next_message_sequence(conversation_id: str, session: Session) -> int:
+    current = session.execute(
+        select(func.coalesce(func.max(Message.sequence_no), 0)).where(
+            Message.conversation_id == conversation_id
+        )
+    ).scalar_one()
+    return int(current) + 1
+
+
+def _begin_turn(
+    conversation: Conversation,
+    payload: AskRequest,
+    session: Session,
+) -> _PendingTurn:
+    locked_conversation = session.execute(
+        select(Conversation)
+        .where(Conversation.conversation_id == conversation.conversation_id)
+        .with_for_update()
+    ).scalar_one()
+    previous_messages = _recent_messages(locked_conversation, session)
+    latest = (
+        session.query(Message)
+        .filter(Message.conversation_id == locked_conversation.conversation_id)
+        .order_by(Message.sequence_no.desc(), Message.message_id.desc())
+        .first()
+    )
+    if latest and (latest.meta_data or {}).get("turn_status") == "processing":
+        created_at = latest.created_at or now_utc()
+        if now_utc() - created_at < _PENDING_TURN_TTL:
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "conversation_turn_in_progress",
+                    "message": "Another turn is still being processed for this conversation.",
+                },
+            )
+        latest.meta_data = {
+            **(latest.meta_data or {}),
+            "turn_status": "abandoned",
+            "memory_eligible": False,
+        }
+
+    user_message_id = f"msg_{uuid4().hex}"
+    session.add(
+        Message(
+            message_id=user_message_id,
+            conversation_id=locked_conversation.conversation_id,
+            sequence_no=_next_message_sequence(
+                locked_conversation.conversation_id,
+                session,
+            ),
+            role="user",
+            content=payload.question,
+            meta_data={
+                "turn_status": "processing",
+                "memory_eligible": False,
+            },
+        )
+    )
+    locked_conversation.updated_at = now_utc()
+    session.commit()
+    return _PendingTurn(
+        user_message_id=user_message_id,
+        previous_messages=previous_messages,
+    )
+
+
+def _mark_turn_failed(
+    user_message_id: str,
+    session: Session,
+    failure_code: str,
+) -> None:
+    try:
+        session.rollback()
+        user_message = session.get(Message, user_message_id)
+        if user_message is None:
+            session.rollback()
+            return
+        if (user_message.meta_data or {}).get("turn_status") != "processing":
+            session.rollback()
+            return
+        user_message.meta_data = {
+            **(user_message.meta_data or {}),
+            "turn_status": "failed",
+            "memory_eligible": False,
+            "failure_code": failure_code,
+        }
+        session.commit()
+    except Exception:
+        session.rollback()
+        logger.exception("chat_turn_failure_state_not_persisted message_id=%s", user_message_id)
 
 
 def _store_answer(
     conversation: Conversation,
-    payload: AskRequest,
+    user_message_id: str,
     answer,
     best_score,
     rag_trace: dict | None = None,
@@ -184,25 +385,51 @@ def _store_answer(
     if session is None:
         return
     now = now_utc()
-
-    user_msg = Message(
-        message_id=f"msg_{uuid4().hex}",
-        conversation_id=conversation.conversation_id,
-        role="user",
-        content=payload.question,
-        meta_data={"rag_trace": rag_trace or {}},
+    session.execute(
+        select(Conversation)
+        .where(Conversation.conversation_id == conversation.conversation_id)
+        .with_for_update()
+    ).scalar_one()
+    user_msg = session.get(Message, user_message_id)
+    if user_msg is None:
+        raise RuntimeError("The pending chat turn no longer exists.")
+    latest_message_id = session.execute(
+        select(Message.message_id)
+        .where(Message.conversation_id == conversation.conversation_id)
+        .order_by(Message.sequence_no.desc(), Message.message_id.desc())
+        .limit(1)
+    ).scalar_one()
+    if (user_msg.meta_data or {}).get(
+        "turn_status"
+    ) != "processing" or latest_message_id != user_message_id:
+        raise RuntimeError("The pending chat turn is no longer active.")
+    memory_eligible = bool(
+        (rag_trace or {}).get("guardrail", {}).get("allowed", True)
+        and answer.answer_status == "answered"
+        and answer.refusal_reason is None
+        and answer.citations
     )
-    session.add(user_msg)
+    user_msg.meta_data = {
+        "rag_trace": rag_trace or {},
+        "memory_eligible": memory_eligible,
+        "turn_status": "completed",
+        "answer_status": answer.answer_status,
+        "has_valid_citations": bool(answer.citations),
+    }
 
     asst_msg = Message(
         message_id=f"msg_{uuid4().hex}",
         conversation_id=conversation.conversation_id,
+        sequence_no=_next_message_sequence(conversation.conversation_id, session),
         role="assistant",
         content=answer.answer,
         meta_data={
-            "answer": asdict(answer),
+            "answer": _public_answer_payload(answer),
             "retrieval_score": best_score,
-            "token_usage": {"prompt_tokens": 0, "completion_tokens": 0},
+            "token_usage": answer.debug.get(
+                "token_usage",
+                {"prompt_tokens": 0, "completion_tokens": 0},
+            ),
             "rag_trace": rag_trace or {},
         },
     )
@@ -211,10 +438,32 @@ def _store_answer(
     session.commit()
 
 
-def _generator_query(question: str, memory: MemoryContext) -> str:
-    if not memory.used:
-        return question
-    return f'{question} (konteks percakapan sebelumnya: {memory.retrieval_query})'
+def _public_answer_payload(answer) -> dict:
+    payload = asdict(answer)
+    payload["debug"] = {
+        "trace_id": answer.trace_id,
+        "prompt_version_id": answer.prompt_version_id,
+    }
+    return payload
+
+
+def _public_message_metadata(metadata: dict | None) -> dict:
+    raw = metadata or {}
+    return {
+        key: value
+        for key, value in raw.items()
+        if key
+        not in {
+            "rag_trace",
+            "memory_eligible",
+            "turn_status",
+            "answer_status",
+            "has_valid_citations",
+            "failure_code",
+            "system_prompt",
+            "rendered_user_prompt",
+        }
+    }
 
 
 def _stream_event(event: str, **payload) -> bytes:
@@ -226,6 +475,74 @@ def _stream_event(event: str, **payload) -> bytes:
     return f"{serialized}\n".encode()
 
 
+def _server_rag_trace(guardrail, memory, retrieval, answer) -> dict:
+    retrieval_items = retrieval.results if retrieval else []
+    return {
+        "guardrail": {"allowed": guardrail.allowed, "reason": guardrail.reason},
+        "memory": {
+            "used": memory.used,
+            "source_turns": memory.source_turns,
+            "citation_context_count": len(memory.citation_context),
+            "retrieval_query_sha256": hashlib.sha256(memory.retrieval_query.encode()).hexdigest(),
+            "activation_reason": memory.activation_reason,
+            "question_language": memory.question_language,
+            "context_topics": list(memory.context_topics),
+            "context_document_count": len(memory.context_document_ids),
+            "context_article_count": len(memory.context_articles),
+            "redaction_count": memory.redaction_count,
+        },
+        "pipeline": {
+            "vector_store": settings.vector_store,
+            "embedding_model": settings.embedding_model,
+            "generator_model": settings.groq_model,
+            "verifier_model": settings.claim_verifier_model,
+            "reranker_model": settings.reranker_model,
+            "prompt_version": answer.prompt_version_id,
+            "answer_version": answer.answer_version,
+            "index_release_id": retrieval.index_release_id if retrieval else None,
+            "index_namespace": retrieval.index_namespace if retrieval else None,
+            "question_language": memory.question_language,
+        },
+        "retrieval": [
+            {
+                "chunk_id": item.document.chunk_id,
+                "document_id": item.document.document_id,
+                "document_version": item.document.document_version,
+                "final_score": item.final_score,
+            }
+            for item in retrieval_items[:8]
+        ],
+        "verification": [
+            {
+                "cited_chunk_ids": claim.cited_chunk_ids,
+                "supported": claim.supported,
+                "support_score": claim.support_score,
+            }
+            for claim in answer.claims
+        ],
+        "generation": {
+            "failure_category": answer.debug.get("failure_category"),
+            "provider_failure_type": answer.debug.get("provider_failure_type"),
+            "generation_attempts": answer.debug.get("generation_attempts"),
+            "validation_issues": answer.debug.get("validation_issues", []),
+        },
+        "token_usage": answer.debug.get("token_usage", {}),
+    }
+
+
+def _log_rag_completion(answer, latency_ms: int) -> None:
+    logger.info(
+        "rag_completed trace_id=%s status=%s latency_ms=%s citations=%s "
+        "prompt_version=%s answer_version=%s",
+        answer.trace_id,
+        answer.answer_status,
+        latency_ms,
+        len(answer.citations),
+        answer.prompt_version_id,
+        answer.answer_version,
+    )
+
+
 @router.post("/ask", response_model=AskResponse)
 def ask_question(
     payload: AskRequest,
@@ -234,14 +551,16 @@ def ask_question(
     guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
 ) -> AskResponse:
     started_at = time.perf_counter()
+    trace_id = f"rag_{uuid4().hex}"
     active_user = user or _anonymous_user(guest_id)
     conversation = _get_or_create_conversation(payload, active_user, session)
+    pending_turn = _begin_turn(conversation, payload, session)
 
     try:
         guardrail = evaluate_input_guardrail(payload.question)
         memory = build_memory_context(
             payload.question,
-            _recent_messages(conversation, session),
+            pending_turn.previous_messages,
         )
         if not guardrail.allowed:
             answer = build_guardrail_refusal(
@@ -250,36 +569,67 @@ def ask_question(
             )
             retrieval = None
         else:
-            retrieval = _retrieve(memory.retrieval_query, payload.top_k)
-            answer = answer_generator_from_settings(settings).generate(
-                _generator_query(payload.question, memory),
-                retrieval,
+            retrieval_started = time.perf_counter()
+            with trace_stage("retrieval", settings.vector_store):
+                retrieval = _retrieve(memory, payload.top_k, session)
+            observe_stage(
+                "retrieval",
+                settings.vector_store,
+                time.perf_counter() - retrieval_started,
             )
-    except RuntimeError as exc:
+            generation_started = time.perf_counter()
+            with trace_stage("generation_and_verification", settings.llm_provider):
+                answer = answer_generator_from_settings(settings).generate(
+                    payload.question,
+                    retrieval,
+                )
+            observe_stage(
+                "generation_and_verification",
+                settings.llm_provider,
+                time.perf_counter() - generation_started,
+            )
+        best_score = retrieval.results[0].final_score if retrieval and retrieval.results else None
+        rag_trace = _server_rag_trace(guardrail, memory, retrieval, answer)
+        answer.debug.update(rag_trace)
+        answer = replace(answer, trace_id=trace_id)
+        _store_answer(
+            conversation,
+            pending_turn.user_message_id,
+            answer,
+            best_score,
+            rag_trace,
+            session,
+        )
+    except Exception as exc:
+        _mark_turn_failed(
+            pending_turn.user_message_id,
+            session,
+            "rag_pipeline_failed",
+        )
+        record_outcome("failed")
+        record_provider_error("rag_pipeline", f"{settings.vector_store}+{settings.llm_provider}")
+        logger.exception("rag_failed trace_id=%s", trace_id)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail={
+                "code": "rag_temporarily_unavailable",
+                "message": "The grounded answer service is temporarily unavailable.",
+                "trace_id": trace_id,
+            },
         ) from exc
-    best_score = retrieval.results[0].final_score if retrieval and retrieval.results else None
-    rag_trace = {
-        "guardrail": {"allowed": guardrail.allowed, "reason": guardrail.reason},
-        "memory": {
-            "used": memory.used,
-            "source_turns": memory.source_turns,
-            "retrieval_query": memory.retrieval_query,
-        },
-    }
-    answer.debug.update(rag_trace)
-
-    _store_answer(conversation, payload, answer, best_score, rag_trace, session)
-
     latency_ms = int((time.perf_counter() - started_at) * 1000)
+    record_outcome(answer.answer_status)
+    observe_rag_completion(answer, retrieval)
+    _log_rag_completion(answer, latency_ms)
     return AskResponse(
         conversation_id=conversation.conversation_id,
-        answer=asdict(answer),
+        answer=_public_answer_payload(answer),
         latency_ms=latency_ms,
         retrieval_score=best_score,
-        token_usage={"prompt_tokens": 0, "completion_tokens": 0},
+        token_usage=answer.debug.get(
+            "token_usage",
+            {"prompt_tokens": 0, "completion_tokens": 0},
+        ),
     )
 
 
@@ -293,9 +643,13 @@ def ask_question_stream(
 ) -> StreamingResponse:
     active_user = user or _anonymous_user(guest_id)
     conversation = _get_or_create_conversation(payload, active_user, session)
+    pending_turn = _begin_turn(conversation, payload, session)
+    trace_id = f"rag_{uuid4().hex}"
 
     async def event_stream():
         started_at = time.perf_counter()
+        stored = False
+        failure_code = "stream_cancelled"
         yield _stream_event(
             "start",
             conversation_id=conversation.conversation_id,
@@ -305,7 +659,7 @@ def ask_question_stream(
             guardrail = evaluate_input_guardrail(payload.question)
             memory = build_memory_context(
                 payload.question,
-                _recent_messages(conversation, session),
+                pending_turn.previous_messages,
             )
             if not guardrail.allowed:
                 yield _stream_event("thinking", status="Memeriksa keamanan permintaan")
@@ -316,48 +670,92 @@ def ask_question_stream(
                 retrieval = None
             else:
                 yield _stream_event("thinking", status="Menelusuri regulasi resmi")
-                retrieval = await asyncio.to_thread(
-                    _retrieve,
-                    memory.retrieval_query,
-                    payload.top_k,
+                retrieval_started = time.perf_counter()
+                with trace_stage("retrieval", settings.vector_store):
+                    retrieval = await asyncio.to_thread(
+                        _retrieve_with_isolated_session,
+                        memory,
+                        payload.top_k,
+                    )
+                observe_stage(
+                    "retrieval",
+                    settings.vector_store,
+                    time.perf_counter() - retrieval_started,
                 )
                 yield _stream_event("thinking", status="Menyusun jawaban berdasarkan sumber")
                 generator = answer_generator_from_settings(settings)
-                answer = await asyncio.to_thread(
-                    generator.generate,
-                    _generator_query(payload.question, memory),
-                    retrieval,
+                generation_started = time.perf_counter()
+                with trace_stage("generation_and_verification", settings.llm_provider):
+                    answer = await asyncio.to_thread(
+                        generator.generate,
+                        payload.question,
+                        retrieval,
+                    )
+                observe_stage(
+                    "generation_and_verification",
+                    settings.llm_provider,
+                    time.perf_counter() - generation_started,
                 )
-        except RuntimeError as exc:
-            yield _stream_event("error", detail=str(exc))
+            best_score = (
+                retrieval.results[0].final_score if retrieval and retrieval.results else None
+            )
+            rag_trace = _server_rag_trace(guardrail, memory, retrieval, answer)
+            answer.debug.update(rag_trace)
+            answer = replace(answer, trace_id=trace_id)
+            _store_answer(
+                conversation,
+                pending_turn.user_message_id,
+                answer,
+                best_score,
+                rag_trace,
+                session,
+            )
+            stored = True
+        except Exception:
+            failure_code = "rag_pipeline_failed"
+            record_outcome("failed")
+            record_provider_error(
+                "rag_pipeline",
+                f"{settings.vector_store}+{settings.llm_provider}",
+            )
+            logger.exception("rag_failed trace_id=%s", trace_id)
+            yield _stream_event(
+                "error",
+                code="rag_temporarily_unavailable",
+                detail="The grounded answer service is temporarily unavailable.",
+                trace_id=trace_id,
+            )
             return
+        finally:
+            if not stored:
+                _mark_turn_failed(
+                    pending_turn.user_message_id,
+                    session,
+                    failure_code,
+                )
 
-        best_score = retrieval.results[0].final_score if retrieval and retrieval.results else None
-        rag_trace = {
-            "guardrail": {"allowed": guardrail.allowed, "reason": guardrail.reason},
-            "memory": {
-                "used": memory.used,
-                "source_turns": memory.source_turns,
-                "retrieval_query": memory.retrieval_query,
-            },
-        }
-        answer.debug.update(rag_trace)
-        _store_answer(conversation, payload, answer, best_score, rag_trace, session)
-        for token in _STREAM_TOKEN_RE.findall(answer.answer):
-            if await request.is_disconnected():
-                return
-            yield _stream_event("delta", content=token)
-            await asyncio.sleep(0.012)
+        if answer.answer_status != "temporarily_unavailable":
+            for token in _STREAM_TOKEN_RE.findall(answer.answer):
+                if await request.is_disconnected():
+                    return
+                yield _stream_event("delta", content=token)
+                await asyncio.sleep(0.012)
 
         latency_ms = int((time.perf_counter() - started_at) * 1000)
+        record_outcome(answer.answer_status)
+        observe_rag_completion(answer, retrieval)
+        _log_rag_completion(answer, latency_ms)
         yield _stream_event(
             "done",
             response={
                 "conversation_id": conversation.conversation_id,
-                "answer": asdict(answer),
+                "answer": _public_answer_payload(answer),
                 "latency_ms": latency_ms,
                 "retrieval_score": best_score,
-                "token_usage": {"prompt_tokens": 0, "completion_tokens": 0},
+                "token_usage": answer.debug.get(
+                    "token_usage",
+                    {"prompt_tokens": 0, "completion_tokens": 0},
+                ),
             },
         )
 
@@ -398,18 +796,23 @@ def get_conversation(
     messages = (
         session.query(Message)
         .filter(Message.conversation_id == conversation_id)
-        .order_by(Message.created_at)
+        .order_by(Message.sequence_no, Message.message_id)
         .all()
     )
     return ConversationDetail(
         conversation_id=conversation.conversation_id,
         title=conversation.title,
-        messages=[MessageResponse(**{
-            "role": m.role,
-            "content": m.content,
-            "created_at": m.created_at,
-            "metadata": m.meta_data,
-        }) for m in messages],
+        messages=[
+            MessageResponse(
+                **{
+                    "role": m.role,
+                    "content": m.content,
+                    "created_at": m.created_at,
+                    "metadata": _public_message_metadata(m.meta_data),
+                }
+            )
+            for m in messages
+        ],
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )

@@ -38,6 +38,9 @@ export type AnswerPayload = {
   prompt_version_id: string;
   retrieved_chunk_ids: string[];
   warnings: string[];
+  answer_status?: "answered" | "refused" | "clarification" | "temporarily_unavailable";
+  answer_version?: string;
+  trace_id?: string | null;
 };
 
 export type AskResponse = {

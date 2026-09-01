@@ -1,113 +1,91 @@
-# Industrial RAG Pipeline
+# High-Assurance RAG Pipeline
 
-KerjaPedia AI mendukung dua mode RAG:
+Production KerjaPedia AI bersifat fail-closed. Mode `artifact`, embedding `hash`,
+generator `local`, reranker heuristik, dan sumber unpublished hanya tersedia untuk
+development/test. Contoh konfigurasi lengkap ada di `.env.production.example`.
 
-- `artifact`: mode lokal/offline untuk development dan test deterministik.
-- `pinecone`: mode industri memakai Pinecone, embedding BGE-M3 lokal, dan Groq untuk answer generation.
+## Source governance
 
-## Provider Configuration
+Database adalah sumber kebenaran untuk versi dokumen, verifikasi sumber, review hukum,
+publication status, serta relasi hukum. Migrasi status lama hanya mengisi
+`source_verification_status`; dokumen tetap membutuhkan review hukum manusia dan bukti
+HTTPS sebelum dapat dipublikasikan.
 
-Variabel utama:
+Retrieval umum hanya menerima versi yang:
 
-```bash
-VECTOR_STORE=pinecone
-PINECONE_API_KEY=
-PINECONE_INDEX_NAME=kerjapedia-regulations
-PINECONE_NAMESPACE=production
-PINECONE_CLOUD=aws
-PINECONE_REGION=us-east-1
+- `is_current=true`, yang hanya berubah atomik saat release tervalidasi dipromosikan;
+- `publication_status=published`;
+- `ingestion_status=completed` (OCR/review gate lulus);
+- source dan legal review berstatus `verified`; dan
+- legal status `active` atau `amended`.
 
-EMBEDDING_PROVIDER=bge_m3
-EMBEDDING_MODEL=BAAI/bge-m3
-EMBEDDING_DIMENSION=1024
+Versi lama hanya tersedia dalam immutable release untuk pertanyaan historis eksplisit.
+Perubahan registry yang membuat snapshot aktif stale menyebabkan readiness dan chat
+production gagal tertutup sampai release baru dipromosikan.
 
-LLM_PROVIDER=groq
-GROQ_API_KEY=
-GROQ_MODEL=openai/gpt-oss-120b
-GROQ_TIMEOUT_SECONDS=30
-GROQ_MAX_RETRIES=2
-GROQ_MAX_TOKENS=1200
-```
+## Ingestion dan publication
 
-`artifact`, `hash`, dan `local` tetap tersedia untuk development:
+Ingestion job menggunakan ID deterministik dari document ID dan checksum. Celery/Redis
+memberikan retry durable dan mencegah job checksum yang sama diproses ulang. Pipeline:
 
-```bash
-VECTOR_STORE=artifact
-EMBEDDING_PROVIDER=hash
-LLM_PROVIDER=local
-```
+1. memvalidasi PDF dan checksum;
+2. menjalankan OCRmyPDF/Tesseract `ind+eng` untuk halaman minim teks;
+3. menandai hasil OCR berkualitas rendah sebagai `review_required`;
+4. parse Bab/Pasal/Ayat dan membentuk child chunk 250–450 token (maksimum 550,
+   overlap maksimum 60, tidak lintas Pasal);
+5. menyimpan parent context maksimum 1.200 token, halaman, offset, checksum, dan versi;
+6. membuat dense serta lexical sparse vector BGE-M3; dan
+7. menyimpan artifact tanpa menulis namespace aktif.
 
-## Ingestion Flow
+Publication dilakukan melalui release admin:
 
-Pipeline membaca metadata dari `dataset/metadata.json`, memvalidasi PDF, mengekstrak teks, parse struktur hukum, chunking, membuat embedding, menulis artifact JSON, lalu opsional mengirim vector ke Pinecone.
+1. `POST /admin/rag/releases` membuat snapshot dan namespace baru.
+2. `POST /admin/rag/releases/{id}/build` membangun namespace via worker.
+3. `POST /evaluation/runs` dengan `release_id` mengevaluasi namespace tersebut.
+4. `POST /admin/rag/releases/{id}/transition` memvalidasi, mempromosikan, atau
+   me-retire release.
 
-Command full dataset:
+Lifecycle publik tetap `building → validated → active → retired`; `build_status`
+menyimpan substate queue/build. Hanya satu release boleh aktif karena partial unique
+constraint database. Promosi mengunci row dan mengganti active namespace secara atomik.
+Release juga membekukan embedding, reranker, generator, verifier, dan prompt version.
+Hash canonical relasi hukum juga dibekukan; perubahan relasi membuat release stale.
+Build, evaluation, startup, dan request production gagal tertutup ketika provenance
+runtime tidak cocok dengan release.
 
-```powershell
-cd apps/api
-.venv\Scripts\python -m app.services.ingestion.cli --all --vector-store pinecone --embedding-provider bge_m3
-```
+## Retrieval
 
-Pinecone index dibuat otomatis bila belum ada, dengan dense cosine index berdimensi `1024`. Upsert memakai `chunk_id` sebagai ID sehingga proses bisa diulang secara idempotent.
+Index Pinecone menggunakan metric `dotproduct`. Query mengirim dense dan sparse vector
+dalam satu hybrid request dengan maksimum 100 kandidat. Alpha adalah `0.35` untuk query
+dengan Pasal/nomor/tahun dan `0.65` untuk pertanyaan natural-language. Filter eksplisit
+menjadi hard filter; topik hasil inferensi hanya memengaruhi ranking.
 
-Metadata Pinecone dibuat flat dan memuat field penting untuk filter dan citation: `document_id`, `version`, `title`, `short_title`, `topics`, `regulation_type`, `year`, `article`, `paragraph`, `page_start`, `page_end`, `legal_status`, `source_url`, dan `text`.
+Pinecone `bge-reranker-v2-m3` mererank maksimum 50 kandidat. Setelah itu policy relasi
+hukum, deduplikasi/diversity, dan context expansion memilih konteks akhir. Threshold
+refusal berasal dari development split release, bukan konstanta production.
 
-## Retrieval Flow
+## Generation dan verification
 
-Mode Pinecone:
+Memory menyimpan pertanyaan asli, bahasa pertanyaan, retrieval query kontekstual, topik,
+document ID, dan citation hints sebagai nilai terpisah. Hard filter Pasal/nomor/tahun
+selalu diekstrak dari pertanyaan saat ini; konteks lama hanya menjadi soft ranking signal.
+Hanya turn yang selesai, terjawab, dan memiliki citation valid yang eligible, serta turn
+kedua hanya dipakai jika koheren dengan topik atau dokumen terbaru. Generator selalu
+menerima pertanyaan asli.
+Groq mengembalikan JSON terstruktur berisi jawaban, cited chunk IDs, dan klaim.
 
-1. Query understanding mendeteksi topik, intent, rewrite, dan filter.
-   Query terkait waktu juga diperluas dengan frasa hukum seperti `paling lambat`
-   dan `wajib dibayarkan`.
-2. Query di-embed dengan provider yang sama dengan ingestion.
-3. Pinecone mengembalikan minimal 100 kandidat semantic berdasarkan vector dan
-   metadata filter agar lexical reranker tetap dapat mengangkat frasa hukum persis.
-4. Kandidat dikonversi ke kontrak `RetrievalDocument`.
-5. Existing reranker menghitung lexical, semantic, fusion, final score, warning status hukum, dan refusal threshold.
-6. Query di luar domain ketenagakerjaan ditolak dengan
-   `refusal_reason=out_of_scope_query` sebelum embedding atau pemanggilan Groq.
+Setiap klaim diverifikasi dengan call verifier terpisah. Klaim tidak didukung atau bahasa
+output salah memicu satu regenerasi. Kegagalan generator, reranker, verifier, atau index
+production menghasilkan error `rag_temporarily_unavailable`; fallback lokal tidak
+digunakan. Streaming hanya mengirim isi jawaban setelah verification selesai.
 
-Command:
+## Operasional
 
-```powershell
-cd apps/api
-.venv\Scripts\python -m app.services.retrieval.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store pinecone
-```
-
-## Answer Generation Flow
-
-Mode Groq mempertahankan guardrail lokal:
-
-1. Pertanyaan terlalu umum tetap meminta klarifikasi sebelum memanggil LLM.
-2. Retrieval kosong, lemah, atau di luar scope tetap refusal sebelum memanggil LLM.
-3. Prompt sistem dan konteks retrieval dikirim ke Groq.
-4. Model wajib mengembalikan JSON berisi `answer`, `confidence`, dan `cited_chunk_ids`.
-5. Service memvalidasi citation agar hanya chunk yang benar-benar retrieved yang boleh dipakai.
-6. Jika JSON invalid, timeout, atau citation salah, service memakai citation-safe fallback lokal.
-
-Command:
-
-```powershell
-cd apps/api
-.venv\Scripts\python -m app.services.answering.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store pinecone --llm-provider groq
-```
-
-## Health and Verification
-
-`GET /health` menampilkan provider aktif, model embedding, model Groq, index Pinecone, namespace, dan status readiness Pinecone tanpa menampilkan secret.
-
-Verifikasi lokal:
-
-```powershell
-cd apps/api
-.venv\Scripts\python -m pytest
-.venv\Scripts\python -m ruff check app tests --no-cache
-```
-
-Smoke test dengan credential nyata:
-
-1. Isi `PINECONE_API_KEY` dan `GROQ_API_KEY`.
-2. Jalankan ingestion seluruh dataset ke Pinecone.
-3. Jalankan retrieval CLI untuk topik PKWT, PHK, THR, BPJS, K3, dan serikat pekerja.
-4. Jalankan answer CLI dengan Groq.
-5. Jalankan evaluation dan pastikan Recall@5 memenuhi target di `docs/EVALUATION.md`.
+- `/health` adalah liveness tanpa panggilan dependency; `/ready` memeriksa DB,
+  Pinecone, Supabase, Redis, active release, dan konsistensi snapshot.
+- `/metrics` mengekspor latency tahap, provider error, outcome, token usage, claim
+  verification, retrieved document version, prompt/answer version, dan index release.
+- OTLP spans dapat dikirim melalui `OTEL_EXPORTER_OTLP_ENDPOINT`.
+- Trace server menyimpan hash query, versi pipeline, chunk/version, hasil verification,
+  dan token usage tanpa prompt lengkap. Celery Beat menghapus trace setelah
+  `RAG_TRACE_RETENTION_DAYS`.

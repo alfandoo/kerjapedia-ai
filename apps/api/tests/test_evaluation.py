@@ -1,17 +1,42 @@
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
+from app.api.schemas import EvaluationDatasetRequest
 from app.services.answering.schemas import AnswerResponse, Citation
 from app.services.evaluation.dataset import load_evaluation_dataset
 from app.services.evaluation.metrics import (
     citation_correctness,
     faithfulness,
+    ndcg_at_k,
     recall_at_k,
     reciprocal_rank,
 )
-from app.services.evaluation.runner import EXPERIMENT_MODES, run_experiment, run_experiments
+from app.services.evaluation.runner import (
+    EXPERIMENT_MODES,
+    run_experiment,
+    run_experiments,
+    run_provider_evaluation,
+)
 from app.services.evaluation.schemas import EvaluationQuestion
 from app.services.ingestion.embeddings import HashEmbeddingProvider
 from app.services.retrieval.schemas import RetrievalDocument
+
+
+def test_evaluation_dataset_rejects_duplicate_questions() -> None:
+    question = {
+        "question_id": "EVAL-DUP-001",
+        "category": "thr",
+        "question": "Kapan THR dibayar?",
+        "expected_answer": "Paling lambat tujuh hari sebelum hari raya.",
+        "expected_document_ids": ["PERMENAKER-6-2016"],
+        "expected_articles": ["Pasal 5"],
+        "expected_topics": ["thr"],
+    }
+
+    with pytest.raises(ValidationError, match="question_id values must be unique"):
+        EvaluationDatasetRequest(name="Duplicate dataset", questions=[question, question])
 
 
 def golden_dataset_path() -> Path:
@@ -107,6 +132,7 @@ def test_evaluation_metrics_are_deterministic() -> None:
 
     assert recall_at_k(["PP-35-2021", "UU-6-2023"], ["PP-35-2021"], 5) == 0.5
     assert reciprocal_rank(["PP-35-2021"], ["UU-6-2023", "PP-35-2021"]) == 0.5
+    assert ndcg_at_k(["PP-35-2021"], ["UU-6-2023", "PP-35-2021"], 10) > 0
     assert citation_correctness(answer, ["PP-35-2021"], ["Pasal 15"]) == 1.0
     assert faithfulness(answer) == 1.0
 
@@ -236,3 +262,22 @@ def test_experiment_comparison_contains_all_modes() -> None:
 
     assert [item["mode"] for item in report["experiments"]] == list(EXPERIMENT_MODES)
     assert all("citation_correctness" in item["metrics"] for item in report["experiments"])
+
+
+def test_provider_evaluation_requires_development_and_held_out_splits() -> None:
+    question = EvaluationQuestion(
+        "SPLIT-001",
+        "pkwt",
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        "Ya.",
+        ["PP-35-2021"],
+        ["Pasal 15"],
+        ["pkwt"],
+        False,
+        status="verified",
+        verified_by="legal-reviewer",
+        split="development",
+    )
+
+    with pytest.raises(ValueError, match="held-out"):
+        run_provider_evaluation([question], retriever=None, generator=None)

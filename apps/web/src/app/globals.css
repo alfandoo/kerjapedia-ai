@@ -159,7 +159,7 @@
   --emas-keraton: #d8b85b;
   --kertas-arsip: #0d0d0d;
   --tinta-pena: #ececec;
-  --sidebar: #171717;
+  --sidebar: #000000;
   --sidebar-foreground: #ececec;
   --sidebar-accent: #212121;
   --sidebar-accent-foreground: #ececec;
@@ -498,5 +498,121 @@
 @keyframes streaming-cursor-blink {
   50% {
     opacity: 0;
+  }
+}
+
+/* Scroll regions stay quiet at rest, but remain discoverable in both themes. */
+.chat-scroll-region {
+  scrollbar-color: color-mix(in srgb, var(--foreground) 24%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.chat-history-title {
+  transform: translateX(0);
+}
+
+.chat-history-row:hover .chat-history-title[data-overflow="true"],
+.chat-history-row:focus-within .chat-history-title[data-overflow="true"] {
+  animation: chat-history-title-reveal 4.5s linear 0.4s infinite;
+  will-change: transform;
+}
+
+@keyframes chat-history-title-reveal {
+  0%,
+  10% {
+    transform: translateX(0);
+  }
+
+  90%,
+  100% {
+    transform: translateX(var(--chat-title-offset, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-history-row:hover .chat-history-title[data-overflow="true"],
+  .chat-history-row:focus-within .chat-history-title[data-overflow="true"] {
+    animation: none;
+  }
+}
+
+.history-scroll-region,
+.sidebar-scroll-region {
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.history-scroll-region:hover,
+.history-scroll-region:focus,
+.history-scroll-region:focus-within,
+.sidebar-scroll-region:hover,
+.sidebar-scroll-region:focus,
+.sidebar-scroll-region:focus-within {
+  scrollbar-color: color-mix(in srgb, var(--sidebar-foreground) 30%, transparent) transparent;
+}
+
+.chat-scroll-region::-webkit-scrollbar {
+  width: 10px;
+}
+
+.history-scroll-region::-webkit-scrollbar,
+.sidebar-scroll-region::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-scroll-region::-webkit-scrollbar-track,
+.history-scroll-region::-webkit-scrollbar-track,
+.sidebar-scroll-region::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scroll-region::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--foreground) 24%, transparent);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+
+.history-scroll-region::-webkit-scrollbar-thumb,
+.sidebar-scroll-region::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+}
+
+.history-scroll-region:hover::-webkit-scrollbar-thumb,
+.history-scroll-region:focus::-webkit-scrollbar-thumb,
+.history-scroll-region:focus-within::-webkit-scrollbar-thumb,
+.sidebar-scroll-region:hover::-webkit-scrollbar-thumb,
+.sidebar-scroll-region:focus::-webkit-scrollbar-thumb,
+.sidebar-scroll-region:focus-within::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--sidebar-foreground) 30%, transparent);
+}
+
+.chat-scroll-region::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--foreground) 38%, transparent);
+}
+
+.history-scroll-region::-webkit-scrollbar-thumb:hover,
+.sidebar-scroll-region::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--sidebar-foreground) 46%, transparent);
+}
+
+@media (hover: none) {
+  .history-scroll-region,
+  .sidebar-scroll-region {
+    scrollbar-color: color-mix(in srgb, var(--sidebar-foreground) 26%, transparent) transparent;
+  }
+
+  .history-scroll-region::-webkit-scrollbar-thumb,
+  .sidebar-scroll-region::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--sidebar-foreground) 26%, transparent);
+  }
+}
+
+@media (max-width: 760px) {
+  .chat-scroll-region::-webkit-scrollbar,
+  .history-scroll-region::-webkit-scrollbar,
+  .sidebar-scroll-region::-webkit-scrollbar {
+    width: 6px;
   }
 }

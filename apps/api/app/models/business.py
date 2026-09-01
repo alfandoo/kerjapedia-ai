@@ -3,7 +3,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,9 +37,7 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     conversation_id: Mapped[str] = mapped_column(String(80), primary_key=True)
-    user_id: Mapped[str | None] = mapped_column(
-        ForeignKey("user_profiles.user_id"), nullable=True
-    )
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("user_profiles.user_id"), nullable=True)
     guest_id: Mapped[str | None] = mapped_column(String(80))
     title: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -39,6 +46,20 @@ class Conversation(Base):
 
 class Message(Base):
     __tablename__ = "messages"
+    __table_args__ = (
+        CheckConstraint("sequence_no > 0", name="sequence_positive"),
+        UniqueConstraint(
+            "conversation_id",
+            "sequence_no",
+            name="uq_messages_conversation_sequence",
+        ),
+        Index(
+            "ix_messages_conversation_recent",
+            "conversation_id",
+            "sequence_no",
+            "message_id",
+        ),
+    )
 
     message_id: Mapped[str] = mapped_column(String(120), primary_key=True)
     conversation_id: Mapped[str] = mapped_column(
@@ -49,6 +70,7 @@ class Message(Base):
     meta_data: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, nullable=False, default=dict
     )
+    sequence_no: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -75,6 +97,33 @@ class EvaluationDataset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class EvaluationQuestionReview(Base):
+    __tablename__ = "evaluation_question_reviews"
+    __table_args__ = (
+        Index(
+            "ix_evaluation_question_review_latest",
+            "dataset_id",
+            "question_id",
+            "reviewed_at",
+            "review_id",
+        ),
+        CheckConstraint(
+            "status IN ('verified', 'rejected')",
+            name="ck_evaluation_question_review_status",
+        ),
+    )
+
+    review_id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(
+        ForeignKey("evaluation_datasets.dataset_id"), nullable=False
+    )
+    question_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    reviewer: Mapped[str] = mapped_column(String(160), nullable=False)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class EvaluationRun(Base):
     __tablename__ = "evaluation_runs"
 
@@ -82,6 +131,7 @@ class EvaluationRun(Base):
     dataset_id: Mapped[str] = mapped_column(
         ForeignKey("evaluation_datasets.dataset_id"), nullable=False
     )
+    release_id: Mapped[str | None] = mapped_column(ForeignKey("rag_index_releases.release_id"))
     metrics: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     report: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -94,9 +144,7 @@ class DocumentAdmin(Base):
     publication_status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     overrides: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    relationships: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
+    relationships: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     versions_history: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, default=list
     )

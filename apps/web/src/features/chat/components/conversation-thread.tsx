@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 
 import { AlertTriangle, Copy, FileText, Pencil, Share2, ThumbsDown, ThumbsUp } from "lucide-react";
 import type { ChatMessage } from "../types";
@@ -35,6 +35,8 @@ const WARNING_LABEL_KEYS: Record<string, TranslationKey> = {
   retrieved_source_superseded_by_newer_document: "answer.warningSuperseded",
   retrieved_source_revoked_or_superseded_document: "answer.warningRevoked",
 };
+
+const LEGACY_FALLBACK_WARNING = "groq_answer_fallback_used";
 
 function formatMessageTime(value: string, language: "id" | "en") {
   return new Intl.DateTimeFormat(language === "id" ? "id-ID" : "en-US", {
@@ -111,15 +113,21 @@ function answerBlocks(content: string): AnswerBlock[] {
   return blocks;
 }
 
-function AnswerContent({ content, streaming }: { content: string; streaming: boolean }) {
+const AnswerContent = memo(function AnswerContent({
+  content,
+  streaming,
+}: {
+  content: string;
+  streaming: boolean;
+}) {
   const blocks = answerBlocks(content);
   return (
-    <div className="mt-1 mb-2 text-[14px] leading-7 text-foreground [&_strong]:font-semibold [&_strong]:text-foreground">
+    <div className="mb-2 mt-1 text-[15px] leading-[26px] text-foreground [&_strong]:font-semibold [&_strong]:text-foreground">
       {blocks.map((block, index) =>
         block.kind === "list" ? (
           block.ordered ? (
             <ol
-              className="mb-2 mt-1.5 max-w-[74ch] list-decimal space-y-1 pl-5 marker:text-muted-text last:mb-0"
+              className="mb-2.5 mt-1.5 max-w-[72ch] list-decimal space-y-1.5 pl-5 marker:text-muted-foreground last:mb-0"
               key={`list-${index}`}
             >
               {block.items.map((item) => (
@@ -130,7 +138,7 @@ function AnswerContent({ content, streaming }: { content: string; streaming: boo
             </ol>
           ) : (
             <ul
-              className="mb-2 mt-1.5 max-w-[74ch] list-disc space-y-1 pl-5 marker:text-muted-text last:mb-0"
+              className="mb-2.5 mt-1.5 max-w-[72ch] list-disc space-y-1.5 pl-5 marker:text-muted-foreground last:mb-0"
               key={`list-${index}`}
             >
               {block.items.map((item) => (
@@ -141,7 +149,7 @@ function AnswerContent({ content, streaming }: { content: string; streaming: boo
             </ul>
           )
         ) : (
-          <p className="mb-2 max-w-[74ch] break-words last:mb-0" key={`p-${index}`}>
+          <p className="mb-2.5 max-w-[72ch] break-words last:mb-0" key={`p-${index}`}>
             {inlineRendered(block.text)}
           </p>
         )
@@ -153,6 +161,13 @@ function AnswerContent({ content, streaming }: { content: string; streaming: boo
         />
       ) : null}
     </div>
+  );
+});
+
+function isUnavailableAnswer(message: ChatMessage) {
+  return (
+    message.answer?.answer_status === "temporarily_unavailable" ||
+    message.answer?.warnings?.includes(LEGACY_FALLBACK_WARNING) === true
   );
 }
 
@@ -191,9 +206,12 @@ export function ConversationThread({
   }
 
   async function shareAnswer(message: ChatMessage) {
+    const displayContent = isUnavailableAnswer(message)
+      ? translate("answer.temporarilyUnavailable")
+      : message.content;
     const shareData = {
       title: translate("answer.shareTitle"),
-      text: message.content,
+      text: displayContent,
     };
     if (navigator.share) {
       try {
@@ -204,7 +222,7 @@ export function ConversationThread({
         if ((error as DOMException).name === "AbortError") return;
       }
     }
-    await copyText(message.id, message.content, translate("answer.shareCopied"));
+    await copyText(message.id, displayContent, translate("answer.shareCopied"));
   }
 
   return (
@@ -213,53 +231,60 @@ export function ConversationThread({
       aria-live="polite"
       aria-label={translate("answer.conversationLabel")}
     >
-      {messages.map((message) =>
-        message.role === "user" ? (
-          <article
-            className="mb-5 flex flex-col items-end pl-[68px] max-[760px]:pl-0"
-            key={message.id}
-          >
-            <p className="user-message-bubble max-w-[min(82%,560px)] rounded-[18px_18px_4px_18px] border border-border bg-accent px-4 py-[11px] text-[13px] leading-relaxed text-foreground">
-              {message.content}
-            </p>
-            <div className="mt-1 flex min-h-[28px] items-center justify-end gap-1">
-              <time
-                className="font-mono text-[10px] leading-normal tabular-nums text-muted-foreground"
-                title={formatMessageTime(message.createdAt, resolvedLanguage)}
-              >
-                {formatMessageTime(message.createdAt, resolvedLanguage)}
-              </time>
-              <div className="flex min-h-7 items-center gap-0.5">
-                <button
-                  type="button"
-                  className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
-                  aria-label={translate("answer.editMessage")}
-                  title={translate("answer.editMessage")}
-                  onClick={() => onEditMessage(message)}
+      {messages.map((message) => {
+        if (message.role === "user") {
+          return (
+            <article
+              className="mb-5 flex flex-col items-end pl-[68px] max-[760px]:pl-0"
+              key={message.id}
+            >
+              <p className="user-message-bubble max-w-[min(82%,560px)] rounded-[18px_18px_4px_18px] border border-border bg-accent px-4 py-[11px] text-[13px] leading-relaxed text-foreground">
+                {message.content}
+              </p>
+              <div className="mt-1 flex min-h-[28px] items-center justify-end gap-1">
+                <time
+                  className="font-mono text-[10px] leading-normal tabular-nums text-muted-foreground"
+                  title={formatMessageTime(message.createdAt, resolvedLanguage)}
                 >
-                  <Pencil className="size-[16px]" />
-                </button>
-                <button
-                  type="button"
-                  className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
-                  aria-label={translate("answer.copyMessage")}
-                  title={translate("answer.copyMessage")}
-                  onClick={() => void copyText(message.id, message.content)}
-                >
-                  <Copy className="size-[16px]" />
-                </button>
-                {actionStatus?.messageId === message.id ? (
-                  <span
-                    className="mx-1 whitespace-nowrap text-[11px] text-muted-text"
-                    role="status"
+                  {formatMessageTime(message.createdAt, resolvedLanguage)}
+                </time>
+                <div className="flex min-h-7 items-center gap-0.5">
+                  <button
+                    type="button"
+                    className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                    aria-label={translate("answer.editMessage")}
+                    title={translate("answer.editMessage")}
+                    onClick={() => onEditMessage(message)}
                   >
-                    {actionStatus.text}
-                  </span>
-                ) : null}
+                    <Pencil className="size-[16px]" />
+                  </button>
+                  <button
+                    type="button"
+                    className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                    aria-label={translate("answer.copyMessage")}
+                    title={translate("answer.copyMessage")}
+                    onClick={() => void copyText(message.id, message.content)}
+                  >
+                    <Copy className="size-[16px]" />
+                  </button>
+                  {actionStatus?.messageId === message.id ? (
+                    <span
+                      className="mx-1 whitespace-nowrap text-[11px] text-muted-text"
+                      role="status"
+                    >
+                      {actionStatus.text}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          </article>
-        ) : (
+            </article>
+          );
+        }
+
+        const displayContent = isUnavailableAnswer(message)
+          ? translate("answer.temporarilyUnavailable")
+          : message.content;
+        return (
           <article className="mb-6" key={message.id}>
             <div className="max-w-[74ch]">
               {message.status && !message.content ? (
@@ -275,7 +300,7 @@ export function ConversationThread({
                   <span>{message.status}</span>
                 </div>
               ) : (
-                <AnswerContent content={message.content} streaming={Boolean(message.streaming)} />
+                <AnswerContent content={displayContent} streaming={Boolean(message.streaming)} />
               )}
               {message.answer?.citations.length ? (
                 <button
@@ -333,7 +358,7 @@ export function ConversationThread({
                       className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
                       aria-label={translate("answer.copyAnswer")}
                       title={translate("answer.copyAnswer")}
-                      onClick={() => void copyText(message.id, message.content)}
+                      onClick={() => void copyText(message.id, displayContent)}
                     >
                       <Copy className="size-[16px]" />
                     </button>
@@ -452,8 +477,8 @@ export function ConversationThread({
               </div>
             ) : null}
           </article>
-        )
-      )}
+        );
+      })}
     </div>
   );
 }

@@ -79,7 +79,13 @@ def get_optional_user(
     token = _extract_bearer_token(authorization)
     if token is None:
         return None
-    return _get_user_from_supabase(token)
+    user = _get_user_from_supabase(token)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token.",
+        )
+    return user
 
 
 CurrentUser = Annotated[UserRecord, Depends(get_current_user)]
@@ -96,6 +102,18 @@ def require_admin(user: CurrentUser) -> UserRecord:
 
 
 AdminUser = Annotated[UserRecord, Depends(require_admin)]
+
+
+def require_legal_reviewer(user: CurrentUser) -> UserRecord:
+    if "legal_reviewer" not in user.roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Legal reviewer role is required.",
+        )
+    return user
+
+
+LegalReviewerUser = Annotated[UserRecord, Depends(require_legal_reviewer)]
 
 
 def get_db() -> Session:

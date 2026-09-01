@@ -14,12 +14,12 @@ def matches_filters(document: RetrievalDocument, filters: dict[str, Any]) -> boo
     if year and document.metadata.get("year") != year:
         return False
 
-    topics = filters.get("topics")
-    if topics and not set(topics).intersection(document.topics):
-        return False
-
     regulation_type = filters.get("regulation_type")
     if regulation_type and document.metadata.get("regulation_type") != regulation_type:
+        return False
+
+    number = filters.get("number")
+    if number and document.metadata.get("number") != number:
         return False
 
     status = filters.get("legal_status")

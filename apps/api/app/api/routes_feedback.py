@@ -61,6 +61,7 @@ def create_feedback(
     _feedback_cache = None
     try:
         from app.api.routes_admin import _stats_cache
+
         _stats_cache.clear()
     except Exception:
         pass

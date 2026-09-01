@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -39,6 +40,42 @@ def build_relationship_index(
             relationship.from_document_id
         )
     return RelationshipIndex(superseded_by=superseded_by, superseding=superseding)
+
+
+def relationship_index_from_rows(rows: list[Any]) -> RelationshipIndex:
+    return build_relationship_index(
+        [
+            RegulationRelationship(
+                from_document_id=row.from_document_id,
+                to_document_id=row.to_document_id,
+                relationship_type=row.relationship_type,
+                confidence=row.confidence,
+                notes=row.notes,
+            )
+            for row in rows
+        ]
+    )
+
+
+def relationship_snapshot_hash(rows: list[Any]) -> str:
+    payload = [
+        {
+            "relationship_id": row.relationship_id,
+            "from_document_id": row.from_document_id,
+            "to_document_id": row.to_document_id,
+            "relationship_type": row.relationship_type,
+            "from_article": row.from_article,
+            "to_article": row.to_article,
+            "confidence": row.confidence,
+            "evidence_url": row.evidence_url,
+            "notes": row.notes,
+            "reviewed_by": row.reviewed_by,
+            "reviewed_at": row.reviewed_at.isoformat() if row.reviewed_at else None,
+        }
+        for row in sorted(rows, key=lambda item: item.relationship_id)
+    ]
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def document_superseding_ids(

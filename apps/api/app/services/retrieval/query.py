@@ -6,26 +6,74 @@ import unicodedata
 from app.services.retrieval.schemas import QueryUnderstanding
 
 TOPIC_KEYWORDS = {
-    "pkwt": ["pkwt", "kontrak", "perjanjian kerja waktu tertentu"],
-    "phk": ["phk", "pemutusan hubungan kerja", "pesangon"],
-    "thr": ["thr", "tunjangan hari raya"],
-    "pengupahan": ["upah", "gaji", "upah minimum", "umk", "ump"],
-    "bpjs": ["bpjs", "jht", "jkp", "jkk", "jkm", "jaminan sosial"],
-    "k3": ["k3", "keselamatan kerja", "kesehatan kerja", "p2k3", "smk3"],
-    "serikat_pekerja": ["serikat pekerja", "serikat buruh"],
-    "hubungan_industrial": ["hubungan industrial", "perselisihan"],
+    "pkwt": [
+        "pkwt",
+        "kontrak",
+        "perjanjian kerja waktu tertentu",
+        "fixed-term contract",
+        "fixed term contract",
+        "fixed-term worker",
+        "fixed term worker",
+        "contract worker",
+    ],
+    "phk": [
+        "phk",
+        "pemutusan hubungan kerja",
+        "pesangon",
+        "termination",
+        "dismissal",
+        "severance",
+    ],
+    "thr": ["thr", "tunjangan hari raya", "religious holiday allowance"],
+    "pengupahan": [
+        "upah",
+        "gaji",
+        "upah minimum",
+        "umk",
+        "ump",
+        "wage",
+        "salary",
+        "minimum wage",
+    ],
+    "bpjs": [
+        "bpjs",
+        "jht",
+        "jkp",
+        "jkk",
+        "jkm",
+        "jaminan sosial",
+        "employment social security",
+    ],
+    "k3": [
+        "k3",
+        "keselamatan kerja",
+        "kesehatan kerja",
+        "p2k3",
+        "smk3",
+        "occupational safety",
+        "occupational health",
+        "workplace safety",
+    ],
+    "serikat_pekerja": ["serikat pekerja", "serikat buruh", "trade union", "labor union"],
+    "hubungan_industrial": [
+        "hubungan industrial",
+        "perselisihan",
+        "industrial relations",
+        "labor dispute",
+        "labour dispute",
+    ],
     "alih_daya": ["alih daya", "outsourcing"],
-    "tenaga_kerja_asing": ["tka", "tenaga kerja asing"],
+    "tenaga_kerja_asing": ["tka", "tenaga kerja asing", "foreign worker"],
 }
 
 INTENT_KEYWORDS = {
-    "definition": ["apa itu", "definisi", "pengertian"],
-    "duration": ["berapa lama", "durasi", "jangka waktu", "batas maksimal"],
-    "eligibility": ["siapa yang berhak", "berhak", "syarat"],
-    "procedure": ["cara", "prosedur", "bagaimana"],
-    "comparison": ["perbedaan", "beda", "bandingkan"],
-    "calculation": ["hitung", "perhitungan", "berapa besar"],
-    "status": ["berlaku", "dicabut", "diubah", "status"],
+    "definition": ["apa itu", "definisi", "pengertian", "what is", "definition"],
+    "duration": ["berapa lama", "durasi", "jangka waktu", "batas maksimal", "how long"],
+    "eligibility": ["siapa yang berhak", "berhak", "syarat", "who is eligible", "eligible"],
+    "procedure": ["cara", "prosedur", "bagaimana", "how to", "procedure"],
+    "comparison": ["perbedaan", "beda", "bandingkan", "difference", "compare"],
+    "calculation": ["hitung", "perhitungan", "berapa besar", "calculate", "how much"],
+    "status": ["berlaku", "dicabut", "diubah", "status", "in force", "revoked", "amended"],
 }
 
 ABBREVIATIONS = {
@@ -52,6 +100,17 @@ DOMAIN_KEYWORDS = {
     "cuti",
     "lembur",
     "jam kerja",
+    "permenaker",
+    "worker",
+    "employee",
+    "employer",
+    "employment",
+    "labor law",
+    "labour law",
+    "workplace",
+    "leave entitlement",
+    "overtime",
+    "working hours",
 }
 
 
@@ -88,9 +147,12 @@ def rewrite_query(query: str) -> list[str]:
 
     timing_terms = {"kapan", "batas waktu", "tenggat"}
     if any(term in query for term in timing_terms):
-        timing_query = (
-            f"{expanded} paling lambat wajib dibayarkan sebelum batas waktu pembayaran"
-        )
+        timing_query = f"{expanded} paling lambat wajib dibayarkan sebelum batas waktu pembayaran"
+        if timing_query not in rewritten:
+            rewritten.append(timing_query)
+    english_timing_terms = {"when", "deadline", "due date", "latest payment date"}
+    if any(term in query for term in english_timing_terms):
+        timing_query = f"{expanded} statutory payment deadline no later than due date"
         if timing_query not in rewritten:
             rewritten.append(timing_query)
     return rewritten
@@ -107,18 +169,43 @@ def extract_filters(query: str, topics: list[str]) -> dict[str, object]:
     if year_match:
         filters["year"] = int(year_match.group(1))
 
+    regulation_match = re.search(
+        r"\b(uu|pp|permenaker|perpres)\s*(?:nomor|no\.?\s*)?(\d+)\b",
+        query,
+    )
+    if regulation_match:
+        filters["regulation_type"] = {
+            "uu": "UU",
+            "pp": "PP",
+            "permenaker": "Permenaker",
+            "perpres": "Perpres",
+        }[regulation_match.group(1)]
+        filters["number"] = int(regulation_match.group(2))
+
+    if re.search(r"\b(dicabut|revoked)\b", query):
+        filters["legal_status"] = "revoked"
+
     if topics:
-        filters["topics"] = topics
+        filters["inferred_topics"] = topics
 
     return filters
 
 
-def understand_query(query: str) -> QueryUnderstanding:
+def understand_query(
+    query: str,
+    *,
+    retrieval_query: str | None = None,
+    context_topics: tuple[str, ...] = (),
+    context_document_ids: tuple[str, ...] = (),
+    context_articles: tuple[str, ...] = (),
+) -> QueryUnderstanding:
     normalized = normalize_query(query)
-    topics = detect_topics(normalized)
+    normalized_retrieval = normalize_query(retrieval_query or query)
+    original_topics = detect_topics(normalized)
+    topics = list(dict.fromkeys([*detect_topics(normalized_retrieval), *context_topics]))
     intents = detect_intents(normalized)
-    rewritten = rewrite_query(normalized)
-    filters = extract_filters(normalized, topics)
+    rewritten = rewrite_query(normalized_retrieval)
+    filters = extract_filters(normalized, original_topics)
 
     return QueryUnderstanding(
         original_query=query,
@@ -127,10 +214,16 @@ def understand_query(query: str) -> QueryUnderstanding:
         detected_topics=topics,
         detected_intents=intents,
         filters=filters,
+        retrieval_query=retrieval_query or query,
+        normalized_retrieval_query=normalized_retrieval,
+        context_topics=list(context_topics),
+        context_document_ids=list(context_document_ids),
+        context_articles=list(context_articles),
     )
 
 
 def is_employment_query(query: QueryUnderstanding) -> bool:
     if query.detected_topics:
         return True
-    return any(keyword in query.normalized_query for keyword in DOMAIN_KEYWORDS)
+    candidate = query.normalized_retrieval_query or query.normalized_query
+    return any(keyword in candidate for keyword in DOMAIN_KEYWORDS)

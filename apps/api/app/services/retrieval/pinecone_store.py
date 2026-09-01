@@ -1,13 +1,30 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, replace
 from typing import Any
 
-from app.services.ingestion.embeddings import EmbeddingProvider
+from app.services.ingestion.embeddings import EmbeddingProvider, embed_hybrid
 from app.services.ingestion.schemas import DocumentMetadata, EmbeddedChunk
+from app.services.retrieval.postprocessing import (
+    apply_query_focus_adjustments,
+    apply_relationship_adjustments,
+    build_warnings,
+    diversify_ranked,
+    drop_heading_only_chunks,
+    expand_context,
+)
 from app.services.retrieval.query import is_employment_query, understand_query
+from app.services.retrieval.relationships import (
+    RelationshipIndex,
+    build_relationship_index,
+)
 from app.services.retrieval.reranker import rerank_score
-from app.services.retrieval.schemas import RankedChunk, RetrievalDocument, RetrievalResponse
+from app.services.retrieval.schemas import (
+    RankedChunk,
+    RetrievalDocument,
+    RetrievalResponse,
+)
 from app.services.retrieval.scoring import lexical_score, reciprocal_rank_fusion
 
 PINECONE_METADATA_TEXT_LIMIT = 12_000
@@ -16,12 +33,12 @@ PINECONE_METADATA_TEXT_LIMIT = 12_000
 @dataclass(frozen=True)
 class PineconeConfig:
     api_key: str
-    index_name: str = "kerjapedia-regulations"
+    index_name: str = "kerjapedia-regulations-v2"
     namespace: str = "production"
     cloud: str = "aws"
     region: str = "us-east-1"
     dimension: int = 1024
-    metric: str = "cosine"
+    metric: str = "dotproduct"
 
 
 class PineconeRetrievalStore:
@@ -29,9 +46,19 @@ class PineconeRetrievalStore:
         self,
         config: PineconeConfig,
         embedding_provider: EmbeddingProvider,
+        reranker_provider: str = "heuristic",
+        reranker_model: str = "bge-reranker-v2-m3",
+        fail_closed: bool = False,
+        allow_unpublished: bool = True,
+        relationship_index: RelationshipIndex | None = None,
     ) -> None:
         self.config = config
         self.embedding_provider = embedding_provider
+        self.reranker_provider = reranker_provider
+        self.reranker_model = reranker_model
+        self.fail_closed = fail_closed
+        self.allow_unpublished = allow_unpublished
+        self.relationship_index = relationship_index or build_relationship_index([])
         self._client = None
         self._index = None
 
@@ -49,13 +76,49 @@ class PineconeRetrievalStore:
                 metric=self.config.metric,
                 spec=ServerlessSpec(cloud=self.config.cloud, region=self.config.region),
             )
+            return
+        description = client.indexes.describe(self.config.index_name)
+        dimension = int(
+            getattr(description, "dimension", 0)
+            or (description.get("dimension", 0) if isinstance(description, dict) else 0)
+        )
+        metric = str(
+            getattr(description, "metric", "")
+            or (description.get("metric", "") if isinstance(description, dict) else "")
+        )
+        if dimension and dimension != self.config.dimension:
+            raise RuntimeError(
+                f"Pinecone index dimension is {dimension}; expected {self.config.dimension}."
+            )
+        if metric and metric != self.config.metric:
+            raise RuntimeError(f"Pinecone index metric is {metric}; expected {self.config.metric}.")
 
     def is_ready(self) -> bool:
         if not self.config.api_key:
             return False
         try:
             desc = self._pinecone_client().indexes.describe(self.config.index_name)
-            return bool(desc.status.ready)
+            dimension = int(
+                getattr(desc, "dimension", 0)
+                or (desc.get("dimension", 0) if isinstance(desc, dict) else 0)
+            )
+            metric = str(
+                getattr(desc, "metric", "")
+                or (desc.get("metric", "") if isinstance(desc, dict) else "")
+            )
+            status_payload = getattr(desc, "status", None)
+            ready = bool(
+                getattr(status_payload, "ready", False)
+                or (
+                    status_payload.get("ready", False)
+                    if isinstance(status_payload, dict)
+                    else False
+                )
+            )
+            metric_is_compatible = metric == self.config.metric or (
+                not self.fail_closed and metric in {"cosine", "euclidean"}
+            )
+            return ready and dimension == self.config.dimension and metric_is_compatible
         except Exception:
             return False
 
@@ -65,21 +128,42 @@ class PineconeRetrievalStore:
         version: int,
         embedded_chunks: list[EmbeddedChunk],
         batch_size: int = 100,
+        publication_status: str = "draft",
+        source_verification_status: str | None = None,
+        legal_review_status: str = "pending",
+        is_current: bool = True,
+        replace_document: bool = True,
     ) -> int:
         self.ensure_index()
         index = self._pinecone_index()
-        index.delete(
-            namespace=self.config.namespace,
-            filter={
-                "document_id": {"$eq": document.document_id},
-                "version": {"$eq": version},
-            },
-        )
+        if replace_document:
+            index.delete(
+                namespace=self.config.namespace,
+                filter={"document_id": {"$eq": document.document_id}},
+            )
         vectors = [
             {
                 "id": item.chunk.chunk_id,
                 "values": item.embedding,
-                "metadata": _metadata_from_embedded_chunk(document, version, item),
+                **(
+                    {
+                        "sparse_values": {
+                            "indices": list(item.sparse_embedding),
+                            "values": list(item.sparse_embedding.values()),
+                        }
+                    }
+                    if item.sparse_embedding
+                    else {}
+                ),
+                "metadata": _metadata_from_embedded_chunk(
+                    document,
+                    version,
+                    item,
+                    publication_status=publication_status,
+                    source_verification_status=source_verification_status,
+                    legal_review_status=legal_review_status,
+                    is_current=is_current,
+                ),
             }
             for item in embedded_chunks
         ]
@@ -90,13 +174,32 @@ class PineconeRetrievalStore:
             upserted += int(getattr(response, "upserted_count", len(batch)) or len(batch))
         return upserted
 
+    def clear_namespace(self) -> None:
+        """Clear only the immutable release namespace owned by this store."""
+        self.ensure_index()
+        self._pinecone_index().delete(
+            namespace=self.config.namespace,
+            delete_all=True,
+        )
+
     def search(
         self,
         query: str,
         top_k: int = 5,
         min_final_score: float = 0.08,
+        *,
+        retrieval_query: str | None = None,
+        context_topics: tuple[str, ...] = (),
+        context_document_ids: tuple[str, ...] = (),
+        context_articles: tuple[str, ...] = (),
     ) -> RetrievalResponse:
-        understanding = understand_query(query)
+        understanding = understand_query(
+            query,
+            retrieval_query=retrieval_query,
+            context_topics=context_topics,
+            context_document_ids=context_document_ids,
+            context_articles=context_articles,
+        )
         if not is_employment_query(understanding):
             return RetrievalResponse(
                 query=understanding,
@@ -105,19 +208,46 @@ class PineconeRetrievalStore:
                 should_refuse=True,
                 refusal_reason="out_of_scope_query",
             )
-        query_vector = self.embedding_provider.embed([" ".join(understanding.rewritten_queries)])[0]
-        # Pinecone performs dense retrieval first, while lexical scoring happens
-        # locally. Keep a sufficiently broad candidate pool so exact legal
-        # phrases can still be recovered and promoted by the reranker.
-        semantic_limit = max(top_k * 20, 100)
-        response = self._pinecone_index().query(
-            vector=query_vector,
-            top_k=semantic_limit,
-            namespace=self.config.namespace,
-            include_metadata=True,
-            include_values=False,
-            filter=_pinecone_filter(understanding.filters),
+        hybrid = embed_hybrid(
+            self.embedding_provider,
+            [" ".join(understanding.rewritten_queries)],
         )
+        alpha = _hybrid_alpha(understanding.normalized_query)
+        query_vector = [value * alpha for value in hybrid.dense[0]]
+        sparse = hybrid.sparse[0]
+        sparse_vector = {
+            "indices": list(sparse),
+            "values": [value * (1 - alpha) for value in sparse.values()],
+        }
+        # Dense and sparse vectors are evaluated together by Pinecone. Keep the
+        # pre-rerank candidate pool fixed so latency and evaluation stay comparable.
+        semantic_limit = 100
+        query_options = {
+            "top_k": semantic_limit,
+            "namespace": self.config.namespace,
+            "include_metadata": True,
+            "include_values": False,
+            "filter": _pinecone_filter(
+                understanding.filters,
+                allow_unpublished=self.allow_unpublished,
+                include_historical=_requests_historical_sources(understanding.normalized_query),
+            ),
+        }
+        sparse_query_fallback_used = False
+        try:
+            response = self._pinecone_index().query(
+                vector=query_vector,
+                sparse_vector=sparse_vector,
+                **query_options,
+            )
+        except Exception as exc:
+            if self.fail_closed or not _index_rejects_sparse_values(exc):
+                raise
+            sparse_query_fallback_used = True
+            response = self._pinecone_index().query(
+                vector=hybrid.dense[0],
+                **query_options,
+            )
         matches = list(getattr(response, "matches", []) or [])
         candidates = [_document_from_match(match) for match in matches]
         semantic_scores = {
@@ -176,18 +306,87 @@ class PineconeRetrievalStore:
             )
 
         ranked.sort(key=lambda item: item.final_score, reverse=True)
-        selected = ranked[:top_k]
-        warnings = _warnings(selected)
+        ranked = self._model_rerank(understanding.retrieval_query, ranked[:50])
+        ranked = apply_relationship_adjustments(ranked, self.relationship_index)
+        ranked = apply_query_focus_adjustments(
+            ranked,
+            understanding.normalized_retrieval_query,
+        )
+        ranked = drop_heading_only_chunks(ranked)
+        ranked = diversify_ranked(ranked)
+        selected = expand_context(ranked[:top_k], candidates)[:top_k]
+        warnings = build_warnings(selected, self.relationship_index)
+        if getattr(self.embedding_provider, "sparse_fallback_used", False):
+            warnings.append("native_sparse_embedding_unavailable")
+        if sparse_query_fallback_used:
+            warnings.append("pinecone_index_requires_dotproduct")
         should_refuse = not selected or selected[0].final_score < min_final_score
         return RetrievalResponse(
             query=understanding,
             results=selected,
             warnings=warnings,
             should_refuse=should_refuse,
-            refusal_reason=(
-                "no_retrieved_chunk_passed_minimum_score" if should_refuse else None
-            ),
+            refusal_reason=("no_retrieved_chunk_passed_minimum_score" if should_refuse else None),
         )
+
+    def _model_rerank(
+        self,
+        query: str,
+        ranked: list[RankedChunk],
+    ) -> list[RankedChunk]:
+        if self.reranker_provider != "pinecone" or not ranked:
+            return ranked
+        try:
+            response = self._pinecone_client().inference.rerank(
+                model=self.reranker_model,
+                query=query,
+                documents=[
+                    {
+                        "id": item.document.chunk_id,
+                        "text": item.document.retrieval_text or item.document.text,
+                    }
+                    for item in ranked
+                ],
+                rank_fields=["text"],
+                top_n=len(ranked),
+                return_documents=False,
+                parameters={"truncate": "END"},
+            )
+            data = list(getattr(response, "data", None) or response.get("data", []))
+            reranked: list[RankedChunk] = []
+            for result in data:
+                index = int(
+                    getattr(
+                        result,
+                        "index",
+                        result.get("index") if isinstance(result, dict) else -1,
+                    )
+                )
+                score = float(
+                    getattr(
+                        result,
+                        "score",
+                        result.get("score") if isinstance(result, dict) else 0,
+                    )
+                )
+                if index < 0 or index >= len(ranked):
+                    continue
+                item = ranked[index]
+                reranked.append(
+                    replace(
+                        item,
+                        rerank_score=round(score, 6),
+                        final_score=round((score * 0.75) + (item.final_score * 0.25), 6),
+                        match_reasons=[*item.match_reasons, "cross_encoder_rerank"],
+                    )
+                )
+            if not reranked:
+                raise RuntimeError("Pinecone reranker returned no usable result.")
+            return sorted(reranked, key=lambda item: item.final_score, reverse=True)
+        except Exception as exc:
+            if self.fail_closed:
+                raise RuntimeError("Required RAG reranker is unavailable.") from exc
+            return ranked
 
     def _pinecone_client(self):
         if self._client is None:
@@ -213,6 +412,11 @@ def _metadata_from_embedded_chunk(
     document: DocumentMetadata,
     version: int,
     embedded_chunk: EmbeddedChunk,
+    *,
+    publication_status: str,
+    source_verification_status: str | None,
+    legal_review_status: str,
+    is_current: bool,
 ) -> dict[str, Any]:
     chunk = embedded_chunk.chunk
     metadata = {
@@ -228,11 +432,20 @@ def _metadata_from_embedded_chunk(
         "topics": document.topics,
         "legal_status": document.legal_status,
         "verification_status": document.verification_status,
+        "source_verification_status": (
+            source_verification_status
+            or ("verified" if document.verification_status == "verified" else "pending")
+        ),
+        "legal_review_status": legal_review_status,
+        "publication_status": publication_status,
+        "is_current": is_current,
         "source_name": document.source_name,
         "source_url": document.source_url,
         "local_file": document.local_file,
         "file_name": document.file_name,
         "embedding_model": embedded_chunk.embedding_model,
+        "embedding_revision": embedded_chunk.embedding_revision,
+        "build_id": chunk.build_id,
         "chapter": chunk.chapter,
         "section": chunk.section,
         "article": chunk.article,
@@ -241,23 +454,51 @@ def _metadata_from_embedded_chunk(
         "page_end": chunk.page_end,
         "token_count": chunk.token_count,
         "text": chunk.text[:PINECONE_METADATA_TEXT_LIMIT],
+        "retrieval_text": (chunk.retrieval_text or chunk.text)[:PINECONE_METADATA_TEXT_LIMIT],
+        "parent_text": (chunk.parent_text or "")[:PINECONE_METADATA_TEXT_LIMIT],
+        "char_start": chunk.char_start,
+        "char_end": chunk.char_end,
     }
     return {key: value for key, value in metadata.items() if value is not None}
 
 
-def _pinecone_filter(filters: dict[str, Any]) -> dict[str, Any] | None:
+def _pinecone_filter(
+    filters: dict[str, Any],
+    *,
+    allow_unpublished: bool,
+    include_historical: bool,
+) -> dict[str, Any] | None:
     pinecone_filter: dict[str, Any] = {}
     if article := filters.get("article"):
         pinecone_filter["article"] = {"$eq": article}
     if year := filters.get("year"):
         pinecone_filter["year"] = {"$eq": year}
-    if topics := filters.get("topics"):
-        pinecone_filter["topics"] = {"$in": list(topics)}
     if regulation_type := filters.get("regulation_type"):
         pinecone_filter["regulation_type"] = {"$eq": regulation_type}
+    if number := filters.get("number"):
+        pinecone_filter["number"] = {"$eq": number}
     if legal_status := filters.get("legal_status"):
         pinecone_filter["legal_status"] = {"$eq": legal_status}
+    elif not include_historical:
+        pinecone_filter["legal_status"] = {"$in": ["active", "amended"]}
+    if not allow_unpublished:
+        pinecone_filter.update(
+            {
+                "publication_status": {"$eq": "published"},
+                "source_verification_status": {"$eq": "verified"},
+                "legal_review_status": {"$eq": "verified"},
+            }
+        )
+        if not include_historical:
+            pinecone_filter["is_current"] = {"$eq": True}
     return pinecone_filter or None
+
+
+def _index_rejects_sparse_values(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "does not support sparse values" in message or (
+        "sparse values" in message and "dotproduct" in message
+    )
 
 
 def _document_from_match(match: Any) -> RetrievalDocument:
@@ -270,6 +511,8 @@ def _document_from_match(match: Any) -> RetrievalDocument:
         chunk_id=chunk_id,
         document_id=str(metadata.get("document_id", "")),
         text=str(metadata.get("text", "")),
+        retrieval_text=str(metadata.get("retrieval_text") or metadata.get("text", "")),
+        build_id=metadata.get("build_id"),
         chapter=metadata.get("chapter"),
         section=metadata.get("section"),
         article=metadata.get("article"),
@@ -290,6 +533,8 @@ def _document_from_match(match: Any) -> RetrievalDocument:
                 "chunk_id",
                 "document_id",
                 "text",
+                "retrieval_text",
+                "build_id",
                 "chapter",
                 "section",
                 "article",
@@ -303,6 +548,13 @@ def _document_from_match(match: Any) -> RetrievalDocument:
                 "embedding_model",
             }
         },
+        document_version=int(metadata.get("version", 0) or 0) or None,
+        publication_status=str(metadata.get("publication_status", "draft")),
+        verification_status=str(metadata.get("legal_review_status", "pending")),
+        is_current=bool(metadata.get("is_current", False)),
+        parent_text=metadata.get("parent_text"),
+        char_start=int(metadata.get("char_start", 0) or 0),
+        char_end=int(metadata.get("char_end", 0) or 0),
     )
 
 
@@ -318,11 +570,22 @@ def _match_metadata(match: Any) -> dict[str, Any]:
     return dict(match.get("metadata", {}))
 
 
-def _warnings(ranked: list[RankedChunk]) -> list[str]:
-    statuses = {item.document.legal_status for item in ranked}
-    warnings: list[str] = []
-    if "needs_verification" in statuses:
-        warnings.append("retrieved_source_status_needs_verification")
-    if {"revoked", "historical"}.intersection(statuses):
-        warnings.append("retrieved_source_contains_historical_or_revoked_document")
-    return warnings
+def _hybrid_alpha(query: str) -> float:
+    exact_legal_reference = re.search(
+        r"\b(pasal\s+\d+[a-z]?|(?:uu|pp|permenaker|perpres)\s*(?:no\.?\s*)?\d+|"
+        r"(?:19|20)\d{2})\b",
+        query,
+        re.IGNORECASE,
+    )
+    return 0.35 if exact_legal_reference else 0.65
+
+
+def _requests_historical_sources(query: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(dicabut|lama|terdahulu|sebelumnya|sebelum diubah|historis|historical|"
+            r"revoked|superseded|before amendment|previous version)\b",
+            query,
+            re.IGNORECASE,
+        )
+    )

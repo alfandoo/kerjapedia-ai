@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Iterable
 
@@ -40,6 +41,20 @@ def reciprocal_rank(expected_ids: Iterable[str], retrieved_ids: list[str]) -> fl
     return 0.0
 
 
+def ndcg_at_k(expected_ids: Iterable[str], retrieved_ids: list[str], k: int = 10) -> float:
+    expected = set(expected_ids)
+    if not expected:
+        return 0.0
+    dcg = sum(
+        1.0 / math.log2(index + 2)
+        for index, document_id in enumerate(retrieved_ids[:k])
+        if document_id in expected
+    )
+    ideal_hits = min(len(expected), k)
+    ideal = sum(1.0 / math.log2(index + 2) for index in range(ideal_hits))
+    return round(dcg / ideal, 6) if ideal else 0.0
+
+
 def citation_correctness(
     answer: AnswerResponse,
     expected_document_ids: Iterable[str],
@@ -63,6 +78,12 @@ def citation_correctness(
 
 
 def faithfulness(answer: AnswerResponse) -> float:
+    if answer.claims:
+        return round(
+            sum(claim.support_score if claim.supported else 0.0 for claim in answer.claims)
+            / len(answer.claims),
+            6,
+        )
     if not answer.citations:
         return 0.0
     support_tokens = set()
@@ -72,6 +93,13 @@ def faithfulness(answer: AnswerResponse) -> float:
     if not answer_tokens:
         return 0.0
     return round(len(answer_tokens.intersection(support_tokens)) / len(answer_tokens), 6)
+
+
+def unsupported_claim_rate(answer: AnswerResponse) -> float:
+    if not answer.claims:
+        return 1.0 if answer.answer and not answer.refusal_reason else 0.0
+    unsupported = sum(not claim.supported for claim in answer.claims)
+    return round(unsupported / len(answer.claims), 6)
 
 
 def _content_tokens(value: str) -> set[str]:
