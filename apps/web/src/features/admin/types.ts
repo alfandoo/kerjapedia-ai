@@ -18,6 +18,8 @@ export type AdminVersion = {
 export type AdminDocument = DocumentSummary & {
   issuer: string;
   verification_status: string;
+  source_verification_status: string;
+  legal_review_status: string;
   ingestion_status: "completed" | "needs_review" | "failed" | "running" | "queued";
   chunk_count: number;
   publication_status: "published" | "draft";
@@ -47,6 +49,8 @@ export type IngestionJob = {
   updated_at: string;
   error?: string | null;
   result?: { chunk_count?: number; warnings?: string[] } | null;
+  elapsed_seconds?: number | null;
+  avg_duration_seconds?: number | null;
 };
 
 export type FeedbackItem = {

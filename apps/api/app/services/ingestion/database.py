@@ -189,6 +189,7 @@ def persist_ingestion_result(
             )
         )
     session.add_all(chunk_rows)
+    session.flush()
     session.add_all(embedding_rows)
 
     resolved_job_id = job_id or f"ing_{result.build_id}"

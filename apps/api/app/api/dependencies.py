@@ -51,10 +51,26 @@ def _get_user_from_supabase(token: str) -> UserRecord | None:
     except Exception:
         return None
     else:
-        with create_session() as session:
-            profile = session.get(UserProfile, uid)
-            roles = profile.roles if profile else ["user"]
+        profile = _get_profile_with_retry(uid)
+        roles = profile.roles if profile else ["user"]
         return UserRecord(user_id=uid, email=email, name=name, roles=roles)
+
+
+def _get_profile_with_retry(uid: str):
+    """Fetch UserProfile retrying transient DB connection failures."""
+    from time import sleep
+
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            with create_session() as session:
+                return session.get(UserProfile, uid)
+        except Exception as exc:
+            last_error = exc
+            sleep(0.5 * (attempt + 1))
+    if last_error:
+        raise last_error
+    return None
 
 
 def get_current_user(authorization: str | None = Header(default=None)) -> UserRecord:

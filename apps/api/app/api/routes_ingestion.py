@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from sqlalchemy import text
@@ -271,13 +272,6 @@ def create_ingestion_job(
 
     job_id = f"ing_{identity.build_id.removeprefix('ingb_')}"
     job = session.get(IngestionJob, job_id)
-    if job is not None and job.status in {
-        "queued",
-        "running",
-        "completed",
-        "review_required",
-    }:
-        return _job_payload(job, build)
     if job is None:
         job = IngestionJob(
             job_id=job_id,
@@ -289,6 +283,28 @@ def create_ingestion_job(
             artifact_paths={},
         )
         session.add(job)
+        stale_jobs = (
+            session.query(IngestionJob)
+            .filter(
+                IngestionJob.document_id == payload.document_id,
+                IngestionJob.version_id == job_version_id,
+                IngestionJob.job_id != job_id,
+                IngestionJob.status.in_(["completed", "review_required", "failed"]),
+            )
+            .all()
+        )
+        for stale in stale_jobs:
+            session.delete(stale)
+    elif job.status in {"queued", "running"}:
+        return _job_payload(job, build)
+    elif job.status == "completed" and not payload.force:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Document sudah selesai diingest dan tidak perlu diulang. "
+                "Ganti file/sumber terlebih dahulu, atau gunakan force untuk mengulang."
+            ),
+        )
     else:
         job.build_id = identity.build_id
         job.status = "queued"
@@ -333,9 +349,12 @@ def create_ingestion_job(
 @router.get("")
 def list_ingestion_jobs(_: AdminUser, session: DbSession) -> list[dict]:
     rows = session.query(IngestionJob).order_by(IngestionJob.created_at.desc()).all()
+    avg_duration = _average_build_duration(session)
     return [
         _job_payload(
-            row, session.get(IngestionBuild, row.build_id) if row.build_id else None
+            row,
+            session.get(IngestionBuild, row.build_id) if row.build_id else None,
+            avg_duration=avg_duration,
         )
         for row in rows
     ]
@@ -350,19 +369,68 @@ def get_ingestion_job(job_id: str, session: DbSession, _: AdminUser) -> dict:
             detail="Ingestion job was not found.",
         )
     build = session.get(IngestionBuild, job.build_id) if job.build_id else None
-    payload = _job_payload(job, build)
+    payload = _job_payload(job, build, avg_duration=_average_build_duration(session))
     payload["artifact_paths"] = job.artifact_paths
     return payload
 
 
-def _job_payload(job: IngestionJob, build: IngestionBuild | None) -> dict:
+def _average_build_duration(session) -> float | None:
+    """Average duration of completed builds in seconds, used to estimate ETA."""
+    rows = (
+        session.query(IngestionBuild.completed_at, IngestionBuild.created_at)
+        .filter(
+            IngestionBuild.completed_at.is_not(None),
+            IngestionBuild.status.in_(["completed", "review_required"]),
+        )
+        .all()
+    )
+    durations = [
+        (completed - created).total_seconds()
+        for (completed, created) in rows
+        if completed is not None and (completed - created).total_seconds() > 0
+    ]
+    if not durations:
+        return None
+    return sum(durations) / len(durations)
+
+
+def _job_payload(
+    job: IngestionJob,
+    build: IngestionBuild | None,
+    avg_duration: float | None = None,
+) -> dict:
+    status = "needs_review" if job.status == "review_required" else job.status
+    created = job.created_at
+    now = datetime.now(UTC)
+    elapsed_seconds = (
+        (now - created).total_seconds()
+        if created is not None and status in {"running", "queued"}
+        else None
+    )
+    stored = job.artifact_paths or {}
+    chunk_count = int(stored.get("chunk_count") or 0)
     return {
         "job_id": job.job_id,
         "build_id": job.build_id,
         "document_id": job.document_id,
-        "status": job.status,
+        "status": status,
         "created_at": job.created_at,
+        "updated_at": job.created_at,
+        "elapsed_seconds": elapsed_seconds,
+        "avg_duration_seconds": avg_duration,
         "warnings": job.warnings,
+        "result": {
+            "chunk_count": chunk_count,
+            "warnings": job.warnings or [],
+        },
+        "error": next(
+            (
+                item
+                for item in (job.warnings or [])
+                if item.startswith("ingestion_failed:")
+            ),
+            None,
+        ),
         "quality_report": build.quality_report if build else {},
         "review_status": build.review_status if build else "pending",
     }

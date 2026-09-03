@@ -41,13 +41,13 @@ export async function fetchAdminSettings(signal?: AbortSignal): Promise<AdminSet
   return parseJsonResponse<AdminSettings>(response);
 }
 
-export async function fetchAuditLogs(limit = 100, signal?: AbortSignal): Promise<AuditLogEntry[]> {
+export async function fetchAuditLogs(page = 1, limit = 10, signal?: AbortSignal): Promise<{ entries: AuditLogEntry[]; total: number }> {
   const response = await fetchWithAuthRetry(
-    `${API_URL}/admin/audit-logs?limit=${limit}`,
+    `${API_URL}/admin/audit-logs?page=${page}&limit=${limit}`,
     { headers: adminHeaders() },
     signal
   );
-  return parseJsonResponse<AuditLogEntry[]>(response);
+  return parseJsonResponse<{ entries: AuditLogEntry[]; total: number }>(response);
 }
 
 export async function fetchAdminOverview(signal?: AbortSignal): Promise<AdminOverview> {
@@ -61,12 +61,32 @@ export async function fetchAdminOverview(signal?: AbortSignal): Promise<AdminOve
 
 export async function updateAdminDocument(
   documentId: string,
-  payload: { legal_status: string; verification_status: string; topics: string[] }
+  payload: { legal_status: string; verification_status: string; topics: string[]; source_url: string }
 ): Promise<void> {
   const response = await fetchWithAuthRetry(`${API_URL}/admin/documents/${documentId}`, {
     method: "PATCH",
     headers: adminHeaders(),
     body: JSON.stringify(payload),
+  });
+  await parseJsonResponse(response);
+}
+
+export async function verifyDocument(
+  documentId: string,
+  verificationType: "source" | "legal",
+  status: "verified" | "pending" | "rejected",
+  evidenceUrl: string,
+  notes?: string
+): Promise<void> {
+  const response = await fetchWithAuthRetry(`${API_URL}/admin/documents/${documentId}/verification`, {
+    method: "POST",
+    headers: adminHeaders(),
+    body: JSON.stringify({
+      verification_type: verificationType,
+      status,
+      evidence_url: evidenceUrl,
+      notes,
+    }),
   });
   await parseJsonResponse(response);
 }
@@ -101,11 +121,11 @@ export async function updateAdminPublication(
   return parseJsonResponse(response);
 }
 
-export async function createIngestionJob(documentId: string): Promise<IngestionJob> {
+export async function createIngestionJob(documentId: string, force = false): Promise<IngestionJob> {
   const response = await fetchWithAuthRetry(`${API_URL}/ingestion/jobs`, {
     method: "POST",
     headers: adminHeaders(),
-    body: JSON.stringify({ document_id: documentId, persist_db: false }),
+    body: JSON.stringify({ document_id: documentId, persist_db: false, force }),
   });
   return parseJsonResponse<IngestionJob>(response);
 }

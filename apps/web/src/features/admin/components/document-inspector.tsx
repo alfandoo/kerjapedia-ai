@@ -2,9 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { BadgeCheck, Plus, RefreshCw, Trash2 } from "lucide-react";
+import {
+  BadgeCheck,
+  Calendar,
+  FileText,
+  Hash,
+  Link as LinkIcon,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+  WholeWord,
+} from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,15 +28,19 @@ import {
 import { SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Callout, StatusBadge } from "./primitives";
+import { Callout, EmptyState, StatusBadge } from "./primitives";
+import { cn } from "@/lib/utils";
 import {
   clearStoredSession,
   createIngestionJob,
+  fetchIngestionJob,
   updateAdminDocument,
   updateAdminPublication,
   updateAdminRelationships,
+  verifyDocument,
 } from "@/features/admin/api";
 import type { AdminDocument, AdminRelationship } from "@/features/admin/types";
+
 export const ingestionLabels: Record<AdminDocument["ingestion_status"], string> = {
   completed: "Selesai",
   needs_review: "Perlu review",
@@ -76,15 +90,91 @@ type InspectorProps = {
   onClose: () => void;
 };
 
+function isGoIdUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "https:" &&
+      (parsed.hostname.endsWith(".go.id") || parsed.hostname === "go.id")
+    );
+  } catch {
+    return false;
+  }
+}
+
+type ChecklistItem = { done: boolean; label: string };
+
+function ReadinessPanel({ items }: { items: ChecklistItem[] }) {
+  const doneCount = items.filter((item) => item.done).length;
+  const pct = Math.round((doneCount / items.length) * 100);
+  return (
+    <section aria-label="Kesiapan publikasi" className="rounded-xl border border-line bg-white">
+      <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
+        <p className="text-sm font-semibold text-tinta">Kesiapan publikasi</p>
+        <span
+          className={cn(
+            "font-mono text-xs font-semibold tabular-nums",
+            doneCount === items.length ? "text-forest" : "text-muted-text"
+          )}
+        >
+          {doneCount}/{items.length}
+        </span>
+      </div>
+      <div className="space-y-3 px-4 py-3.5">
+        <div className="h-1.5 overflow-hidden rounded-full bg-muted/40">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all",
+              doneCount === items.length ? "bg-forest" : "bg-amber"
+            )}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <ul className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+          {items.map((item) => (
+            <li
+              key={item.label}
+              className={cn(
+                "flex items-center gap-2 text-xs font-medium",
+                item.done ? "text-forest" : "text-muted-text"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex size-4 shrink-0 items-center justify-center rounded-full",
+                  item.done ? "bg-teal-soft" : "border border-line bg-muted/40"
+                )}
+              >
+                {item.done ? (
+                  <BadgeCheck className="size-3" />
+                ) : (
+                  <span className="size-1.5 rounded-full bg-muted-text/60" />
+                )}
+              </span>
+              <span className="min-w-0 truncate">{item.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 export function DocumentInspector({ document, allDocuments, onChange, onClose }: InspectorProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"metadata" | "relasi" | "versi">("metadata");
   const [legalStatus, setLegalStatus] = useState(document.legal_status);
-  const [verificationStatus, setVerificationStatus] = useState(document.verification_status);
   const [topics, setTopics] = useState(document.topics.join(", "));
   const [relationshipTarget, setRelationshipTarget] = useState(
     allDocuments.find((item) => item.document_id !== document.document_id)?.document_id ?? ""
   );
+  const [relationshipType, setRelationshipType] =
+    useState<AdminRelationship["relationship_type"]>("amended_by");
+  const [sourceUrl, setSourceUrl] = useState(document.source_url);
+  const [saving, setSaving] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [republishing, setRepublishing] = useState(false);
+  const [reingesting, setReingesting] = useState(false);
 
   function handleAuthFailure(err: unknown): boolean {
     if (!isAuthError(err)) return false;
@@ -101,57 +191,82 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
     const next = {
       ...document,
       legal_status: legalStatus,
-      verification_status: verificationStatus,
       topics: nextTopics,
+      source_url: sourceUrl,
     };
     onChange(next);
+    setSaving(true);
     try {
       await updateAdminDocument(document.document_id, {
         legal_status: legalStatus,
-        verification_status: verificationStatus,
+        verification_status: document.verification_status,
         topics: nextTopics,
+        source_url: sourceUrl,
       });
       toast.success("Metadata berhasil disimpan.");
     } catch (err) {
       onChange(document);
       if (handleAuthFailure(err)) return;
       toast.error(`Metadata gagal disimpan: ${describeError(err)}`);
+    } finally {
+      setSaving(false);
     }
   }
 
-  const isVerified =
-    document.legal_status === "active" && document.verification_status === "verified";
+  const isDbVerified =
+    document.source_verification_status === "verified" &&
+    document.legal_review_status === "verified";
+
+  const canPublish =
+    document.ingestion_status === "completed" &&
+    document.source_verification_status === "verified" &&
+    document.legal_review_status === "verified" &&
+    isGoIdUrl(document.source_url);
 
   async function markVerified() {
+    if (!isGoIdUrl(sourceUrl)) {
+      toast.error("URL sumber harus dari domain .go.id (pemerintah) sebelum verifikasi.");
+      return;
+    }
     onChange({
       ...document,
       legal_status: "active",
       verification_status: "verified",
+      source_verification_status: "verified",
+      legal_review_status: "verified",
+      source_url: sourceUrl,
     });
     setLegalStatus("active");
-    setVerificationStatus("verified");
+    setVerifying(true);
     try {
       await updateAdminDocument(document.document_id, {
         legal_status: "active",
         verification_status: "verified",
         topics: Array.isArray(document.topics) ? document.topics : [],
+        source_url: sourceUrl,
       });
+      await verifyDocument(document.document_id, "source", "verified", sourceUrl);
+      await verifyDocument(document.document_id, "legal", "verified", sourceUrl);
       toast.success("Dokumen ditandai terverifikasi.");
     } catch (err) {
       onChange(document);
       setLegalStatus(document.legal_status);
-      setVerificationStatus(document.verification_status);
       if (handleAuthFailure(err)) return;
       toast.error(`Gagal menandai terverifikasi: ${describeError(err)}`);
+    } finally {
+      setVerifying(false);
     }
   }
 
   async function addRelationship() {
-    if (!relationshipTarget) return;
+    if (!relationshipTarget) {
+      toast.error("Pilih dokumen tujuan terlebih dahulu.");
+      return;
+    }
     const relationship: AdminRelationship = {
       from_document_id: document.document_id,
       to_document_id: relationshipTarget,
-      relationship_type: "amended_by",
+      relationship_type: relationshipType,
       confidence: "medium",
       notes: "Perlu verifikasi admin.",
     };
@@ -215,6 +330,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
       ],
     };
     onChange(next);
+    setRepublishing(true);
     try {
       await updateAdminPublication(document.document_id, action);
       toast.success(action === "publish" ? "Dokumen diterbitkan." : "Penerbitan dibatalkan.");
@@ -224,48 +340,183 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
       const label =
         action === "publish" ? "Gagal menerbitkan dokumen" : "Gagal membatalkan penerbitan";
       toast.error(`${label}: ${describeError(err)}`);
+    } finally {
+      setRepublishing(false);
     }
   }
 
-  async function reingest() {
+  const FINAL_JOB_STATUSES = new Set(["completed", "review_required", "failed"]);
+  const POLL_INTERVAL_MS = 3000;
+  const POLL_TIMEOUT_MS = 10 * 60 * 1000;
+
+  async function reingest(force = false) {
+    if (
+      force &&
+      !window.confirm(`Dokumen ${document.document_id} sudah selesai diingest. Paksa ulang?`)
+    )
+      return;
     onChange({ ...document, ingestion_status: "running" });
+    setReingesting(true);
+    toast.info(force ? "Re-ingest dipaksa ulang..." : "Re-ingest dimulai...", {
+      id: "reingest-progress",
+    });
     try {
-      const job = await createIngestionJob(document.document_id);
-      onChange({ ...document, ingestion_status: job.status });
+      const job = await createIngestionJob(document.document_id, force);
+      const pollStart = Date.now();
+      let current = job;
+      while (!FINAL_JOB_STATUSES.has(current.status)) {
+        if (Date.now() - pollStart > POLL_TIMEOUT_MS) {
+          throw new Error("Re-ingest melebihi batas waktu 10 menit.");
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        try {
+          current = await fetchIngestionJob(job.job_id);
+        } catch (pollError) {
+          if ((pollError as Error)?.name === "AbortError") throw pollError;
+          continue;
+        }
+      }
+      onChange({ ...document, ingestion_status: current.status });
       toast.success(
-        `Re-ingest selesai dengan status ${ingestionLabels[job.status] ?? job.status}.`
+        `Re-ingest selesai dengan status ${ingestionLabels[current.status] ?? current.status}.`,
+        { id: "reingest-progress" }
       );
     } catch (err) {
       onChange(document);
       if (handleAuthFailure(err)) return;
-      toast.error(`Re-ingest gagal dijalankan: ${describeError(err)}`);
+      toast.error(`Re-ingest gagal dijalankan: ${describeError(err)}`, {
+        id: "reingest-progress",
+      });
+    } finally {
+      setReingesting(false);
     }
   }
 
+  const infoCells = [
+    {
+      icon: FileText,
+      label: "Jenis",
+      value: document.regulation_type,
+    },
+    { icon: Hash, label: "Nomor", value: document.number },
+    { icon: Calendar, label: "Tahun", value: document.year },
+    { icon: WholeWord, label: "Chunk", value: document.chunk_count },
+  ];
+
+  const readinessItems: ChecklistItem[] = [
+    {
+      done: document.ingestion_status === "completed",
+      label:
+        document.ingestion_status === "completed"
+          ? "Ingestion selesai"
+          : `Ingestion ${ingestionLabels[document.ingestion_status] ?? document.ingestion_status}`,
+    },
+    {
+      done: document.source_verification_status === "verified",
+      label:
+        document.source_verification_status === "verified"
+          ? "Sumber terverifikasi"
+          : "Sumber belum terverifikasi",
+    },
+    {
+      done: document.legal_review_status === "verified",
+      label:
+        document.legal_review_status === "verified"
+          ? "Review hukum terverifikasi"
+          : "Review hukum belum terverifikasi",
+    },
+    {
+      done: isGoIdUrl(document.source_url),
+      label: isGoIdUrl(document.source_url)
+        ? "URL sumber dari .go.id"
+        : "URL sumber belum dari .go.id",
+    },
+  ];
+
   return (
     <>
-      <SheetHeader className="border-b pb-4">
-        <SheetDescription className="text-xs font-medium tracking-[0.16em] text-forest uppercase">
+      <SheetHeader className="border-b px-5 pb-4">
+        <SheetDescription className="text-[11px] font-semibold tracking-[0.18em] text-forest uppercase">
           Dokumen terpilih
         </SheetDescription>
-        <SheetTitle className="text-lg leading-snug">{document.short_title}</SheetTitle>
-        <p className="font-mono text-xs text-muted-text">{document.document_id}</p>
-        <div className="flex flex-wrap gap-1.5 pt-1.5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <SheetTitle className="text-xl leading-snug">{document.short_title}</SheetTitle>
+            <p className="mt-0.5 font-mono text-xs text-muted-text">{document.document_id}</p>
+          </div>
+          <span className="shrink-0 rounded-lg bg-surface-soft px-2.5 py-1 font-mono text-xs font-semibold text-muted-text">
+            v{document.version}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1.5 pt-1">
           <StatusBadge tone={ingestionTone[document.ingestion_status]}>
             {ingestionLabels[document.ingestion_status]}
           </StatusBadge>
+          {isDbVerified ? (
+            <StatusBadge tone="success">Verifikasi lengkap</StatusBadge>
+          ) : (
+            <StatusBadge tone="warning">Verifikasi belum lengkap</StatusBadge>
+          )}
           {document.publication_status === "published" ? (
             <StatusBadge tone="success">Terbit</StatusBadge>
           ) : (
             <StatusBadge tone="neutral">Draft</StatusBadge>
           )}
-          <StatusBadge tone="neutral">v{document.version}</StatusBadge>
         </div>
       </SheetHeader>
 
-      <div className="flex-1 overflow-y-auto px-4">
+      <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <div className="grid grid-cols-2 gap-2">
+          {infoCells.map((cell) => {
+            const Icon = cell.icon;
+            return (
+              <div
+                key={cell.label}
+                className="rounded-lg border border-line bg-surface-soft/50 px-3.5 py-2.5"
+              >
+                <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-muted-text uppercase">
+                  <Icon className="size-3.5" /> {cell.label}
+                </p>
+                <p className="mt-1 font-mono text-sm font-bold text-tinta tabular-nums">
+                  {cell.value}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="rounded-xl border border-line bg-surface-soft/50 p-3.5">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-tinta">
+            <ShieldCheck className="size-4 text-forest" /> Verifikasi sistem
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <StatusBadge
+              tone={document.source_verification_status === "verified" ? "success" : "warning"}
+            >
+              Sumber{" · "}
+              {document.source_verification_status === "verified" ? "terverifikasi" : "belum"}
+            </StatusBadge>
+            <StatusBadge tone={document.legal_review_status === "verified" ? "success" : "warning"}>
+              Hukum{" · "}
+              {document.legal_review_status === "verified" ? "terverifikasi" : "belum"}
+            </StatusBadge>
+            {!isDbVerified ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto"
+                disabled={verifying}
+                onClick={() => void markVerified()}
+              >
+                <BadgeCheck className="text-forest" />
+                {verifying ? "Memverifikasi..." : "Tandai terverifikasi"}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)}>
-          <TabsList className="w-full">
+          <TabsList className="w-full bg-surface-soft">
             <TabsTrigger value="metadata" className="flex-1">
               Metadata
             </TabsTrigger>
@@ -282,6 +533,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
               <Label>Judul singkat</Label>
               <Input value={document.short_title} readOnly />
             </div>
+
             <div className="space-y-1.5">
               <Label>Status hukum</Label>
               <Select value={legalStatus} onValueChange={setLegalStatus}>
@@ -295,20 +547,28 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
                   <SelectItem value="revoked">Dicabut</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-text">
+                Dokumen dengan status selain Berlaku tidak diikutkan pada retrieval publik.
+              </p>
             </div>
+
             <div className="space-y-1.5">
-              <Label>Status verifikasi</Label>
-              <Select value={verificationStatus} onValueChange={setVerificationStatus}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="verified">Terverifikasi</SelectItem>
-                  <SelectItem value="pending_detail_url">Menunggu URL detail</SelectItem>
-                  <SelectItem value="needs_review">Perlu review</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>URL sumber (source URL)</Label>
+              <Input
+                placeholder="https://peraturan.go.id/..."
+                value={sourceUrl}
+                onChange={(event) => setSourceUrl(event.target.value)}
+              />
+              {!isGoIdUrl(sourceUrl) ? (
+                <p className="text-xs text-red">
+                  URL harus dari domain .go.id (pemerintah) untuk dapat diverifikasi dan
+                  diterbitkan.
+                </p>
+              ) : (
+                <p className="text-xs text-forest">URL valid dari domain pemerintah.</p>
+              )}
             </div>
+
             <div className="space-y-1.5">
               <Label>Topik (pisahkan dengan koma)</Label>
               <Textarea
@@ -317,135 +577,234 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
                 rows={3}
               />
             </div>
+
             <Button
               className="w-full bg-javanese text-white hover:bg-forest"
+              disabled={saving}
               onClick={() => void saveMetadata()}
             >
-              Simpan perubahan
+              {saving ? "Menyimpan..." : "Simpan perubahan"}
             </Button>
-            {!isVerified ? (
-              <div className="space-y-1.5">
-                <Button variant="outline" className="w-full" onClick={() => void markVerified()}>
-                  <BadgeCheck className="text-forest" /> Tandai terverifikasi
-                </Button>
-                <p className="text-xs text-muted-text">
-                  Tetapkan sekaligus sebagai Berlaku + Terverifikasi.
-                </p>
-              </div>
-            ) : (
-              <p className="flex items-center gap-1.5 text-xs text-forest">
-                <BadgeCheck className="size-3.5" /> Dokumen sudah terverifikasi
-              </p>
-            )}
           </TabsContent>
 
-          <TabsContent value="relasi" className="mt-4 space-y-4">
-            {document.relationships.length ? (
-              <ul className="space-y-2">
-                {document.relationships.map((relationship) => (
-                  <li
-                    key={`${relationship.relationship_type}-${relationship.to_document_id}`}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <Badge variant="secondary" className="mb-1">
-                        {relationship.relationship_type.replaceAll("_", " ")}
-                      </Badge>
-                      <p className="truncate font-mono text-xs text-muted-text">
-                        {relationship.to_document_id}
-                      </p>
+          <TabsContent value="relasi" className="mt-4">
+            <div className="space-y-4">
+              {document.relationships.length ? (
+                <ul className="space-y-2">
+                  {document.relationships.map((relationship) => {
+                    const target = allDocuments.find(
+                      (item) => item.document_id === relationship.to_document_id
+                    );
+                    const relTypeLabel =
+                      relationship.relationship_type === "amended_by"
+                        ? "Diubah oleh"
+                        : relationship.relationship_type === "implements"
+                          ? "Mengimplementasikan"
+                          : relationship.relationship_type === "implemented_by"
+                            ? "Diimplementasikan oleh"
+                            : relationship.relationship_type === "related_to"
+                              ? "Terkait dengan"
+                              : relationship.relationship_type.replaceAll("_", " ");
+                    return (
+                      <li
+                        key={`${relationship.relationship_type}-${relationship.to_document_id}`}
+                        className="group flex items-center gap-3 rounded-lg border border-line bg-white px-3 py-2.5"
+                      >
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-soft text-muted-text">
+                          <LinkIcon className="size-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-tinta">
+                            {target?.short_title ?? relationship.to_document_id}
+                          </p>
+                          <p className="flex items-center gap-1.5 font-mono text-[11px] text-muted-text">
+                            <span className="truncate">{relTypeLabel}</span>
+                            <span aria-hidden="true" className="text-muted-text/40">
+                              ·
+                            </span>
+                            <span className="truncate">{relationship.to_document_id}</span>
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Hapus relasi ${relationship.to_document_id}`}
+                          onClick={() => void removeRelationship(relationship)}
+                        >
+                          <Trash2 className="text-red" />
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <EmptyState
+                  icon={LinkIcon}
+                  title="Belum ada relasi hukum"
+                  hint="Tambahkan hubungan antar-regulasi seperti 'diubah oleh' atau 'mengimplementasikan'."
+                />
+              )}
+
+              <div className="rounded-xl border border-line bg-surface-soft/50 p-3.5">
+                <p className="text-sm font-semibold text-tinta">Tambah hubungan</p>
+                <div className="mt-3 space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Jenis hubungan</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRelationshipType("amended_by")}
+                        className={cn(
+                          "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                          relationshipType === "amended_by"
+                            ? "border-javanese bg-javanese text-white"
+                            : "border-line bg-white text-muted-text hover:border-javanese/40 hover:text-tinta"
+                        )}
+                      >
+                        Diubah oleh
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRelationshipType("implements")}
+                        className={cn(
+                          "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                          relationshipType === "implements"
+                            ? "border-javanese bg-javanese text-white"
+                            : "border-line bg-white text-muted-text hover:border-javanese/40 hover:text-tinta"
+                        )}
+                      >
+                        Mengimplementasikan
+                      </button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Hapus relasi ${relationship.to_document_id}`}
-                      onClick={() => void removeRelationship(relationship)}
-                    >
-                      <Trash2 className="text-red" />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="rounded-lg bg-surface-soft px-3 py-4 text-sm text-muted-text">
-                Belum ada relasi hukum untuk dokumen ini.
-              </p>
-            )}
-            <div className="space-y-1.5">
-              <Label>Tambah relasi &quot;diubah oleh&quot;</Label>
-              <Select value={relationshipTarget} onValueChange={setRelationshipTarget}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Pilih dokumen" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allDocuments
-                    .filter((item) => item.document_id !== document.document_id)
-                    .map((item) => (
-                      <SelectItem key={item.document_id} value={item.document_id}>
-                        {item.short_title}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Dokumen tujuan</Label>
+                    <Select value={relationshipTarget} onValueChange={setRelationshipTarget}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Pilih dokumen" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allDocuments
+                          .filter((item) => item.document_id !== document.document_id)
+                          .map((item) => (
+                            <SelectItem key={item.document_id} value={item.document_id}>
+                              {item.short_title}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    className="w-full bg-javanese text-white hover:bg-forest"
+                    disabled={!relationshipTarget}
+                    onClick={() => void addRelationship()}
+                  >
+                    <Plus /> Tambah hubungan
+                  </Button>
+                </div>
+              </div>
             </div>
-            <Button variant="outline" className="w-full" onClick={() => void addRelationship()}>
-              <Plus /> Tambah relasi
-            </Button>
           </TabsContent>
 
           <TabsContent value="versi" className="mt-4">
-            <ul className="space-y-2">
-              {document.versions.map((version) => (
-                <li
-                  key={`${version.version}-${version.created_at}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2.5"
-                >
-                  <span className="font-mono text-sm font-semibold">v{version.version}</span>
-                  <span className="flex-1">
-                    <strong className="block text-sm">
-                      {version.status === "published" ? "Terbit" : "Draft"}
-                    </strong>
-                    <small className="text-xs text-muted-text">
-                      {formatDate(version.created_at)} oleh {version.created_by}
-                    </small>
-                  </span>
-                  {version.version === document.version ? (
-                    <StatusBadge tone="success">Aktif</StatusBadge>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            <div className="relative pl-5">
+              <span
+                aria-hidden="true"
+                className="absolute top-1.5 bottom-1.5 left-[7px] w-px bg-line"
+              />
+              <ul className="space-y-3">
+                {document.versions.map((version) => {
+                  const isCurrent = version.version === document.version;
+                  return (
+                    <li key={`${version.version}-${version.created_at}`} className="relative">
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "absolute top-1 -left-[18px] flex size-3.5 items-center justify-center rounded-full border-2 bg-white",
+                          isCurrent ? "border-forest" : "border-line"
+                        )}
+                      >
+                        {isCurrent ? <span className="size-1.5 rounded-full bg-forest" /> : null}
+                      </span>
+                      <div
+                        className={cn(
+                          "flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5",
+                          isCurrent ? "border-forest/20 bg-teal-soft/40" : "border-line bg-white"
+                        )}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center gap-2">
+                            <span className="font-mono text-sm font-semibold">
+                              v{version.version}
+                            </span>
+                            {version.status === "published" ? (
+                              <StatusBadge tone="success">Terbit</StatusBadge>
+                            ) : (
+                              <StatusBadge tone="neutral">Draft</StatusBadge>
+                            )}
+                            {isCurrent ? <StatusBadge tone="info">Aktif</StatusBadge> : null}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-text">
+                            {formatDate(version.created_at)}
+                            {" · "}oleh {version.created_by}
+                          </p>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           </TabsContent>
         </Tabs>
 
-        <div className="mt-4">
-          {document.last_error ? (
-            <Callout tone="warning" title="Log parsing perlu ditinjau">
-              {document.last_error}
-            </Callout>
-          ) : (
-            <Callout tone="success" title="Parsing tanpa error">
-              {document.chunk_count} chunk siap digunakan.
-            </Callout>
-          )}
-        </div>
+        <ReadinessPanel items={readinessItems} />
+
+        {document.last_error ? (
+          <Callout tone="warning" title="Log parsing perlu ditinjau">
+            {document.last_error}
+          </Callout>
+        ) : (
+          <Callout tone="success" title="Parsing tanpa error">
+            {document.chunk_count} chunk siap digunakan.
+          </Callout>
+        )}
       </div>
 
-      <SheetFooter className="border-t pt-4">
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="outline" onClick={() => void reingest()}>
-            <RefreshCw /> Re-ingest
+      <SheetFooter className="border-t bg-white px-5 py-4">
+        <div className="grid w-full grid-cols-2 gap-2">
+          <Button
+            variant="outline"
+            disabled={reingesting || document.ingestion_status === "completed"}
+            title={
+              document.ingestion_status === "completed"
+                ? "Klik untuk memaksa ulang (force)"
+                : undefined
+            }
+            onClick={() => void reingest(document.ingestion_status === "completed")}
+          >
+            <RefreshCw className={cn(reingesting && "animate-spin")} />
+            {reingesting
+              ? "Memproses..."
+              : document.ingestion_status === "completed"
+                ? "Paksa ulang"
+                : "Re-ingest"}
           </Button>
           <Button
             className="bg-javanese text-white hover:bg-forest"
+            disabled={!canPublish || republishing}
             onClick={() => void changePublication()}
           >
-            {document.publication_status === "published" ? "Batalkan terbit" : "Terbitkan"}
+            {republishing
+              ? "Memproses..."
+              : document.publication_status === "published"
+                ? "Batalkan terbit"
+                : "Terbitkan"}
           </Button>
         </div>
-        <Button variant="ghost" onClick={onClose}>
-          Tutup editor
+        <Button variant="ghost" className="w-full text-muted-text" onClick={onClose}>
+          Kembali ke daftar
         </Button>
       </SheetFooter>
     </>

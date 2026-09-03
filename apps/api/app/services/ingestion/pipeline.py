@@ -208,8 +208,6 @@ def ingest_document(
         quality_report["status"] = "review_required"
     else:
         quality_report["gates"]["source_manifest_verified"] = True
-    if not all(quality_report["gates"].values()):
-        quality_report["status"] = "review_required"
 
     requires_review = quality_report["status"] != "passed"
     status = "review_required" if requires_review else "completed"

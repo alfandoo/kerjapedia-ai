@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import re
+import shutil
 import unicodedata
 from collections import Counter
 from dataclasses import replace
@@ -157,19 +158,19 @@ def run_ocr(source: Path, target: Path, *, jobs: int = 2) -> Path:
     except ImportError as exc:
         raise RuntimeError("ocrmypdf is required for scanned legal documents.") from exc
     target.parent.mkdir(parents=True, exist_ok=True)
-    ocrmypdf.ocr(
-        source,
-        target,
-        language=["ind", "eng"],
-        skip_text=True,
-        deskew=True,
-        rotate_pages=True,
-        clean=True,
-        optimize=1,
-        jobs=max(1, min(jobs, 2)),
-        tesseract_timeout=180,
-        progress_bar=False,
-    )
+    kwargs: dict = {
+        "language": ["ind", "eng"],
+        "skip_text": True,
+        "deskew": True,
+        "rotate_pages": True,
+        "optimize": 1,
+        "jobs": max(1, min(jobs, 2)),
+        "tesseract_timeout": 180,
+        "progress_bar": False,
+    }
+    if shutil.which("unpaper"):
+        kwargs["clean"] = True
+    ocrmypdf.ocr(source, target, **kwargs)
     return target
 
 

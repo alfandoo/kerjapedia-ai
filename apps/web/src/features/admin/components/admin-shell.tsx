@@ -114,7 +114,7 @@ export function AdminShell({ children }: AdminShellProps) {
 
   if (!session || !session.user.roles.includes("admin")) {
     return (
-      <div className="flex min-h-[100svh] items-center justify-center bg-arsip px-4">
+      <div className="admin-theme flex min-h-[100svh] items-center justify-center bg-arsip px-4">
         <div className="w-full max-w-md rounded-2xl border border-line bg-white p-10 text-center shadow-[0_16px_40px_rgba(27,67,50,0.08)]">
           <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-javanese text-emas">
             <ScaleIcon className="size-7" />
@@ -156,7 +156,7 @@ export function AdminShell({ children }: AdminShellProps) {
   }
 
   return (
-    <div className="flex min-h-[100svh]">
+    <div className="admin-theme flex min-h-[100svh]">
       {mobileOpen ? (
         <button
           type="button"

@@ -227,7 +227,7 @@ def build_embedding_provider(
             batch_size=batch_size,
         )
     if provider_name == "hash":
-        return HashEmbeddingProvider()
+        return HashEmbeddingProvider(dimensions=dimensions)
     if provider_name == "openai":
         if not openai_api_key:
             raise RuntimeError(

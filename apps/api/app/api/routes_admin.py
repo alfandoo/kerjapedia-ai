@@ -263,6 +263,12 @@ def list_admin_documents(session: DbSession, _: AdminUser) -> dict:
                 "publication_status": version.publication_status
                 if version
                 else "draft",
+                "source_verification_status": version.source_verification_status
+                if version
+                else "pending",
+                "legal_review_status": version.legal_review_status
+                if version
+                else "pending",
                 "version": version.version if version else record.version,
                 "updated_at": record.updated_at,
                 "updated_by": record.updated_by,
@@ -320,6 +326,12 @@ def update_admin_document(
     record.overrides = {**record.overrides, **applied}
     record.updated_at = now_utc()
     record.updated_by = user.user_id
+
+    if "source_url" in changes:
+        version = _latest_document_version(session, document_id)
+        if version is not None:
+            version.source_url = changes["source_url"]
+
     session.commit()
 
     log_audit(

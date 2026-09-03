@@ -104,6 +104,7 @@ class DocumentUpdateRequest(ApiModel):
     legal_status: str | None = Field(default=None, max_length=80)
     topics: list[str] | None = None
     verification_status: str | None = Field(default=None, max_length=80)
+    source_url: str | None = Field(default=None, max_length=1000)
 
 
 class DocumentRelationshipRequest(ApiModel):
@@ -170,6 +171,7 @@ class IngestionJobRequest(ApiModel):
     document_id: str = Field(min_length=3, max_length=80)
     persist_db: bool = False
     release_candidate: bool = False
+    force: bool = False
 
 
 class FeedbackRequest(ApiModel):
