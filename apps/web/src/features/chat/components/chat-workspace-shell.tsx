@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -75,6 +77,7 @@ export function ChatWorkspaceShell({
 }: ChatWorkspaceShellProps) {
   const session = useStoredSession();
   const { t: translate } = useSettings();
+  const pathname = usePathname();
   const mobileSidebarRef = useRef<HTMLElement>(null);
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLButtonElement>(null);
@@ -119,7 +122,7 @@ export function ChatWorkspaceShell({
     (conversation) => !pinnedConversationIds.includes(conversation.conversation_id)
   );
 
-  function togglePinned(conversationId: string) {
+  const togglePinned = useCallback((conversationId: string) => {
     setPinnedConversationIds((current) => {
       const next = current.includes(conversationId)
         ? current.filter((id) => id !== conversationId)
@@ -127,7 +130,15 @@ export function ChatWorkspaceShell({
       window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(next));
       return next;
     });
-  }
+  }, []);
+
+  const isActive = useCallback(
+    (href: string) => {
+      if (href === "/chat") return pathname === "/chat";
+      return pathname === href || pathname.startsWith(`${href}/`);
+    },
+    [pathname]
+  );
 
   function openChatSearch(trigger: HTMLElement) {
     if (!session) {
@@ -355,7 +366,9 @@ export function ChatWorkspaceShell({
           >
             <button
               type="button"
-              className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-left text-xs font-semibold text-sidebar-foreground transition hover:bg-sidebar-accent"
+              className={`flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-left text-xs font-semibold transition hover:bg-sidebar-accent ${
+                isActive("/chat") ? "bg-sidebar-accent text-[#d9f2df]" : "text-sidebar-foreground"
+              }`}
               onClick={() => {
                 onNewConversation();
                 onMobileSidebarOpenChange(false);
@@ -366,14 +379,24 @@ export function ChatWorkspaceShell({
             </button>
             <Link
               href="/search"
-              className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-sidebar-foreground transition hover:bg-sidebar-accent"
+              aria-current={isActive("/search") ? "page" : undefined}
+              className={`flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs transition hover:bg-sidebar-accent ${
+                isActive("/search")
+                  ? "bg-sidebar-accent font-semibold text-[#d9f2df]"
+                  : "text-sidebar-foreground"
+              }`}
             >
               <Search className="size-[18px] text-javanese" />
               <span>{translate("sidebar.searchRegulations")}</span>
             </Link>
             <Link
               href="/legal/disclaimer"
-              className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-sidebar-foreground transition hover:bg-sidebar-accent"
+              aria-current={isActive("/legal/disclaimer") ? "page" : undefined}
+              className={`flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs transition hover:bg-sidebar-accent ${
+                isActive("/legal/disclaimer")
+                  ? "bg-sidebar-accent font-semibold text-[#d9f2df]"
+                  : "text-sidebar-foreground"
+              }`}
             >
               <FileText className="size-[18px] text-javanese" />
               <span>{translate("sidebar.legal")}</span>
@@ -769,7 +792,7 @@ export function ChatWorkspaceShell({
               session ? "" : "max-[760px]:hidden"
             }`}
           >
-            {translate("header.assistant")}
+            {pathname === "/search" ? translate("header.search") : translate("header.assistant")}
           </h1>
           {session ? (
             <button

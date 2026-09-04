@@ -55,6 +55,7 @@ const en = {
   "header.login": "Sign in",
   "header.signup": "Sign up free",
   "header.assistant": "Employment regulation assistant",
+  "header.search": "Regulation search",
 
   // Auth modal
   "auth.loginTitle": "Sign in to KerjaPedia",
