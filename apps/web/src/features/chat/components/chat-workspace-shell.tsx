@@ -204,18 +204,18 @@ export function ChatWorkspaceShell({
             {session ? (
               <Link
                 href="/chat"
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-1 text-sidebar-foreground transition hover:bg-sidebar-accent"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-1 text-javanese transition hover:bg-sidebar-accent hover:text-forest"
                 aria-label="KerjaPedia AI beranda"
               >
                 <Scale className="size-[23px]" />
-                <strong className="whitespace-nowrap font-display text-sm font-semibold">
+                <strong className="whitespace-nowrap font-display text-sm font-semibold text-javanese">
                   KerjaPedia AI
                 </strong>
               </Link>
             ) : (
               <Link
                 href="/"
-                className="grid size-10 place-items-center rounded-[9px] text-sidebar-foreground transition hover:bg-sidebar-accent"
+                className="grid size-10 place-items-center rounded-[9px] text-javanese transition hover:bg-sidebar-accent hover:text-forest"
                 aria-label="KerjaPedia AI beranda"
               >
                 <Scale className="size-[23px]" />
@@ -224,7 +224,7 @@ export function ChatWorkspaceShell({
             <div className="flex flex-none items-center gap-0.5">
               <button
                 type="button"
-                className="grid size-[38px] place-items-center rounded-lg text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                className="grid size-[38px] place-items-center rounded-lg text-javanese transition hover:bg-sidebar-accent hover:text-forest"
                 aria-label={translate("sidebar.search")}
                 aria-expanded={chatSearchOpen}
                 onClick={(event) => openChatSearch(event.currentTarget)}
@@ -233,7 +233,7 @@ export function ChatWorkspaceShell({
               </button>
               <button
                 type="button"
-                className="grid size-[38px] place-items-center rounded-lg text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-foreground max-[760px]:hidden"
+                className="grid size-[38px] place-items-center rounded-lg text-javanese transition hover:bg-sidebar-accent hover:text-forest max-[760px]:hidden"
                 aria-label="Tutup sidebar"
                 onClick={() => onSidebarExpandedChange(false)}
               >
@@ -241,7 +241,7 @@ export function ChatWorkspaceShell({
               </button>
               <button
                 type="button"
-                className="grid size-[38px] place-items-center rounded-lg text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-foreground hidden max-[760px]:grid"
+                className="grid size-[38px] place-items-center rounded-lg text-javanese transition hover:bg-sidebar-accent hover:text-forest hidden max-[760px]:grid"
                 ref={mobileCloseRef}
                 aria-label="Tutup riwayat"
                 onClick={() => {
@@ -293,21 +293,21 @@ export function ChatWorkspaceShell({
                 onMobileSidebarOpenChange(false);
               }}
             >
-              <Plus className="size-[18px]" />
+              <Plus className="size-[18px] text-javanese" />
               <span>{translate("sidebar.newChat")}</span>
             </button>
             <Link
               href="/search"
               className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-sidebar-foreground transition hover:bg-sidebar-accent"
             >
-              <Search className="size-[18px]" />
+              <Search className="size-[18px] text-javanese" />
               <span>{translate("sidebar.searchRegulations")}</span>
             </Link>
             <Link
               href="/legal/disclaimer"
               className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-sidebar-foreground transition hover:bg-sidebar-accent"
             >
-              <FileText className="size-[18px]" />
+              <FileText className="size-[18px] text-javanese" />
               <span>{translate("sidebar.legal")}</span>
             </Link>
           </nav>
@@ -368,7 +368,7 @@ export function ChatWorkspaceShell({
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-[#ececec]"
+              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent"
             >
               <span className="flex size-5 shrink-0 items-center justify-center">
                 <svg
@@ -378,7 +378,7 @@ export function ChatWorkspaceShell({
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="size-[18px]"
+                  className="size-[18px] text-javanese"
                 >
                   <circle cx="12" cy="12" r="3" />
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
@@ -388,7 +388,7 @@ export function ChatWorkspaceShell({
             </button>
             <Link
               href="/legal/disclaimer"
-              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-[#ececec]"
+              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent"
             >
               <span className="flex size-5 shrink-0 items-center justify-center">
                 <svg
@@ -398,7 +398,7 @@ export function ChatWorkspaceShell({
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="size-[18px]"
+                  className="size-[18px] text-javanese"
                 >
                   <circle cx="12" cy="12" r="10" />
                   <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
@@ -413,13 +413,13 @@ export function ChatWorkspaceShell({
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="size-4 text-[#676767]"
+                className="size-4 text-javanese"
               >
                 <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
               </svg>
             </Link>
           </nav>
-          <div className="border-t border-[#e5e5e5] p-4">
+          <div className="border-t border-sidebar-border p-4">
             <h3 className="text-[15px] font-semibold text-tinta">
               {translate("sidebar.loginTitle")}
             </h3>
@@ -428,7 +428,7 @@ export function ChatWorkspaceShell({
             </p>
             <button
               type="button"
-              className="mt-3 flex min-h-[40px] w-full items-center justify-center rounded-full border border-[#e5e5e5] bg-white text-[13px] font-semibold text-tinta transition hover:border-javanese hover:bg-[#ececec]"
+              className="mt-3 flex min-h-[40px] w-full items-center justify-center rounded-full bg-white text-[13px] font-semibold text-javanese transition hover:bg-[#e2f3e6]"
               onClick={(event) => openAuthModal(event.currentTarget, "login")}
             >
               {translate("sidebar.loginButton")}
@@ -530,37 +530,37 @@ export function ChatWorkspaceShell({
     >
       <Link
         href="/"
-        className="mb-2 grid size-11 place-items-center rounded-[10px] text-[#0d0d0d] transition hover:bg-[#ececec]"
+        className="mb-2 grid size-11 place-items-center rounded-[10px] text-javanese transition hover:bg-sidebar-accent hover:text-forest"
         aria-label="KerjaPedia AI beranda"
       >
         <Scale className="size-[21px]" />
       </Link>
       <button
         type="button"
-        className="grid size-11 place-items-center rounded-[10px] text-[#0d0d0d] transition hover:bg-[#ececec]"
+        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
         aria-label={translate("sidebar.newChat")}
         onClick={onNewConversation}
       >
-        <Plus className="size-[18px]" />
+        <Plus className="size-[18px] text-javanese" />
       </button>
       <button
         type="button"
-        className="grid size-11 place-items-center rounded-[10px] text-[#0d0d0d] transition hover:bg-[#ececec]"
+        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
         aria-label={translate("sidebar.search")}
         onClick={(event) => openChatSearch(event.currentTarget)}
       >
-        <Search className="size-[21px]" />
+        <Search className="size-[21px] text-javanese" />
       </button>
       <Link
         href="/legal/disclaimer"
-        className="grid size-11 place-items-center rounded-[10px] text-[#0d0d0d] transition hover:bg-[#ececec]"
+        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
         aria-label={translate("sidebar.legal")}
       >
-        <FileText className="size-[21px]" />
+        <FileText className="size-[21px] text-javanese" />
       </Link>
       <button
         type="button"
-        className="mt-auto grid size-11 place-items-center rounded-[10px] text-[#0d0d0d] transition hover:bg-[#ececec]"
+        className="mt-auto grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
         aria-label={session ? translate("sidebar.profile") : translate("sidebar.login")}
         onClick={(event) => {
           if (session) {
@@ -570,7 +570,7 @@ export function ChatWorkspaceShell({
           }
         }}
       >
-        <User className="size-[21px]" />
+        <User className="size-[21px] text-javanese" />
       </button>
     </nav>
   );
@@ -602,11 +602,11 @@ export function ChatWorkspaceShell({
       />
       <div className="relative flex min-h-0 min-w-0 flex-col bg-white max-[760px]:h-full">
         <header
-          className={`relative z-[5] grid min-h-[58px] items-center gap-2 border-b border-[#e5e5e5] bg-white/95 px-3.5 py-1.5 backdrop-blur-xl ${topbarColumns}`}
+          className={`relative z-[5] grid min-h-[58px] items-center gap-2 border-b border-border bg-white/95 px-3.5 py-1.5 backdrop-blur-xl ${topbarColumns}`}
         >
           <button
             type="button"
-            className={`grid size-11 place-items-center rounded-[9px] text-[#676767] transition hover:bg-[#ececec] max-[760px]:hidden ${
+            className={`grid size-11 place-items-center rounded-[9px] text-muted-foreground transition hover:bg-accent max-[760px]:hidden ${
               sidebarExpanded ? "invisible pointer-events-none" : ""
             }`}
             aria-label={sidebarExpanded ? "Tutup sidebar" : "Buka sidebar"}
@@ -620,7 +620,7 @@ export function ChatWorkspaceShell({
           <button
             ref={mobileMenuRef}
             type="button"
-            className="hidden size-11 place-items-center rounded-[9px] text-[#676767] transition hover:bg-[#ececec] max-[760px]:grid"
+            className="hidden size-11 place-items-center rounded-[9px] text-muted-foreground transition hover:bg-accent max-[760px]:grid"
             aria-label={session ? "Buka riwayat" : "Buka menu"}
             aria-expanded={mobileSidebarOpen}
             onClick={() => onMobileSidebarOpenChange(true)}
@@ -633,7 +633,7 @@ export function ChatWorkspaceShell({
             </span>
           </div>
           <h1
-            className={`m-0 truncate text-[13px] font-medium text-tinta ${
+            className={`m-0 truncate text-[13px] font-medium text-javanese ${
               session ? "" : "max-[760px]:hidden"
             }`}
           >
@@ -643,14 +643,14 @@ export function ChatWorkspaceShell({
             <div className="flex items-center justify-self-end gap-2 max-[760px]:gap-1.5">
               <button
                 type="button"
-                className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-[#e5e5e5] bg-white px-4 text-xs font-semibold text-[#0d0d0d] transition hover:border-[#9dafa4] hover:bg-[#ececec] max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
+                className="inline-flex min-h-[38px] items-center justify-center rounded-full bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
                 onClick={(event) => openAuthModal(event.currentTarget, "login")}
               >
                 {translate("header.login")}
               </button>
               <button
                 type="button"
-                className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-[#e5e5e5] bg-white px-4 text-xs font-semibold text-[#0d0d0d] transition hover:border-[#9dafa4] hover:bg-[#ececec] max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
+                className="inline-flex min-h-[38px] items-center justify-center rounded-full bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
                 onClick={(event) => openAuthModal(event.currentTarget, "signup")}
               >
                 {translate("header.signup")}

@@ -345,12 +345,12 @@ export function EditorialChatExperience() {
           onScroll={handleConversationScroll}
         >
           {messages.length === 0 ? (
-            <div className="mx-auto mt-[clamp(24px,6vh,72px)] flex max-w-[680px] flex-col items-center text-center max-[760px]:mt-[clamp(28px,7vh,56px)]">
-              <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#e2ddd3] bg-[#faf8f4] px-4 py-1.5 text-[11px] font-medium tracking-wide text-[#8a7a5e]">
-                <span className="size-1.5 rounded-full bg-emas" />
+            <div className="mx-auto mt-[clamp(24px,5vh,60px)] flex max-w-[680px] flex-col items-center text-center max-[760px]:mt-[clamp(28px,6vh,48px)]">
+              <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#bfe3c9] bg-[#f0f8f2] px-4 py-1.5 text-[11px] font-medium tracking-wide text-[#176b3a]">
+                <span className="size-1.5 rounded-full bg-javanese" />
                 {translate("chat.badge")}
               </span>
-              <h1 className="font-display text-[clamp(28px,3.5vw,38px)] font-semibold leading-[1.12] tracking-[-0.03em] text-tinta max-[760px]:text-[28px]">
+              <h1 className="font-display text-[clamp(28px,3.5vw,38px)] font-semibold leading-[1.12] tracking-[-0.03em] text-javanese-deep max-[760px]:text-[28px]">
                 {translate("chat.title")}
               </h1>
               <p className="mb-8 mt-3 max-w-[420px] text-[13px] leading-[1.65] text-muted-text max-[760px]:mb-6 max-[760px]:mt-2.5">
@@ -366,12 +366,12 @@ export function EditorialChatExperience() {
                     key={item.text}
                     type="button"
                     onClick={() => void handleSubmit(item.text)}
-                    className="group flex min-h-[90px] w-full flex-col justify-between rounded-xl border border-[#e5e5e5] bg-white px-4 py-3.5 text-left transition hover:border-emas/40 hover:shadow-[0_2px_12px_rgba(201,162,39,0.08)] max-[760px]:min-h-[auto] max-[760px]:py-3"
+                    className="group flex min-h-[90px] w-full flex-col justify-between rounded-xl border border-[#d8e8dc] bg-white px-4 py-3.5 text-left transition hover:border-javanese/40 hover:shadow-[0_2px_12px_rgba(22,128,63,0.1)] max-[760px]:min-h-[auto] max-[760px]:py-3"
                   >
-                    <span className="mb-2 inline-flex self-start rounded-md bg-[#faf8f4] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#8a7a5e]">
+                    <span className="mb-2 inline-flex self-start rounded-md bg-[#f0f8f2] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#176b3a]">
                       {item.tag}
                     </span>
-                    <span className="text-[13px] leading-[1.45] text-[#303b35] group-hover:text-tinta">
+                    <span className="text-[13px] leading-[1.45] text-[#315342] group-hover:text-tinta">
                       {item.text}
                     </span>
                   </button>
@@ -392,7 +392,7 @@ export function EditorialChatExperience() {
           )}
           {isLoading && !messages.some((message) => message.streaming) ? (
             <div
-              className="mx-auto mb-5 flex max-w-[760px] items-start gap-3 rounded-xl border-l-[3px] border-javanese/20 bg-[#f4f4f4] py-3 pl-4 pr-3 text-xs leading-[1.55] text-tinta"
+              className="mx-auto mb-5 flex max-w-[760px] items-start gap-3 rounded-xl border-l-[3px] border-javanese/30 bg-[#f0f8f2] py-3 pl-4 pr-3 text-xs leading-[1.55] text-tinta"
               role="status"
               aria-live="polite"
             >

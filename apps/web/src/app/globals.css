@@ -2,61 +2,61 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *:not(.admin-theme *)));
 
 :root {
   color-scheme: light;
-  --muted: oklch(0.97 0 0);
-  --muted-text: #676767;
-  --line: #e5e5e5;
+  --muted: #f0f8f2;
+  --muted-text: #567064;
+  --line: #d8e8dc;
   --surface: #ffffff;
-  --surface-soft: #f7f7f8;
-  --teal: #00796f;
-  --teal-strong: #00645c;
-  --teal-soft: #dff4f1;
+  --surface-soft: #f3faf4;
+  --teal: #16803f;
+  --teal-strong: #126b35;
+  --teal-soft: #dcf5e3;
   --amber: #b7791f;
   --amber-soft: #fff7e6;
   --red: #c62828;
   --red-soft: #fff0f0;
   --blue-soft: #eef5ff;
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
-  --javanese-green: #1b4332;
-  --javanese-deep: #12352a;
-  --teal-forest: #2d6a4f;
+  --javanese-green: #176b3a;
+  --javanese-deep: #104d2a;
+  --teal-forest: #23864b;
   --emas-keraton: #c9a227;
   --kertas-arsip: #ffffff;
-  --tinta-pena: #0d0d0d;
+  --tinta-pena: #14251b;
   --background: #ffffff;
-  --foreground: #0d0d0d;
+  --foreground: #14251b;
   --card: #ffffff;
-  --card-foreground: #0d0d0d;
+  --card-foreground: #14251b;
   --popover: #ffffff;
   --popover-foreground: #0d0d0d;
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: #f7f7f8;
-  --secondary-foreground: #0d0d0d;
-  --muted-foreground: #676767;
-  --accent: #ececec;
-  --accent-foreground: #0d0d0d;
+  --primary: #176b3a;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f8f2;
+  --secondary-foreground: #14251b;
+  --muted-foreground: #567064;
+  --accent: #e2f3e6;
+  --accent-foreground: #14251b;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: #e5e5e5;
-  --input: #e5e5e5;
-  --ring: #1b4332;
+  --border: #d8e8dc;
+  --input: #c5ddcb;
+  --ring: #16803f;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: #f7f7f8;
-  --sidebar-foreground: #0d0d0d;
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar: #176b3a;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #176b3a;
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: #ececec;
-  --sidebar-accent-foreground: #0d0d0d;
-  --sidebar-border: #e5e5e5;
-  --sidebar-ring: #1b4332;
+  --sidebar-accent: #23864b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #3a8d57;
+  --sidebar-ring: #16803f;
 }
 
 @theme inline {
@@ -116,6 +116,27 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Solid green sidebar keeps its own readable light-theme contrast. */
+.light aside.bg-sidebar .text-javanese {
+  color: #d9f2df !important;
+}
+
+.light aside.bg-sidebar button.bg-white.text-javanese {
+  color: #176b3a !important;
+}
+
+.light aside.bg-sidebar .hover\:text-forest:hover {
+  color: #ffffff !important;
+}
+
+.light aside.bg-sidebar .text-tinta {
+  color: #ffffff !important;
+}
+
+.light aside.bg-sidebar .text-muted-text {
+  color: rgba(255, 255, 255, 0.72) !important;
 }
 
 /* ── Dark theme ── */
@@ -615,4 +636,187 @@
   .sidebar-scroll-region::-webkit-scrollbar {
     width: 6px;
   }
+}
+
+/* ── Admin console theme (independent of chat/global dark-light toggle) ── */
+
+.admin-theme {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #0d0d0d;
+  --card: #ffffff;
+  --card-foreground: #0d0d0d;
+  --popover: #ffffff;
+  --popover-foreground: #0d0d0d;
+  --primary: #0d0d0d;
+  --primary-foreground: #ffffff;
+  --secondary: #ececec;
+  --secondary-foreground: #0d0d0d;
+  --muted: #ececec;
+  --muted-foreground: #676767;
+  --accent: #ececec;
+  --accent-foreground: #0d0d0d;
+  --destructive: #c0392b;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #8f8f8f;
+  --muted-text: #676767;
+  --line: #e5e5e5;
+  --surface: #ffffff;
+  --surface-soft: #f4f6f4;
+  --teal: #00796f;
+  --teal-strong: #00695f;
+  --teal-soft: #dff4f1;
+  --amber: #c99a2e;
+  --amber-soft: #fdf3dc;
+  --red: #c0392b;
+  --red-soft: #fbe9e7;
+  --blue-soft: #e6f0fa;
+  --shadow: 0 18px 48px rgba(26, 26, 46, 0.12);
+  --javanese-green: #2d6a4f;
+  --javanese-deep: #388056;
+  --teal-forest: #2d6a4f;
+  --emas-keraton: #b8860b;
+  --kertas-arsip: #ffffff;
+  --tinta-pena: #0d0d0d;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0d0d0d;
+  --sidebar-accent: #ececec;
+  --sidebar-accent-foreground: #0d0d0d;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #8f8f8f;
+}
+
+/* Neutralise legacy dark utility overrides inside the admin console */
+.admin-theme .bg-white,
+.admin-theme .bg-[\#f9f9f9],
+.admin-theme .bg-[\#f7f7f8],
+.admin-theme .bg-[\#f4f4f4],
+.admin-theme .bg-[\#faf8f4],
+.admin-theme .bg-[\#ececec] {
+  background-color: #ffffff !important;
+}
+.admin-theme .text-tinta,
+.admin-theme .text-[\#0d0d0d],
+.admin-theme .text-[\#111713],
+.admin-theme .text-[\#344039] {
+  color: #0d0d0d !important;
+}
+.admin-theme .text-muted-text,
+.admin-theme .text-[\#676767],
+.admin-theme .text-[\#758078],
+.admin-theme .text-[\#303b35] {
+  color: #676767 !important;
+}
+.admin-theme .border,
+.admin-theme .border-line,
+.admin-theme .border-[\#e5e5e5],
+.admin-theme .border-[\#e2ddd3] {
+  border-color: #e5e5e5 !important;
+}
+.admin-theme .text-white {
+  color: #ffffff !important;
+}
+
+/* Admin dialog/sheet: force light even when <html> is .dark */
+.admin-theme [role="dialog"],
+.admin-theme [data-slot="sheet-content"] {
+  background-color: #ffffff !important;
+  color: #0d0d0d !important;
+}
+.admin-theme [role="dialog"] header.bg-white,
+.admin-theme [data-slot="sheet-content"] header.bg-white {
+  background-color: #ffffff !important;
+}
+.admin-theme [role="dialog"] .text-javanese,
+.admin-theme [role="dialog"] .hover\:text-forest:hover,
+.admin-theme [data-slot="sheet-content"] .text-javanese {
+  color: #1b4332 !important;
+}
+.admin-theme [role="dialog"] ~ button {
+  background-color: rgba(0, 0, 0, 0.25) !important;
+}
+.admin-theme [data-slot="sheet-overlay"] {
+  background-color: rgba(0, 0, 0, 0.25) !important;
+}
+.admin-theme [data-slot="sheet-content"] [class*="shadow-"] {
+  box-shadow: 0 24px 70px rgba(21, 32, 31, 0.18) !important;
+}
+
+/* Admin inputs: force light even under .dark <html> */
+.admin-theme input,
+.admin-theme textarea {
+  background-color: #ffffff !important;
+  color: #0d0d0d !important;
+  border-color: #e5e5e5 !important;
+}
+.admin-theme input::placeholder,
+.admin-theme textarea::placeholder {
+  color: #9a9a9a !important;
+}
+.admin-theme .bg-javanese,
+.admin-theme button[type="submit"],
+.admin-theme button.rounded-full.bg-javanese {
+  background-color: #2d6a4f !important;
+  color: #ffffff !important;
+}
+.admin-theme button[type="submit"]:hover,
+.admin-theme .hover\:bg-forest:hover {
+  background-color: #388056 !important;
+}
+
+/* Neutralise remaining .dark overrides inside admin */
+.admin-theme header[class*="bg-white"] {
+  background-color: #ffffff !important;
+}
+.admin-theme .shadow-sm {
+  box-shadow: 0 1px 2px rgba(21, 32, 31, 0.04) !important;
+}
+.admin-theme div[class*="bg-white"][role="dialog"],
+.admin-theme [role="dialog"] .bg-white,
+.admin-theme [role="dialog"] [class*="bg-white"] {
+  background-color: #ffffff !important;
+  color: #0d0d0d !important;
+}
+.admin-theme .bg-javanese {
+  background-color: #2d6a4f !important;
+  color: #ffffff !important;
+}
+.admin-theme .hover\:bg-forest:hover {
+  background-color: #2d6a4f !important;
+}
+
+/* Admin: readable green text & solid borders regardless of .dark overrides */
+.admin-theme .text-forest,
+.admin-theme .hover\:text-forest:hover {
+  color: #2d6a4f !important;
+}
+.admin-theme .text-emas {
+  color: #d8b85b !important;
+}
+.admin-theme .text-teal,
+.admin-theme .hover\:text-teal:hover {
+  color: #00796f !important;
+}
+.admin-theme .border-teal-soft,
+.admin-theme .border-line {
+  border-color: #b8d5cc !important;
+}
+.admin-theme header[class*="border-b"],
+.admin-theme section {
+  border-color: #b8d5cc !important;
+}
+
+/* Admin sidebar: keep gold accents (logo, konsol label, active icon) */
+.admin-theme .text-emas\/90 {
+  color: #d8b85b !important;
+}
+.admin-theme .bg-white\/10 {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+.admin-theme .bg-javanese {
+  background-color: #2d6a4f !important;
+}
+.admin-theme .text-white\/60 {
+  color: rgba(255, 255, 255, 0.72) !important;
 }

@@ -41,7 +41,7 @@ export function ChatComposer({
       <label htmlFor="question-input" className="sr-only">
         {translate("chat.inputLabel")}
       </label>
-      <div className="chat-composer-surface relative rounded-2xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition focus-within:border-emas/50 focus-within:shadow-[0_0_0_3px_rgba(201,162,39,0.08)]">
+      <div className="chat-composer-surface relative rounded-2xl border border-[#d8e8dc] bg-white shadow-[0_1px_3px_rgba(23,107,58,0.08)] transition focus-within:border-javanese/50 focus-within:shadow-[0_0_0_3px_rgba(22,128,63,0.12)]">
         <textarea
           ref={inputRef}
           id="question-input"
@@ -60,7 +60,7 @@ export function ChatComposer({
           </span>
           {loading ? (
             <button
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#e5e5e5] bg-white px-3.5 text-xs font-semibold text-[#676767] transition hover:bg-[#ececec] hover:text-[#0d0d0d]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#d8e8dc] bg-white px-3.5 text-xs font-semibold text-[#567064] transition hover:bg-[#e2f3e6] hover:text-[#14251b]"
               type="button"
               onClick={onCancel}
             >
@@ -69,7 +69,7 @@ export function ChatComposer({
             </button>
           ) : (
             <button
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest disabled:cursor-not-allowed disabled:bg-[#c9d3cb]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest disabled:cursor-not-allowed disabled:bg-[#b8cfc0]"
               type="submit"
               disabled={!question.trim()}
             >
