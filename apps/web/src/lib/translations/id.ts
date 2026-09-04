@@ -20,6 +20,8 @@ const id = {
   "sidebar.newChat": "Percakapan baru",
   "sidebar.search": "Cari chat",
   "sidebar.legal": "Legal dan bantuan",
+  "sidebar.privacy": "Kebijakan privasi",
+  "sidebar.terms": "Ketentuan penggunaan",
   "sidebar.profile": "Buka profil pengguna",
   "sidebar.login": "Masuk",
   "sidebar.settings": "Pengaturan",

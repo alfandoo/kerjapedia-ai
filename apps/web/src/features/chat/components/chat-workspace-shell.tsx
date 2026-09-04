@@ -13,16 +13,16 @@ import {
 
 import { AuthModal } from "@/features/auth";
 import {
+  ChevronRight,
   FileText,
   LogOut,
   Menu,
   PanelLeftClose,
   Plus,
-  Search,
   Scale,
-  Shield,
+  Search,
   Settings,
-  ChevronRight,
+  Shield,
   User,
   X,
 } from "lucide-react";
@@ -389,18 +389,6 @@ export function ChatWorkspaceShell({
               <Search className="size-[18px] text-javanese" />
               <span>{translate("sidebar.searchRegulations")}</span>
             </Link>
-            <Link
-              href="/legal/disclaimer"
-              aria-current={isActive("/legal/disclaimer") ? "page" : undefined}
-              className={`flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs transition hover:bg-sidebar-accent ${
-                isActive("/legal/disclaimer")
-                  ? "bg-sidebar-accent font-semibold text-[#d9f2df]"
-                  : "text-sidebar-foreground"
-              }`}
-            >
-              <FileText className="size-[18px] text-javanese" />
-              <span>{translate("sidebar.legal")}</span>
-            </Link>
           </nav>
           {session ? (
             <nav className="-mx-3 grid gap-0.5 pt-2" aria-label="Kategori chat">
@@ -546,32 +534,27 @@ export function ChatWorkspaceShell({
               className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent"
             >
               <span className="flex size-5 shrink-0 items-center justify-center">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="size-[18px] text-javanese"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                  <path d="M12 17h.01" />
-                </svg>
+                <FileText className="size-[18px] text-javanese" />
               </span>
-              <span className="flex-1">{translate("sidebar.help")}</span>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="size-4 text-javanese"
-              >
-                <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-              </svg>
+              <span>{translate("sidebar.legal")}</span>
+            </Link>
+            <Link
+              href="/legal/privacy"
+              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent"
+            >
+              <span className="flex size-5 shrink-0 items-center justify-center">
+                <Shield className="size-[18px] text-javanese" />
+              </span>
+              <span>{translate("sidebar.privacy")}</span>
+            </Link>
+            <Link
+              href="/legal/terms"
+              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent"
+            >
+              <span className="flex size-5 shrink-0 items-center justify-center">
+                <Scale className="size-[18px] text-javanese" />
+              </span>
+              <span>{translate("sidebar.terms")}</span>
             </Link>
           </nav>
           <div className="border-t border-sidebar-border p-4">
@@ -635,13 +618,31 @@ export function ChatWorkspaceShell({
           <span>{translate("sidebar.searchRegulations")}</span>
         </Link>
         <Link
+          href="/legal/disclaimer"
+          role="menuitem"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
+          onClick={() => setProfileMenuOpen(false)}
+        >
+          <FileText className="size-[18px]" />
+          <span>{translate("sidebar.legal")}</span>
+        </Link>
+        <Link
           href="/legal/privacy"
           role="menuitem"
           className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
           onClick={() => setProfileMenuOpen(false)}
         >
           <Shield className="size-[18px]" />
-          <span>Privasi</span>
+          <span>{translate("sidebar.privacy")}</span>
+        </Link>
+        <Link
+          href="/legal/terms"
+          role="menuitem"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
+          onClick={() => setProfileMenuOpen(false)}
+        >
+          <FileText className="size-[18px]" />
+          <span>{translate("sidebar.terms")}</span>
         </Link>
         {session.user.roles.includes("admin") ? (
           <Link
@@ -656,15 +657,6 @@ export function ChatWorkspaceShell({
         ) : null}
       </div>
       <div className="grid gap-0.5 border-t border-border py-[7px]">
-        <Link
-          href="/legal/disclaimer"
-          role="menuitem"
-          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
-          onClick={() => setProfileMenuOpen(false)}
-        >
-          <FileText className="size-[18px]" />
-          <span>{translate("sidebar.help")}</span>
-        </Link>
         <button
           type="button"
           role="menuitem"
@@ -706,15 +698,7 @@ export function ChatWorkspaceShell({
       >
         <Search className="size-[21px] text-javanese" />
       </button>
-      <Link
-        href="/legal/disclaimer"
-        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
-        aria-label={translate("sidebar.legal")}
-      >
-        <FileText className="size-[21px] text-javanese" />
-      </Link>
       <button
-        type="button"
         className="mt-auto grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
         aria-label={session ? translate("sidebar.profile") : translate("sidebar.login")}
         onClick={(event) => {

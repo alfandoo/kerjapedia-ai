@@ -20,6 +20,8 @@ const en = {
   "sidebar.newChat": "New chat",
   "sidebar.search": "Search chat",
   "sidebar.legal": "Legal & Help",
+  "sidebar.privacy": "Privacy Policy",
+  "sidebar.terms": "Terms of Use",
   "sidebar.profile": "Open user profile",
   "sidebar.login": "Sign in",
   "sidebar.settings": "Settings",

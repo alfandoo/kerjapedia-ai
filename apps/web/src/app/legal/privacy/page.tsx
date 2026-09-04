@@ -1,22 +1,68 @@
-import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
 
-import { AppShell } from "@/components/layout/app-shell";
+import { LegalLayout } from "../legal-layout";
 
 export default function PrivacyPage() {
   return (
-    <AppShell>
-      <section className="mx-auto max-w-[940px] rounded-lg border border-line bg-surface p-7">
-        <h1 className="text-2xl font-[760] leading-tight">Kebijakan privasi</h1>
-        <p className="mt-1.5 leading-relaxed text-muted-text">
-          Riwayat percakapan dan feedback dipakai untuk meningkatkan kualitas retrieval, citation,
-          dan pengalaman produk. Jangan memasukkan data pribadi sensitif yang tidak diperlukan.
+    <LegalLayout>
+      <header className="border-b border-border pb-8">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-javanese">
+          Privasi pengguna
         </p>
-        <p className="mt-1.5 leading-relaxed text-muted-text">
-          Pada MVP lokal, sesi frontend tersimpan di browser dan sebagian data backend masih
-          in-memory.
+        <h1 className="max-w-[760px] font-display text-[clamp(32px,4.5vw,44px)] font-medium leading-[1.1] tracking-[-0.03em] text-javanese-deep">
+          Kebijakan privasi
+        </h1>
+        <p className="mt-5 max-w-[720px] text-[15px] leading-7 text-muted-text">
+          Kami menghormati privasi Anda dan menjelaskan dengan jelas data apa yang diproses serta
+          bagaimana data tersebut digunakan saat Anda menggunakan KerjaPedia AI.
         </p>
-        <Link href="/legal/disclaimer" className="mt-5 font-bold text-teal-strong">Kembali ke disclaimer</Link>
-      </section>
-    </AppShell>
+        <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-muted-text">
+          <span>Versi 1.0</span>
+          <span>Terakhir diperbarui: 4 September 2026</span>
+        </div>
+      </header>
+
+      <div className="grid gap-10 text-[15px] leading-7 text-foreground">
+        <section>
+          <h2 className="mb-3 font-display text-2xl font-medium text-javanese-deep">
+            Data yang kami proses
+          </h2>
+          <p>
+            Pertanyaan yang Anda ajukan, riwayat percakapan, dan tanggapan feedback digunakan untuk
+            meningkatkan kualitas retrieval, penyusunan kutipan, dan pengalaman produk secara
+            keseluruhan.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="mb-3 font-display text-2xl font-medium text-javanese-deep">
+            Penyimpanan pada MVP lokal
+          </h2>
+          <p>
+            Pada tahap awal (MVP), sesi frontend disimpan di browser Anda dan sebagian data backend
+            masih bersifat in-memory. Ini berarti data dapat hilang ketika sesi berakhir atau server
+            dimulai ulang.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="mb-3 font-display text-2xl font-medium text-javanese-deep">
+            Data yang sebaiknya tidak dimasukkan
+          </h2>
+          <p>
+            Jangan memasukkan data pribadi sensitif, rahasia perusahaan, kredensial, atau informasi
+            pihak lain yang tidak diperlukan untuk memahami pertanyaan regulasi Anda.
+          </p>
+        </section>
+
+        <div className="flex items-start gap-3 rounded-xl border border-[#bfe3c9] bg-[#f0f8f2] px-4 py-4 text-sm leading-6 text-javanese-deep">
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-javanese" />
+          <p>
+            Kami berupaya memproses data seminimal mungkin untuk kebutuhan layanan. Jika Anda
+            memiliki pertanyaan, silakan hubungi kami melalui kanal resmi.
+          </p>
+        </div>
+      </div>
+    </LegalLayout>
   );
 }
