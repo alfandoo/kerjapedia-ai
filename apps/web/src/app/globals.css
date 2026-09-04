@@ -123,6 +123,10 @@
   color: #d9f2df !important;
 }
 
+.light aside.bg-sidebar .profile-initials {
+  color: #176b3a !important;
+}
+
 .light aside.bg-sidebar button.bg-white.text-javanese {
   color: #176b3a !important;
 }
@@ -530,6 +534,10 @@
 
 .chat-history-title {
   transform: translateX(0);
+}
+
+.chat-history-title-viewport {
+  mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 12px), transparent 100%);
 }
 
 .chat-history-row:hover .chat-history-title[data-overflow="true"],

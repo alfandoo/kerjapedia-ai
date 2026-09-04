@@ -32,6 +32,8 @@ const id = {
   "sidebar.loadingHistory": "Memuat riwayat...",
   "sidebar.emptyHistory": "Belum ada percakapan. Ajukan pertanyaan pertama Anda.",
   "sidebar.chatHistory": "Percakapan",
+  "sidebar.pinned": "Disematkan",
+  "sidebar.chats": "Percakapan",
   "sidebar.historyToday": "Hari ini",
   "sidebar.historyYesterday": "Kemarin",
   "sidebar.historyPrevious7Days": "7 hari sebelumnya",

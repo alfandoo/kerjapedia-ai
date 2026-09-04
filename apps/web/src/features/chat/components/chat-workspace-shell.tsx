@@ -19,6 +19,7 @@ import {
   Search,
   Scale,
   Settings,
+  ChevronRight,
   User,
   X,
 } from "lucide-react";
@@ -29,6 +30,8 @@ import { useStoredSession } from "@/features/auth";
 import { useSettings } from "@/features/settings";
 import { SESSION_STORAGE_KEY } from "@/features/chat/api";
 import type { ConversationSummary } from "@/features/chat/types";
+
+const PINNED_STORAGE_KEY = "kerjapedia.chat.pinned.v1";
 
 type ChatWorkspaceShellProps = {
   children: ReactNode;
@@ -75,12 +78,27 @@ export function ChatWorkspaceShell({
   const profileTriggerRef = useRef<HTMLButtonElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const chatSearchInputRef = useRef<HTMLInputElement>(null);
+  const sidebarScrollRef = useRef<HTMLDivElement>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pinnedConversationIds, setPinnedConversationIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const storedPinned = JSON.parse(window.localStorage.getItem(PINNED_STORAGE_KEY) ?? "[]");
+      return Array.isArray(storedPinned)
+        ? storedPinned.filter((id): id is string => typeof id === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  const [pinnedExpanded, setPinnedExpanded] = useState(true);
+  const [chatsExpanded, setChatsExpanded] = useState(true);
+  const [sidebarContentTouchesFooter, setSidebarContentTouchesFooter] = useState(false);
 
   const visibleConversations = chatSearchQuery.trim()
     ? conversations.filter((conversation) =>
@@ -89,6 +107,22 @@ export function ChatWorkspaceShell({
           .includes(chatSearchQuery.trim().toLocaleLowerCase("id-ID"))
       )
     : conversations;
+  const pinnedConversations = conversations.filter((conversation) =>
+    pinnedConversationIds.includes(conversation.conversation_id)
+  );
+  const chatConversations = visibleConversations.filter(
+    (conversation) => !pinnedConversationIds.includes(conversation.conversation_id)
+  );
+
+  function togglePinned(conversationId: string) {
+    setPinnedConversationIds((current) => {
+      const next = current.includes(conversationId)
+        ? current.filter((id) => id !== conversationId)
+        : [...current, conversationId];
+      window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
 
   function openChatSearch(trigger: HTMLElement) {
     if (!session) {
@@ -164,6 +198,29 @@ export function ChatWorkspaceShell({
   }, [sourceDrawerOpen]);
 
   useEffect(() => {
+    const scrollRegion = sidebarScrollRef.current;
+    if (!scrollRegion || !session) {
+      setSidebarContentTouchesFooter(false);
+      return;
+    }
+
+    const updateFooterBorder = () => {
+      setSidebarContentTouchesFooter(scrollRegion.scrollHeight > scrollRegion.clientHeight + 1);
+    };
+    updateFooterBorder();
+    const observer = new ResizeObserver(updateFooterBorder);
+    observer.observe(scrollRegion);
+    return () => observer.disconnect();
+  }, [
+    chatsExpanded,
+    conversations.length,
+    pinnedConversationIds.length,
+    session,
+    sidebarExpanded,
+    chatSearchOpen,
+  ]);
+
+  useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       if (mobileSidebarOpen) {
@@ -198,7 +255,10 @@ export function ChatWorkspaceShell({
 
   const sidebarBody = (
     <>
-      <div className="sidebar-scroll-region min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div
+        ref={sidebarScrollRef}
+        className="sidebar-scroll-region min-h-0 flex-1 overflow-y-auto overscroll-contain"
+      >
         <div className="px-3 pt-[14px]">
           <div className="flex min-h-11 items-center justify-between pb-2.5">
             {session ? (
@@ -311,51 +371,115 @@ export function ChatWorkspaceShell({
               <span>{translate("sidebar.legal")}</span>
             </Link>
           </nav>
+          {session ? (
+            <nav className="-mx-3 grid gap-0.5 pt-2" aria-label="Kategori chat">
+              <button
+                type="button"
+                className="flex min-h-7 items-center justify-start gap-1.5 rounded-lg px-2.5 text-left text-xs text-sidebar-foreground transition hover:bg-sidebar-accent"
+                aria-expanded={pinnedExpanded}
+                aria-controls="pinned-history"
+                onClick={() => setPinnedExpanded((expanded) => !expanded)}
+              >
+                <span>{translate("sidebar.pinned")}</span>
+                <ChevronRight
+                  className={`size-3.5 text-sidebar-foreground/70 transition-transform ${
+                    pinnedExpanded ? "rotate-90" : ""
+                  }`}
+                />
+              </button>
+              {pinnedExpanded && pinnedConversations.length > 0 ? (
+                <div id="pinned-history" className="-mt-1">
+                  <ConversationHistory
+                    conversations={pinnedConversations}
+                    activeConversationId={activeConversationId}
+                    onConversationSelect={onConversationSelect}
+                    onConversationRename={onConversationRename}
+                    onConversationDelete={onConversationDelete}
+                    historyEnabled={Boolean(session)}
+                    showNewConversation={false}
+                    mobileVisible
+                    embedded
+                    showTitle={false}
+                    compact
+                    showPinnedIcon
+                    pinnedConversationIds={pinnedConversationIds}
+                    onTogglePinned={togglePinned}
+                  />
+                </div>
+              ) : null}
+              <button
+                type="button"
+                className="flex min-h-7 items-center justify-start gap-1.5 rounded-lg px-2.5 text-left text-xs font-semibold text-sidebar-foreground transition hover:bg-sidebar-accent"
+                aria-expanded={chatsExpanded}
+                aria-controls="chat-history"
+                onClick={() => setChatsExpanded((expanded) => !expanded)}
+              >
+                <span>{translate("sidebar.chats")}</span>
+                <ChevronRight
+                  className={`size-3.5 text-sidebar-foreground/70 transition-transform ${
+                    chatsExpanded ? "rotate-90" : ""
+                  }`}
+                />
+              </button>
+            </nav>
+          ) : null}
         </div>
-        <div className={historyWrapperClass}>
-          <ConversationHistory
-            conversations={visibleConversations}
-            activeConversationId={activeConversationId}
-            loading={historyLoading}
-            onConversationSelect={(id) => {
-              onConversationSelect(id);
-              onMobileSidebarOpenChange(false);
-            }}
-            onNewConversation={() => {
-              onNewConversation();
-              onMobileSidebarOpenChange(false);
-            }}
-            onConversationRename={onConversationRename}
-            onConversationDelete={onConversationDelete}
-            historyEnabled={Boolean(session)}
-            showNewConversation={false}
-            mobileVisible
-            embedded
-            emptyMessage={
-              chatSearchQuery.trim()
-                ? `${translate("sidebar.noSearchResults")} “${chatSearchQuery.trim()}”`
-                : undefined
-            }
-          />
-        </div>
+        {chatsExpanded ? (
+          <div className={historyWrapperClass} id="chat-history">
+            <ConversationHistory
+              conversations={chatConversations}
+              activeConversationId={activeConversationId}
+              loading={historyLoading}
+              onConversationSelect={(id) => {
+                onConversationSelect(id);
+                onMobileSidebarOpenChange(false);
+              }}
+              onNewConversation={() => {
+                onNewConversation();
+                onMobileSidebarOpenChange(false);
+              }}
+              onConversationRename={onConversationRename}
+              onConversationDelete={onConversationDelete}
+              historyEnabled={Boolean(session)}
+              showNewConversation={false}
+              mobileVisible
+              embedded
+              showTitle={false}
+              compact
+              pinnedConversationIds={pinnedConversationIds}
+              onTogglePinned={togglePinned}
+              emptyMessage={
+                chatSearchQuery.trim()
+                  ? `${translate("sidebar.noSearchResults")} “${chatSearchQuery.trim()}”`
+                  : undefined
+              }
+            />
+          </div>
+        ) : null}
       </div>
       {session ? (
-        <div className="shrink-0 border-t border-sidebar-border bg-sidebar px-3 pb-3 pt-2">
+        <div
+          className={`shrink-0 border-t bg-sidebar px-3 pb-3 pt-2 ${
+            sidebarContentTouchesFooter ? "border-sidebar-border" : "border-transparent"
+          }`}
+        >
           <button
             ref={profileTriggerRef}
             type="button"
-            className="flex min-h-11 w-full items-center gap-[11px] rounded-lg px-2.5 text-left text-xs text-sidebar-foreground transition hover:bg-sidebar-accent"
+            className="flex min-h-12 w-full items-center gap-3 rounded-lg px-2.5 text-left text-xs text-sidebar-foreground transition hover:bg-sidebar-accent"
             aria-label={`Buka menu profil ${session.user.name}`}
             aria-haspopup="menu"
             aria-expanded={profileMenuOpen}
             onClick={() => setProfileMenuOpen((open) => !open)}
           >
-            <span className="grid size-[30px] shrink-0 place-items-center rounded-full bg-javanese text-[10px] font-bold text-white">
+            <span className="profile-initials grid size-9 shrink-0 place-items-center rounded-full bg-white text-[11px] font-bold text-[#176b3a]">
               {session.user.name.slice(0, 2).toUpperCase()}
             </span>
             <span className="min-w-0 flex-1">
-              <strong className="block truncate text-xs font-medium">{session.user.name}</strong>
-              <small className="mt-0.5 block text-[9px] text-muted-text">
+              <strong className="block truncate text-[13px] font-semibold leading-tight">
+                {session.user.name}
+              </strong>
+              <small className="mt-1 block truncate text-[10px] leading-tight text-muted-text">
                 {session.user.roles.join(", ")}
               </small>
             </span>

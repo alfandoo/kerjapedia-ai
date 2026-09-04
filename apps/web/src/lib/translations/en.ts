@@ -32,6 +32,8 @@ const en = {
   "sidebar.loadingHistory": "Loading history...",
   "sidebar.emptyHistory": "No conversations yet. Ask your first question.",
   "sidebar.chatHistory": "Chats",
+  "sidebar.pinned": "Pinned",
+  "sidebar.chats": "Chats",
   "sidebar.historyToday": "Today",
   "sidebar.historyYesterday": "Yesterday",
   "sidebar.historyPrevious7Days": "Previous 7 days",
