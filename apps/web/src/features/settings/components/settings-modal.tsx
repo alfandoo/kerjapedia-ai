@@ -88,7 +88,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           <header className="flex items-center gap-3 border-b border-[#e5e5e5] px-4 py-3">
             <h2
               id="settings-title"
-              className="flex-1 text-center text-[15px] font-semibold text-tinta"
+              className="flex-1 text-center text-[15px] font-semibold text-javanese-deep"
             >
               {translate("settings.title")}
             </h2>
@@ -99,10 +99,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               <p className="text-[13px] font-medium text-muted-text">
                 {translate("settings.general")}
               </p>
-              <div className="rounded-2xl border border-[#e5e5e5] bg-[#f7f7f8]">
+              <div className="rounded-2xl border border-[#cfe5d4] bg-[#f0f8f2]">
                 <button
                   type="button"
-                  className={`flex min-h-[60px] w-full items-center gap-4 px-4 text-left transition hover:bg-[#ececec] ${
+                  className={`flex min-h-[60px] w-full items-center gap-4 px-4 text-left transition hover:bg-[#e2f3e6] ${
                     appearanceOpen ? "rounded-t-2xl border-2 border-javanese" : "rounded-t-2xl"
                   }`}
                   onClick={() => {
@@ -110,7 +110,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     setLanguageOpen(false);
                   }}
                 >
-                  <span className="flex size-5 shrink-0 items-center justify-center text-muted-text">
+                  <span className="flex size-5 shrink-0 items-center justify-center text-javanese">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -137,13 +137,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className={`size-4 text-[#676767] transition-transform ${appearanceOpen ? "rotate-180" : ""}`}
+                    className={`size-4 text-javanese transition-transform ${appearanceOpen ? "rotate-180" : ""}`}
                   >
                     <path d="M6 9l6 6 6-6" />
                   </svg>
                 </button>
                 {appearanceOpen ? (
-                  <div className="border-t border-[#e5e5e5] bg-white">
+                  <div className="border-t border-[#cfe5d4] bg-white">
                     {[
                       { value: "system" as const, label: translate("settings.system") },
                       { value: "dark" as const, label: translate("settings.dark") },
@@ -152,9 +152,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       <button
                         key={option.value}
                         type="button"
-                        className={`flex min-h-[44px] w-full items-center px-4 text-left text-[13px] transition hover:bg-[#ececec] ${
+                        className={`flex min-h-[44px] w-full items-center px-4 text-left text-[13px] transition hover:bg-[#e2f3e6] ${
                           index === 2 ? "rounded-b-2xl" : ""
-                        } ${theme === option.value ? "font-semibold text-tinta bg-[#ececec]" : "text-muted-text"}`}
+                        } ${theme === option.value ? "bg-[#dcf5e3] font-semibold text-javanese" : "text-muted-text"}`}
                         onClick={() => {
                           setTheme(option.value);
                           // State resets are part of opening the modal, while this effect also manages focus and scroll lock.
@@ -167,10 +167,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     ))}
                   </div>
                 ) : null}
-                <div className="border-t border-[#e5e5e5]" />
+                <div className="border-t border-[#cfe5d4]" />
                 <button
                   type="button"
-                  className={`flex min-h-[60px] w-full items-center gap-4 px-4 text-left transition hover:bg-[#ececec] ${
+                  className={`flex min-h-[60px] w-full items-center gap-4 px-4 text-left transition hover:bg-[#e2f3e6] ${
                     languageOpen ? "" : "rounded-b-2xl"
                   }`}
                   onClick={() => {
@@ -180,7 +180,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     setAppearanceOpen(false);
                   }}
                 >
-                  <span className="flex size-5 shrink-0 items-center justify-center text-muted-text">
+                  <span className="flex size-5 shrink-0 items-center justify-center text-javanese">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -207,13 +207,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className={`size-4 text-[#676767] transition-transform ${languageOpen ? "rotate-180" : ""}`}
+                    className={`size-4 text-javanese transition-transform ${languageOpen ? "rotate-180" : ""}`}
                   >
                     <path d="M6 9l6 6 6-6" />
                   </svg>
                 </button>
                 {languageOpen ? (
-                  <div className="border-t border-[#e5e5e5] bg-white">
+                  <div className="border-t border-[#cfe5d4] bg-white">
                     {[
                       { value: "auto" as const, label: translate("settings.auto") },
                       { value: "id" as const, label: translate("settings.indonesian") },
@@ -222,9 +222,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                       <button
                         key={option.value}
                         type="button"
-                        className={`flex min-h-[44px] w-full items-center px-4 text-left text-[13px] transition hover:bg-[#ececec] rounded-b-2xl ${
+                        className={`flex min-h-[44px] w-full items-center rounded-b-2xl px-4 text-left text-[13px] transition hover:bg-[#e2f3e6] ${
                           language === option.value
-                            ? "font-semibold text-tinta bg-[#ececec]"
+                            ? "bg-[#dcf5e3] font-semibold text-javanese"
                             : "text-muted-text"
                         }`}
                         onClick={() => {
@@ -239,12 +239,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 ) : null}
               </div>
 
-              <div className="rounded-2xl border border-[#e5e5e5] bg-[#f7f7f8]">
+              <div className="rounded-2xl border border-[#cfe5d4] bg-[#f0f8f2]">
                 <button
                   type="button"
-                  className="flex min-h-[60px] w-full items-center gap-4 px-4 text-left transition hover:bg-[#ececec] rounded-2xl"
+                  className="flex min-h-[60px] w-full items-center gap-4 rounded-2xl px-4 text-left transition hover:bg-[#e2f3e6]"
                 >
-                  <span className="flex size-5 shrink-0 items-center justify-center text-muted-text">
+                  <span className="flex size-5 shrink-0 items-center justify-center text-javanese">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -267,7 +267,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="size-4 text-[#676767]"
+                    className="size-4 text-javanese"
                   >
                     <path d="M9 18l6-6-6-6" />
                   </svg>

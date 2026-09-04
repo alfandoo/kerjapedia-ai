@@ -65,6 +65,7 @@ function ConversationTitleButton({ title, isActive, onSelect }: ConversationTitl
       variant="ghost"
       className="h-8 min-w-0 justify-start rounded-none border-0 px-0.5 text-left shadow-none hover:bg-transparent"
       aria-current={isActive ? "page" : undefined}
+      title={title}
       onPointerEnter={updateOverflowDistance}
       onFocus={updateOverflowDistance}
       onClick={onSelect}

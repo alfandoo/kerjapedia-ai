@@ -425,7 +425,7 @@ export function EditorialChatExperience() {
           onCancel={stopRequest}
         />
         {messages.length === 0 ? (
-          <p className="absolute inset-x-6 bottom-[max(15px,env(safe-area-inset-bottom))] z-[3] mx-auto max-w-[680px] text-center text-[10px] leading-[1.5] text-[#b0b8b3] max-[760px]:inset-x-[18px] max-[760px]:bottom-[max(12px,env(safe-area-inset-bottom))] max-[760px]:text-[9px]">
+          <p className="relative z-[3] mx-auto mb-2 mt-[-6px] max-w-[680px] px-6 text-center text-[10px] leading-[1.5] text-[#8aa094] max-[760px]:px-[18px] max-[760px]:text-[9px]">
             KerjaPedia dapat membuat kekeliruan. Periksa selalu sumber resmi. Dengan menggunakan
             layanan ini, Anda menyetujui{" "}
             <Link

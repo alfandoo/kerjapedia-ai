@@ -18,6 +18,7 @@ import {
   Plus,
   Search,
   Scale,
+  Shield,
   Settings,
   ChevronRight,
   User,
@@ -50,6 +51,10 @@ type ChatWorkspaceShellProps = {
   onConversationRename: (id: string, title: string) => Promise<void>;
   onConversationDelete: (id: string) => Promise<void>;
 };
+
+function formatRole(role: string) {
+  return role.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export function ChatWorkspaceShell({
   children,
@@ -275,10 +280,13 @@ export function ChatWorkspaceShell({
             ) : (
               <Link
                 href="/"
-                className="grid size-10 place-items-center rounded-[9px] text-javanese transition hover:bg-sidebar-accent hover:text-forest"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-1 text-javanese transition hover:bg-sidebar-accent hover:text-forest"
                 aria-label="KerjaPedia AI beranda"
               >
                 <Scale className="size-[23px]" />
+                <strong className="whitespace-nowrap font-display text-sm font-semibold text-javanese">
+                  KerjaPedia AI
+                </strong>
               </Link>
             )}
             <div className="flex flex-none items-center gap-0.5">
@@ -480,7 +488,7 @@ export function ChatWorkspaceShell({
                 {session.user.name}
               </strong>
               <small className="mt-1 block truncate text-[10px] leading-tight text-muted-text">
-                {session.user.roles.join(", ")}
+                {session.user.roles.map(formatRole).join(", ")}
               </small>
             </span>
           </button>
@@ -568,7 +576,7 @@ export function ChatWorkspaceShell({
       ref={profileMenuRef}
       role="menu"
       aria-label="Menu profil pengguna"
-      className="fixed bottom-16 left-2.5 z-30 w-[min(248px,calc(100vw-24px))] rounded-[14px] border border-[#424743] bg-[#303330] p-2 text-[#f7f9f8] shadow-[0_18px_44px_rgba(16,24,19,0.22)]"
+      className="fixed bottom-16 left-2.5 z-30 w-[min(248px,calc(100vw-24px))] rounded-[14px] border border-border bg-white p-2 text-tinta shadow-[0_18px_44px_rgba(16,24,19,0.16)]"
     >
       <div className="flex min-h-[50px] items-center gap-2.5 px-2 pb-2.5 pt-1">
         <span className="grid size-[30px] shrink-0 place-items-center rounded-full bg-[#2cbf91] text-[9px] font-bold text-white">
@@ -576,16 +584,16 @@ export function ChatWorkspaceShell({
         </span>
         <div>
           <strong className="block text-xs font-semibold">{session.user.name}</strong>
-          <small className="mt-[3px] block text-[10px] capitalize text-[#b9c0bc]">
-            {session.user.roles.join(", ")}
+          <small className="mt-[3px] block text-[10px] text-muted-foreground">
+            {session.user.roles.map(formatRole).join(", ")}
           </small>
         </div>
       </div>
-      <div className="grid gap-0.5 border-t border-[#4d524e] py-[7px]">
+      <div className="grid gap-0.5 border-t border-border py-[7px]">
         <button
           type="button"
           role="menuitem"
-          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
           onClick={() => {
             onSidebarExpandedChange(true);
             setProfileMenuOpen(false);
@@ -597,7 +605,7 @@ export function ChatWorkspaceShell({
         <Link
           href="/search"
           role="menuitem"
-          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
           onClick={() => setProfileMenuOpen(false)}
         >
           <Search className="size-[18px]" />
@@ -606,17 +614,17 @@ export function ChatWorkspaceShell({
         <Link
           href="/legal/privacy"
           role="menuitem"
-          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
           onClick={() => setProfileMenuOpen(false)}
         >
-          <Settings className="size-[18px]" />
+          <Shield className="size-[18px]" />
           <span>Privasi</span>
         </Link>
         {session.user.roles.includes("admin") ? (
           <Link
             href="/admin/settings"
             role="menuitem"
-            className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+            className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
             onClick={() => setProfileMenuOpen(false)}
           >
             <Settings className="size-[18px]" />
@@ -624,11 +632,11 @@ export function ChatWorkspaceShell({
           </Link>
         ) : null}
       </div>
-      <div className="grid gap-0.5 border-t border-[#4d524e] py-[7px]">
+      <div className="grid gap-0.5 border-t border-border py-[7px]">
         <Link
           href="/legal/disclaimer"
           role="menuitem"
-          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
           onClick={() => setProfileMenuOpen(false)}
         >
           <FileText className="size-[18px]" />
@@ -637,7 +645,7 @@ export function ChatWorkspaceShell({
         <button
           type="button"
           role="menuitem"
-          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-[#414541]"
+          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
           onClick={handleLogout}
         >
           <LogOut className="size-[18px]" />
@@ -730,7 +738,7 @@ export function ChatWorkspaceShell({
         >
           <button
             type="button"
-            className={`grid size-11 place-items-center rounded-[9px] text-muted-foreground transition hover:bg-accent max-[760px]:hidden ${
+            className={`grid size-11 place-items-center rounded-[9px] text-javanese transition hover:bg-accent hover:text-forest max-[760px]:hidden ${
               sidebarExpanded ? "invisible pointer-events-none" : ""
             }`}
             aria-label={sidebarExpanded ? "Tutup sidebar" : "Buka sidebar"}
@@ -744,7 +752,7 @@ export function ChatWorkspaceShell({
           <button
             ref={mobileMenuRef}
             type="button"
-            className="hidden size-11 place-items-center rounded-[9px] text-muted-foreground transition hover:bg-accent max-[760px]:grid"
+            className="hidden size-11 place-items-center rounded-[9px] text-javanese transition hover:bg-accent hover:text-forest max-[760px]:grid"
             aria-label={session ? "Buka riwayat" : "Buka menu"}
             aria-expanded={mobileSidebarOpen}
             onClick={() => onMobileSidebarOpenChange(true)}
@@ -761,9 +769,18 @@ export function ChatWorkspaceShell({
               session ? "" : "max-[760px]:hidden"
             }`}
           >
-            KerjaPedia AI
+            {translate("header.assistant")}
           </h1>
-          {!session ? (
+          {session ? (
+            <button
+              type="button"
+              className="grid size-11 place-items-center rounded-[9px] text-javanese transition hover:bg-accent hover:text-forest"
+              aria-label={translate("sidebar.settings")}
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings className="size-[20px]" />
+            </button>
+          ) : (
             <div className="flex items-center justify-self-end gap-2 max-[760px]:gap-1.5">
               <button
                 type="button"
@@ -780,7 +797,7 @@ export function ChatWorkspaceShell({
                 {translate("header.signup")}
               </button>
             </div>
-          ) : null}
+          )}
         </header>
         {session && profileMenuOpen ? profileMenu : null}
         <main className="chat-workspace-surface min-h-0 flex-1 overflow-hidden bg-white max-[760px]:h-full">

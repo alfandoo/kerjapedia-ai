@@ -54,6 +54,7 @@ const id = {
   // Header
   "header.login": "Masuk",
   "header.signup": "Daftar gratis",
+  "header.assistant": "Asisten regulasi ketenagakerjaan",
 
   // Auth modal
   "auth.loginTitle": "Masuk ke KerjaPedia",
