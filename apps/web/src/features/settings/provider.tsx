@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { t, type TranslationKey } from "@/lib/translations";
 
 type Theme = "system" | "dark" | "light";
@@ -89,7 +97,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [resolvedLanguage]
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const storedTheme = localStorage.getItem("settings-theme");
     const savedTheme: Theme | null =
       storedTheme === "system" || storedTheme === "dark" || storedTheme === "light"

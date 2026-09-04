@@ -78,6 +78,15 @@ export function ChatWorkspaceShell({
   const session = useStoredSession();
   const { t: translate } = useSettings();
   const pathname = usePathname();
+  const [hydrated, setHydrated] = useState(false);
+  const shownSession = hydrated ? session : null;
+  const showGuest = hydrated && !session; // Only render the guest chrome once hydration confirms there is no session.
+  useEffect(() => {
+    // Hydration gate: only mark ready after mount so the guest shell never flashes before session restores.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHydrated(true);
+  }, []);
+
   const mobileSidebarRef = useRef<HTMLElement>(null);
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLButtonElement>(null);
@@ -267,7 +276,7 @@ export function ChatWorkspaceShell({
     }
   }
 
-  const historyWrapperClass = session ? "min-w-0" : "hidden";
+  const historyWrapperClass = shownSession ? "min-w-0" : "hidden";
 
   const sidebarBody = (
     <>
@@ -277,7 +286,7 @@ export function ChatWorkspaceShell({
       >
         <div className="px-3 pt-[14px]">
           <div className="flex min-h-11 items-center justify-between pb-2.5">
-            {session ? (
+            {shownSession ? (
               <Link
                 href="/chat"
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] px-1 text-javanese transition hover:bg-sidebar-accent hover:text-forest"
@@ -361,8 +370,8 @@ export function ChatWorkspaceShell({
             </div>
           ) : null}
           <nav
-            className={`grid gap-[3px] ${session ? "pb-2" : ""}`}
-            aria-label={session ? "Navigasi pengguna" : "Navigasi guest"}
+            className={`grid gap-[3px] ${shownSession ? "pb-2" : ""}`}
+            aria-label={shownSession ? "Navigasi pengguna" : "Navigasi guest"}
           >
             <button
               type="button"
@@ -390,7 +399,7 @@ export function ChatWorkspaceShell({
               <span>{translate("sidebar.searchRegulations")}</span>
             </Link>
           </nav>
-          {session ? (
+          {shownSession ? (
             <nav className="-mx-3 grid gap-0.5 pt-2" aria-label="Kategori chat">
               <button
                 type="button"
@@ -414,7 +423,7 @@ export function ChatWorkspaceShell({
                     onConversationSelect={onConversationSelect}
                     onConversationRename={onConversationRename}
                     onConversationDelete={onConversationDelete}
-                    historyEnabled={Boolean(session)}
+                    historyEnabled={Boolean(shownSession)}
                     showNewConversation={false}
                     mobileVisible
                     embedded
@@ -459,7 +468,7 @@ export function ChatWorkspaceShell({
               }}
               onConversationRename={onConversationRename}
               onConversationDelete={onConversationDelete}
-              historyEnabled={Boolean(session)}
+              historyEnabled={Boolean(shownSession)}
               showNewConversation={false}
               mobileVisible
               embedded
@@ -476,7 +485,7 @@ export function ChatWorkspaceShell({
           </div>
         ) : null}
       </div>
-      {session ? (
+      {shownSession ? (
         <div
           className={`shrink-0 border-t bg-sidebar px-3 pb-3 pt-2 ${
             sidebarContentTouchesFooter ? "border-sidebar-border" : "border-transparent"
@@ -486,26 +495,26 @@ export function ChatWorkspaceShell({
             ref={profileTriggerRef}
             type="button"
             className="flex min-h-12 w-full items-center gap-3 rounded-lg px-2.5 text-left text-xs text-sidebar-foreground transition hover:bg-sidebar-accent"
-            aria-label={`Buka menu profil ${session.user.name}`}
+            aria-label={`Buka menu profil ${shownSession.user.name}`}
             aria-haspopup="menu"
             aria-expanded={profileMenuOpen}
             onClick={() => setProfileMenuOpen((open) => !open)}
           >
             <span className="profile-initials grid size-9 shrink-0 place-items-center rounded-full bg-white text-[11px] font-bold text-[#176b3a]">
-              {session.user.name.slice(0, 2).toUpperCase()}
+              {shownSession.user.name.slice(0, 2).toUpperCase()}
             </span>
             <span className="min-w-0 flex-1">
               <strong className="block truncate text-[13px] font-semibold leading-tight">
-                {session.user.name}
+                {shownSession.user.name}
               </strong>
               <small className="mt-1 block truncate text-[10px] leading-tight text-muted-text">
-                {session.user.roles.map(formatRole).join(", ")}
+                {shownSession.user.roles.map(formatRole).join(", ")}
               </small>
             </span>
           </button>
         </div>
       ) : null}
-      {!session ? (
+      {showGuest ? (
         <div className="shrink-0 border-t border-sidebar-border bg-sidebar pb-3">
           <nav className="grid gap-0.5 p-2" aria-label="Menu tamu">
             <button
@@ -722,7 +731,7 @@ export function ChatWorkspaceShell({
       ? "grid-cols-[268px_minmax(0,1fr)_minmax(340px,390px)] max-[1180px]:grid-cols-[220px_minmax(0,1fr)_340px]"
       : "grid-cols-[268px_minmax(0,1fr)]";
 
-  const topbarColumns = session
+  const topbarColumns = shownSession
     ? "grid-cols-[44px_minmax(0,1fr)_44px] max-[760px]:grid-cols-[44px_34px_minmax(0,1fr)_44px]"
     : "grid-cols-[44px_minmax(0,1fr)_auto] max-[760px]:grid-cols-[44px_34px_minmax(0,1fr)_auto]";
 
@@ -731,7 +740,7 @@ export function ChatWorkspaceShell({
       className={[
         "grid h-svh w-full overflow-hidden bg-arsip text-tinta transition-[grid-template-columns] duration-200 max-[760px]:block max-[760px]:h-svh",
         shellColumns,
-        session ? "authenticated-shell" : "guest-shell",
+        shownSession ? "authenticated-shell" : "guest-shell",
       ].join(" ")}
     >
       <ChatSidebar
@@ -760,7 +769,7 @@ export function ChatWorkspaceShell({
             ref={mobileMenuRef}
             type="button"
             className="hidden size-11 place-items-center rounded-[9px] text-javanese transition hover:bg-accent hover:text-forest max-[760px]:grid"
-            aria-label={session ? "Buka riwayat" : "Buka menu"}
+            aria-label={shownSession ? "Buka riwayat" : "Buka menu"}
             aria-expanded={mobileSidebarOpen}
             onClick={() => onMobileSidebarOpenChange(true)}
           >
@@ -773,12 +782,12 @@ export function ChatWorkspaceShell({
           </div>
           <h1
             className={`m-0 truncate text-[13px] font-medium text-javanese ${
-              session ? "" : "max-[760px]:hidden"
+              shownSession ? "" : "max-[760px]:hidden"
             }`}
           >
             {pathname === "/search" ? translate("header.search") : translate("header.assistant")}
           </h1>
-          {session ? (
+          {shownSession ? (
             <button
               type="button"
               className="grid size-11 place-items-center rounded-[9px] text-javanese transition hover:bg-accent hover:text-forest"
@@ -787,7 +796,7 @@ export function ChatWorkspaceShell({
             >
               <Settings className="size-[20px]" />
             </button>
-          ) : (
+          ) : showGuest ? (
             <div className="flex items-center justify-self-end gap-2 max-[760px]:gap-1.5">
               <button
                 type="button"
@@ -804,9 +813,9 @@ export function ChatWorkspaceShell({
                 {translate("header.signup")}
               </button>
             </div>
-          )}
+          ) : null}
         </header>
-        {session && profileMenuOpen ? profileMenu : null}
+        {shownSession && profileMenuOpen ? profileMenu : null}
         <main className="chat-workspace-surface min-h-0 flex-1 overflow-hidden bg-white max-[760px]:h-full">
           {children}
         </main>
