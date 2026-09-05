@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException, status
+from supabase_auth.errors import AuthApiError
 
 from app.api.dependencies import CurrentUser, _extract_bearer_token
 from app.api.schemas import (
@@ -218,12 +219,18 @@ def logout(authorization: str | None = Header(default=None)) -> dict[str, str]:
     try:
         supabase = supabase_service.get_supabase()
         user = supabase.auth.get_user(token)
-        if user and user.user:
-            supabase.auth.admin.sign_out(user.user.id, scope="global")
+        if not user or not user.user:
+            raise HTTPException(status_code=401, detail="Invalid or expired token.")
+        # The SDK expects the caller's access JWT, not the user's UUID.
+        supabase.auth.admin.sign_out(token, scope="global")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except AuthApiError as exc:
+        if exc.status in (401, 403, 404):
+            raise HTTPException(status_code=401, detail="Invalid or expired token.") from exc
+        raise HTTPException(status_code=503, detail="Logout gagal. Silakan coba lagi.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Logout gagal. Silakan coba lagi.") from exc
     return {"status": "ok"}
 
 

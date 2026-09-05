@@ -52,7 +52,7 @@ services:
       - production_storage:/workspace/storage
       - model_cache:/workspace/model-cache
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -133,6 +133,9 @@ services:
         condition: service_healthy
 
   web:
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      APP_ORIGIN: ${APP_ORIGIN:?APP_ORIGIN is required}
     build:
       context: ./apps/web
       args:

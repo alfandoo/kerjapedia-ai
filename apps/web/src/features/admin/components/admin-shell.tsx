@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { toast } from "sonner";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
@@ -24,7 +25,7 @@ import {
 } from "lucide-react";
 
 import { ScaleIcon } from "@/components/icons";
-import { useStoredSession } from "@/features/auth";
+import { useStoredSession, useSessionReady } from "@/features/auth";
 import { signOut } from "@/features/admin/api";
 import { cn } from "@/lib/utils";
 import accessStyles from "./admin-access.module.css";
@@ -75,6 +76,7 @@ export function AdminShell({ children }: AdminShellProps) {
   const isClient = useIsClient();
   const pathname = usePathname();
   const session = useStoredSession();
+  const sessionReady = useSessionReady();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
@@ -115,7 +117,7 @@ export function AdminShell({ children }: AdminShellProps) {
     };
   }, []);
 
-  if (!isClient) {
+  if (!isClient || !sessionReady) {
     return null;
   }
 
@@ -158,8 +160,9 @@ export function AdminShell({ children }: AdminShellProps) {
   async function handleLogout() {
     try {
       await signOut();
-    } finally {
       window.location.assign("/login-admin");
+    } catch (error) {
+      toast.error((error as Error).message);
     }
   }
 

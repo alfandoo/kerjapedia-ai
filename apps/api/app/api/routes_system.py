@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import time
+from threading import Lock
+
 from fastapi import APIRouter, HTTPException
+from fastapi import Response as HeaderResponse
 from fastapi.responses import Response
 from sqlalchemy import text
 
+from app.api.dependencies import AdminUser
 from app.api.schemas import HealthResponse
 from app.core.config import settings
 from app.services.providers import pinecone_store_from_settings
@@ -18,21 +23,15 @@ def health_check() -> HealthResponse:
     return HealthResponse(
         status="ok",
         service=settings.app_name,
-        version=settings.app_version,
-        providers={
-            "vector_store": settings.vector_store,
-            "embedding_provider": settings.embedding_provider,
-            "embedding_model": settings.embedding_model,
-            "llm_provider": settings.llm_provider,
-            "groq_model": settings.groq_model if settings.llm_provider == "groq" else None,
-            "pinecone_index": settings.pinecone_index_name,
-            "pinecone_namespace": settings.pinecone_namespace,
-        },
     )
 
 
-@router.get("/ready")
-def readiness_check() -> dict:
+_readiness_lock = Lock()
+_readiness_cache: tuple[float, tuple[str, ...]] | None = None
+_READINESS_TTL_SECONDS = 10
+
+
+def _probe_readiness() -> list[str]:
     from app.db.session import create_session
     from app.services.retrieval.governance import load_retrieval_governance
 
@@ -48,7 +47,10 @@ def readiness_check() -> dict:
     except Exception:
         failures.append("database")
     if settings.vector_store == "pinecone":
-        if not pinecone_store_from_settings(settings).is_ready():
+        try:
+            if not pinecone_store_from_settings(settings).is_ready():
+                failures.append("pinecone")
+        except Exception:
             failures.append("pinecone")
         if settings.app_env.lower() == "production" and (
             governance is None or not governance.active_namespace
@@ -76,18 +78,61 @@ def readiness_check() -> dict:
                 ).ping()
             except Exception:
                 failures.append("redis")
-    if failures:
-        raise HTTPException(
-            status_code=503,
-            detail={"status": "not_ready", "failures": failures},
-        )
-    return {"status": "ready"}
+    return failures
+
+
+def _readiness_failures() -> tuple[str, ...]:
+    global _readiness_cache
+    # Share probes across callers; public polling cannot cause parallel fan-out.
+    with _readiness_lock:
+        now = time.monotonic()
+        if _readiness_cache is None or now >= _readiness_cache[0]:
+            failures = tuple(_probe_readiness())
+            _readiness_cache = (time.monotonic() + _READINESS_TTL_SECONDS, failures)
+        return _readiness_cache[1]
+
+
+@router.get("/ready")
+def readiness_check() -> Response:
+    from fastapi.responses import JSONResponse
+
+    failed = bool(_readiness_failures())
+    return JSONResponse(
+        {"status": "not_ready" if failed else "ready"},
+        status_code=503 if failed else 200,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get("/admin/system/diagnostics")
+def system_diagnostics(_: AdminUser, response: HeaderResponse) -> dict:
+    response.headers["Cache-Control"] = "private, no-store"
+    failures = _readiness_failures()
+    return {
+        "status": "not_ready" if failures else "ready",
+        "failures": list(failures),
+        "service": settings.app_name,
+        "version": settings.app_version,
+        "providers": {
+            "vector_store": settings.vector_store,
+            "embedding_provider": settings.embedding_provider,
+            "embedding_model": settings.embedding_model,
+            "llm_provider": settings.llm_provider,
+            "groq_model": settings.groq_model if settings.llm_provider == "groq" else None,
+            "pinecone_index": settings.pinecone_index_name,
+            "pinecone_namespace": settings.pinecone_namespace,
+        },
+    }
 
 
 @router.get("/metrics", include_in_schema=False)
-def prometheus_metrics() -> Response:
+def prometheus_metrics(_: AdminUser) -> Response:
     try:
         from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
     except ImportError as exc:
         raise HTTPException(status_code=503, detail="Metrics exporter is unavailable.") from exc
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return Response(
+        generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+        headers={"Cache-Control": "private, no-store"},
+    )

@@ -35,7 +35,7 @@ test.beforeEach(async ({ page }) => {
     window.fetch = (input, init) => {
       const url =
         typeof input === "string" ? input : input instanceof Request ? input.url : input.href;
-      if (url === "http://127.0.0.1:8000/documents") {
+      if (url === "/api/backend/documents") {
         return Promise.resolve(
           new Response(JSON.stringify(mockDocuments), {
             status: 200,

@@ -1,4 +1,6 @@
 import { API_URL } from "@/lib/api-client";
+import { fetchWithAuthRetry } from "@/features/auth";
+import { chatHeaders } from "./request-headers";
 
 export type FeedbackRating = "helpful" | "not_helpful";
 export type FeedbackIssue =
@@ -12,9 +14,9 @@ export async function submitFeedback(payload: {
   issue_category?: FeedbackIssue;
   comment?: string;
 }): Promise<void> {
-  const response = await fetch(`${API_URL}/feedback`, {
+  const response = await fetchWithAuthRetry(`${API_URL}/feedback`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: chatHeaders(true),
     body: JSON.stringify(payload),
   });
   if (!response.ok) {

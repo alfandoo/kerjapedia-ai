@@ -23,20 +23,11 @@ const citation = {
 };
 
 async function useAuthenticatedSession(page: Page) {
-  await page.addInitScript(() => {
-    window.localStorage.setItem(
-      "kerjapedia-session-v1",
-      JSON.stringify({
-        access_token: "e2e-token",
-        user: {
-          user_id: "user_e2e",
-          email: "user@example.com",
-          name: "Pengguna E2E",
-          roles: ["user"],
-        },
-      })
-    );
-  });
+  await page.route("**/api/backend/auth/session", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: JSON.stringify({ user: { user_id: "user_e2e", email: "user@example.com", name: "Pengguna E2E", roles: ["user"] } }),
+  }));
+  await page.route("**/api/backend/auth/logout", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "ok" }) }));
 }
 
 async function mockChat(
@@ -164,8 +155,8 @@ test("user receives a sourced answer", async ({ page }, testInfo) => {
   await expect(
     page.getByText(/Build Error|Runtime Error|Application error|Unhandled Runtime Error/i)
   ).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "KerjaPedia AI" })).toBeVisible();
-  await expect(page.locator(".chatgpt-shell")).toHaveClass(/guest-shell/);
+  await expect(page.getByRole("heading", { name: "Apa yang ingin Anda pahami?" })).toBeVisible();
+  await expect(page.locator(".authenticated-shell")).toBeVisible();
   await page.getByLabel("Ketik pertanyaan Anda").fill("Apakah pekerja PKWT memperoleh kompensasi?");
   await page.getByLabel("Ketik pertanyaan Anda").press("Enter");
 
@@ -369,7 +360,6 @@ test("guest authenticates through the two-step modal", async ({ page }, testInfo
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        access_token: "modal-token",
         user: {
           user_id: "user_modal",
           email: "user@example.com",
@@ -424,7 +414,7 @@ test("guest authenticates through the two-step modal", async ({ page }, testInfo
   await expect(page.getByText("Pengguna Modal")).toHaveCount(1);
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("kerjapedia-session-v1")))
-    .toContain("modal-token");
+    .toBeNull();
 });
 
 test("auth modal fits a mobile viewport", async ({ page }, testInfo) => {

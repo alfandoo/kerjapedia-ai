@@ -9,7 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 
-import { login, register, SESSION_STORAGE_KEY } from "@/features/auth";
+import { login, register } from "@/features/auth";
 import { useSettings } from "@/features/settings";
 import type { UserSession } from "@/features/auth/types";
 
@@ -184,8 +184,6 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
         mode === "signup"
           ? await register(name.trim(), email.trim(), password)
           : await login(email.trim(), password);
-      window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-      window.dispatchEvent(new Event("kerjapedia-session-change"));
       onSuccess(session);
       setStep("email");
       setEmail("");

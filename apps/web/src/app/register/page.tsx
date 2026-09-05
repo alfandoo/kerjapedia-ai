@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
-import { login, register, SESSION_STORAGE_KEY } from "@/features/auth/api";
+import { login, register } from "@/features/auth/api";
 
 function RegisterPageContent() {
   const router = useRouter();
@@ -25,11 +25,9 @@ function RegisterPageContent() {
     setLoading(true);
     setStatus(null);
     try {
-      const session = isSignup
-        ? await register(name.trim(), email.trim(), password)
-        : await login(email.trim(), password);
-      window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-      window.dispatchEvent(new Event("kerjapedia-session-change"));
+      await (isSignup
+        ? register(name.trim(), email.trim(), password)
+        : login(email.trim(), password));
       router.push("/chat");
     } catch (err) {
       setStatus((err as Error).message || "Gagal. Coba lagi.");

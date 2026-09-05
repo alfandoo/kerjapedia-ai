@@ -1,17 +1,18 @@
 import { API_URL, parseJsonResponse } from "@/lib/api-client";
+import { fetchWithAuthRetry } from "@/features/auth/api";
 import type { DocumentSearchFilters, DocumentSummary } from "./types";
 
 export async function fetchDocuments(signal?: AbortSignal): Promise<DocumentSummary[]> {
-  const response = await fetch(`${API_URL}/documents`, { signal });
+  const response = await fetchWithAuthRetry(`${API_URL}/documents`, {}, signal);
   const documents = await parseJsonResponse<DocumentSummary[]>(response);
   return documents.map((document) => ({
     ...document,
-    pdf_url: new URL(document.pdf_url, `${API_URL}/`).toString(),
+    pdf_url: documentPdfUrl(document.document_id),
   }));
 }
 
 export function documentPdfUrl(documentId: string): string {
-  return `${API_URL}/documents/${encodeURIComponent(documentId)}/pdf`;
+  return `/api/backend/documents/${encodeURIComponent(documentId)}/pdf`;
 }
 
 export async function searchDocuments(
@@ -24,11 +25,11 @@ export async function searchDocuments(
   if (filters.year) params.set("year", String(filters.year));
   if (filters.legal_status) params.set("legal_status", filters.legal_status);
   const query = params.toString();
-  const response = await fetch(`${API_URL}/documents${query ? `?${query}` : ""}`, { signal });
+  const response = await fetchWithAuthRetry(`${API_URL}/documents${query ? `?${query}` : ""}`, {}, signal);
   const documents = await parseJsonResponse<DocumentSummary[]>(response);
   return documents.map((document) => ({
     ...document,
-    pdf_url: new URL(document.pdf_url, `${API_URL}/`).toString(),
+    pdf_url: documentPdfUrl(document.document_id),
   }));
 }
 

@@ -11,7 +11,8 @@ import {
   type ReactNode,
 } from "react";
 
-import { AuthModal } from "@/features/auth";
+import { AuthModal, signOut } from "@/features/auth";
+import { toast } from "sonner";
 import {
   ChevronRight,
   FileText,
@@ -31,7 +32,6 @@ import { ChatSidebar } from "./chat-sidebar";
 import { SettingsModal } from "@/features/settings";
 import { useStoredSession } from "@/features/auth";
 import { useSettings } from "@/features/settings";
-import { SESSION_STORAGE_KEY } from "@/features/chat/api";
 import type { ConversationSummary } from "@/features/chat/types";
 
 const PINNED_STORAGE_KEY = "kerjapedia.chat.pinned.v1";
@@ -218,13 +218,16 @@ export function ChatWorkspaceShell({
     window.setTimeout(() => authTriggerRef.current?.focus(), 0);
   }
 
-  function handleLogout() {
-    setProfileMenuOpen(false);
-    window.localStorage.removeItem(SESSION_STORAGE_KEY);
-    window.dispatchEvent(new Event("kerjapedia-session-change"));
-    onNewConversation();
-    onSourceDrawerClose();
-    onMobileSidebarOpenChange(false);
+  async function handleLogout() {
+    try {
+      await signOut();
+      setProfileMenuOpen(false);
+      onNewConversation();
+      onSourceDrawerClose();
+      onMobileSidebarOpenChange(false);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
   }
 
   useEffect(() => {

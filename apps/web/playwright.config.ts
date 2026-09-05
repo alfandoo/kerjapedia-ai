@@ -13,6 +13,7 @@ export default defineConfig({
   reporter: "list",
   outputDir: join(tmpdir(), "kerjapedia-playwright-results"),
   use: {
+    locale: "id-ID",
     baseURL: externalBaseUrl ?? "http://127.0.0.1:3100",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

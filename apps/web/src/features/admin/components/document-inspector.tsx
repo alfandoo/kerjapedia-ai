@@ -606,7 +606,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
                             ? "Diimplementasikan oleh"
                             : relationship.relationship_type === "related_to"
                               ? "Terkait dengan"
-                              : relationship.relationship_type.replaceAll("_", " ");
+                              : String(relationship.relationship_type).replaceAll("_", " ");
                     return (
                       <li
                         key={`${relationship.relationship_type}-${relationship.to_document_id}`}

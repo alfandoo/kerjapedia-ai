@@ -1,26 +1,7 @@
 import { API_URL, parseJsonResponse } from "@/lib/api-client";
-import { fetchWithAuthRetry, getStoredSession } from "@/features/auth";
+import { fetchWithAuthRetry } from "@/features/auth";
 import type { AskResponse, ConversationDetail, ConversationSummary } from "./types";
-const GUEST_STORAGE_KEY = "kerjapedia-guest-v1";
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function getGuestId(): string {
-  const existing = window.localStorage.getItem(GUEST_STORAGE_KEY);
-  if (existing && UUID_PATTERN.test(existing)) return existing;
-  const guestId = crypto.randomUUID();
-  window.localStorage.setItem(GUEST_STORAGE_KEY, guestId);
-  return guestId;
-}
-
-function chatHeaders(contentType = false): HeadersInit {
-  const session = getStoredSession();
-  return {
-    ...(contentType ? { "Content-Type": "application/json" } : {}),
-    ...(session
-      ? { Authorization: `Bearer ${session.access_token}` }
-      : { "X-KerjaPedia-Guest-ID": getGuestId() }),
-  };
-}
+import { chatHeaders } from "./request-headers";
 
 export async function askQuestion(
   question: string,
@@ -153,4 +134,3 @@ export async function deleteConversation(conversationId: string): Promise<void> 
 export { submitFeedback } from "./feedback-api";
 export type { FeedbackIssue, FeedbackRating } from "./feedback-api";
 export { documentPdfUrl } from "@/features/documents";
-export { SESSION_STORAGE_KEY } from "@/features/auth";

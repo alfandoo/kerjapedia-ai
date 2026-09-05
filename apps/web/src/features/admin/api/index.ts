@@ -1,5 +1,4 @@
 import { API_URL, parseJsonResponse } from "@/lib/api-client";
-import { getStoredSession } from "@/features/auth";
 import { fetchWithAuthRetry } from "@/features/auth";
 import type {
   AdminOverview,
@@ -16,10 +15,8 @@ import type {
   RetrievalPlaygroundResponse,
 } from "../types";
 function adminHeaders(contentType = true): HeadersInit {
-  const session = getStoredSession();
   return {
     ...(contentType ? { "Content-Type": "application/json" } : {}),
-    ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
   };
 }
 

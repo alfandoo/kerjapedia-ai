@@ -6,7 +6,7 @@ import { ScaleIcon } from "@/components/icons";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { login, SESSION_STORAGE_KEY } from "@/features/auth/api";
+import { login } from "@/features/auth/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,8 +28,6 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-      window.dispatchEvent(new Event("kerjapedia-session-change"));
       router.push("/admin/dashboard");
     } catch (err) {
       const message = (err as Error).message;

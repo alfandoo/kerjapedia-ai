@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const adminSession = {
-  access_token: "e2e-admin-token",
   user: {
     user_id: "admin_e2e",
     email: "admin@example.com",
@@ -20,10 +19,9 @@ function monitorRuntimeErrors(page: Page): string[] {
 }
 
 async function preloadAdminSession(page: Page) {
-  await page.addInitScript((session) => {
-    window.localStorage.setItem("kerjapedia-session-v1", JSON.stringify(session));
-  }, adminSession);
+  await page.route("**/api/backend/auth/session", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(adminSession) }));
 }
+
 
 test("stored session hydrates the chat shell without mismatch", async ({ page }) => {
   const runtimeErrors = monitorRuntimeErrors(page);

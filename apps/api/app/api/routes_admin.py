@@ -115,9 +115,7 @@ def _get_or_create_admin_record(document_id: str, session) -> DocumentAdmin:
     record = session.get(DocumentAdmin, document_id)
     if record is None:
         relationships = [
-            item
-            for item in _manifest_relationships()
-            if item["from_document_id"] == document_id
+            item for item in _manifest_relationships() if item["from_document_id"] == document_id
         ]
         record = DocumentAdmin(
             document_id=document_id,
@@ -195,15 +193,10 @@ def admin_stats(session: DbSession, _: AdminUser) -> dict:
     conversation_count = session.query(Conversation).count()
     message_count = session.query(sa_func.count(Message.message_id)).scalar() or 0
     feedback_count = session.query(Feedback).count()
-    feedback_helpful = (
-        session.query(Feedback).filter(Feedback.rating == "helpful").count()
-    )
+    feedback_helpful = session.query(Feedback).filter(Feedback.rating == "helpful").count()
     job_count = session.query(IngestionJob).count()
     recent_jobs = (
-        session.query(IngestionJob)
-        .order_by(IngestionJob.created_at.desc())
-        .limit(5)
-        .all()
+        session.query(IngestionJob).order_by(IngestionJob.created_at.desc()).limit(5).all()
     )
 
     result = {
@@ -260,15 +253,11 @@ def list_admin_documents(session: DbSession, _: AdminUser) -> dict:
             {
                 "ingestion_status": ingestion_status,
                 "chunk_count": chunk_counts.get(document.document_id, 0),
-                "publication_status": version.publication_status
-                if version
-                else "draft",
+                "publication_status": version.publication_status if version else "draft",
                 "source_verification_status": version.source_verification_status
                 if version
                 else "pending",
-                "legal_review_status": version.legal_review_status
-                if version
-                else "pending",
+                "legal_review_status": version.legal_review_status if version else "pending",
                 "version": version.version if version else record.version,
                 "updated_at": record.updated_at,
                 "updated_by": record.updated_by,
@@ -282,9 +271,7 @@ def list_admin_documents(session: DbSession, _: AdminUser) -> dict:
     summary = {
         "documents": len(results),
         "published": sum(item["publication_status"] == "published" for item in results),
-        "needs_review": sum(
-            item["ingestion_status"] == "needs_review" for item in results
-        ),
+        "needs_review": sum(item["ingestion_status"] == "needs_review" for item in results),
         "failed": sum(item["ingestion_status"] == "failed" for item in results),
     }
     result = {"summary": summary, "documents": results}
@@ -360,9 +347,7 @@ def replace_relationships(
         raise HTTPException(status_code=403, detail="Legal reviewer role is required.")
     find_dataset_document(document_id)
     if session.get(Document, document_id) is None:
-        raise HTTPException(
-            status_code=409, detail="Source document has not been ingested."
-        )
+        raise HTTPException(status_code=409, detail="Source document has not been ingested.")
     relationships = []
     session.query(DocumentRelationship).filter(
         DocumentRelationship.from_document_id == document_id
@@ -374,9 +359,7 @@ def replace_relationships(
                 status_code=409,
                 detail=f"Target document {relationship.to_document_id} has not been ingested.",
             )
-        if not relationship.evidence_url or not relationship.evidence_url.startswith(
-            "https://"
-        ):
+        if not relationship.evidence_url or not relationship.evidence_url.startswith("https://"):
             raise HTTPException(
                 status_code=422,
                 detail="A reviewed HTTPS evidence URL is required for every legal relationship.",
@@ -429,9 +412,7 @@ def update_publication(
     version = _latest_document_version(session, document_id)
     if payload.action == "publish":
         if version is None:
-            raise HTTPException(
-                status_code=409, detail="Document has not been ingested."
-            )
+            raise HTTPException(status_code=409, detail="Document has not been ingested.")
         if (
             version.ingestion_status != "completed"
             or version.source_verification_status != "verified"
@@ -447,9 +428,7 @@ def update_publication(
             )
     elif version is not None and version.is_current:
         active_release = (
-            session.query(RagIndexRelease)
-            .filter(RagIndexRelease.status == "active")
-            .first()
+            session.query(RagIndexRelease).filter(RagIndexRelease.status == "active").first()
         )
         if active_release is not None:
             raise HTTPException(
@@ -498,9 +477,7 @@ def verify_document_version(
     version = _latest_document_version(session, document_id)
     if version is None:
         raise HTTPException(status_code=409, detail="Document has not been ingested.")
-    if payload.status == "verified" and not is_canonical_official_source_url(
-        payload.evidence_url
-    ):
+    if payload.status == "verified" and not is_canonical_official_source_url(payload.evidence_url):
         raise HTTPException(
             status_code=422,
             detail="Verification requires a canonical official government HTTPS URL.",
@@ -571,20 +548,13 @@ def review_ingestion_build(
 
     report = dict(build.quality_report or {})
     gates = dict(report.get("gates") or {})
-    unresolved = {
-        str(page) for page in (report.get("pages") or {}).get("unresolved", [])
-    }
-    supplied = {
-        str(page): disposition
-        for page, disposition in payload.page_dispositions.items()
-    }
+    unresolved = {str(page) for page in (report.get("pages") or {}).get("unresolved", [])}
+    supplied = {str(page): disposition for page, disposition in payload.page_dispositions.items()}
     if payload.status == "approved":
         missing = sorted(unresolved - set(supplied))
         unexpected = sorted(set(supplied) - unresolved)
         failed_gates = sorted(
-            name
-            for name, passed in gates.items()
-            if not passed and name != "no_unresolved_pages"
+            name for name, passed in gates.items() if not passed and name != "no_unresolved_pages"
         )
         if missing or unexpected or failed_gates:
             raise HTTPException(
@@ -745,9 +715,7 @@ def _assert_release_snapshot_eligible(session, release: RagIndexRelease) -> None
 
 @router.get("/rag/releases")
 def list_rag_releases(session: DbSession, _: AdminUser) -> list[dict]:
-    rows = (
-        session.query(RagIndexRelease).order_by(RagIndexRelease.created_at.desc()).all()
-    )
+    rows = session.query(RagIndexRelease).order_by(RagIndexRelease.created_at.desc()).all()
     return [
         {
             "release_id": row.release_id,
@@ -852,9 +820,7 @@ def create_rag_release(
     release_id = f"ragrel_{uuid4().hex}"
     namespace = payload.namespace or f"{settings.pinecone_namespace}-{release_id[-12:]}"
     current_version_ids = {candidate.version_id for candidate in release_versions}
-    relationship_hash = relationship_snapshot_hash(
-        session.query(DocumentRelationship).all()
-    )
+    relationship_hash = relationship_snapshot_hash(session.query(DocumentRelationship).all())
     release = RagIndexRelease(
         release_id=release_id,
         namespace=namespace,
@@ -868,9 +834,7 @@ def create_rag_release(
         relationship_snapshot_hash=relationship_hash,
         document_versions={row.document_id: row.version for row in release_versions},
         historical_version_ids=[
-            row.version_id
-            for row, _ in eligible_pairs
-            if row.version_id not in current_version_ids
+            row.version_id for row, _ in eligible_pairs if row.version_id not in current_version_ids
         ],
         ingestion_builds=release_builds,
         evaluation_metrics={},
@@ -988,10 +952,7 @@ def transition_rag_release(
         if (
             evaluation_dataset is None
             or len(evaluation_dataset.questions) < 300
-            or {
-                question.get("split", "development")
-                for question in evaluation_dataset.questions
-            }
+            or {question.get("split", "development") for question in evaluation_dataset.questions}
             != {"development", "test"}
             or any(
                 question.get("status") != "verified"
@@ -1006,9 +967,9 @@ def transition_rag_release(
                     "with development and held-out test splits."
                 ),
             )
-        if len(
-            {question.get("question_id") for question in evaluation_dataset.questions}
-        ) != len(evaluation_dataset.questions) or len(
+        if len({question.get("question_id") for question in evaluation_dataset.questions}) != len(
+            evaluation_dataset.questions
+        ) or len(
             {
                 " ".join(str(question.get("question", "")).lower().split())
                 for question in evaluation_dataset.questions
@@ -1036,8 +997,7 @@ def transition_rag_release(
         if set(verified_reviewers) != {
             question.get("question_id") for question in evaluation_dataset.questions
         } or any(
-            verified_reviewers.get(question.get("question_id"))
-            != question.get("verified_by")
+            verified_reviewers.get(question.get("question_id")) != question.get("verified_by")
             for question in evaluation_dataset.questions
         ):
             raise HTTPException(
@@ -1072,23 +1032,19 @@ def transition_rag_release(
                 },
             )
         release.evaluation_metrics = metrics
-        release.retrieval_thresholds = {
-            "general": float(metrics["recommended_refusal_threshold"])
-        }
+        release.retrieval_thresholds = {"general": float(metrics["recommended_refusal_threshold"])}
         release.status = "validated"
     elif payload.action == "promote":
         _assert_release_snapshot_eligible(session, release)
         if release.status not in {"validated", "retired"}:
-            raise HTTPException(
-                status_code=409, detail="Only validated releases can be promoted."
-            )
+            raise HTTPException(status_code=409, detail="Only validated releases can be promoted.")
         session.query(RagIndexRelease).with_for_update().all()
-        session.query(RagIndexRelease).filter(
-            RagIndexRelease.status == "active"
-        ).update({RagIndexRelease.status: "retired"})
-        session.query(DocumentVersion).filter(
-            DocumentVersion.is_current.is_(True)
-        ).update({DocumentVersion.is_current: False})
+        session.query(RagIndexRelease).filter(RagIndexRelease.status == "active").update(
+            {RagIndexRelease.status: "retired"}
+        )
+        session.query(DocumentVersion).filter(DocumentVersion.is_current.is_(True)).update(
+            {DocumentVersion.is_current: False}
+        )
         session.flush()
         for document_id, version_number in release.document_versions.items():
             version_row = (
@@ -1129,6 +1085,29 @@ def transition_rag_release(
     }
 
 
+async def _read_upload_content(request: Request) -> bytes:
+    """Bound buffering by actual streamed bytes, not the client's size claim."""
+    declared_length = request.headers.get("content-length")
+    if declared_length is not None:
+        if not declared_length.isascii() or not declared_length.isdecimal():
+            raise HTTPException(status_code=400, detail="Invalid Content-Length.")
+        # Avoid parsing an arbitrarily long integer header.
+        normalized_length = declared_length.lstrip("0") or "0"
+        if len(normalized_length) > len(str(MAX_UPLOAD_BYTES)):
+            raise HTTPException(status_code=413, detail="PDF file exceeds the 50 MB limit.")
+        if int(normalized_length) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="PDF file exceeds the 50 MB limit.")
+
+    content = bytearray()
+    async for chunk in request.stream():
+        if len(chunk) > MAX_UPLOAD_BYTES - len(content):
+            raise HTTPException(status_code=413, detail="PDF file exceeds the 50 MB limit.")
+        content.extend(chunk)
+    if declared_length is not None and len(content) != int(normalized_length):
+        raise HTTPException(status_code=400, detail="Content-Length does not match the upload.")
+    return bytes(content)
+
+
 @router.post("/documents/upload", status_code=status.HTTP_201_CREATED)
 async def upload_document(
     request: Request,
@@ -1140,13 +1119,9 @@ async def upload_document(
     safe_name = Path(file_name).name
     if Path(safe_name).suffix.lower() != ".pdf":
         raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
-    content = await request.body()
+    content = await _read_upload_content(request)
     if not content.startswith(b"%PDF-"):
-        raise HTTPException(
-            status_code=400, detail="The uploaded file is not a valid PDF."
-        )
-    if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="PDF file exceeds the 50 MB limit.")
+        raise HTTPException(status_code=400, detail="The uploaded file is not a valid PDF.")
 
     upload_id = f"upload_{uuid4().hex}"
     document_id = re.sub(r"[^A-Z0-9]+", "-", Path(safe_name).stem.upper()).strip("-")
@@ -1215,9 +1190,7 @@ def retrieval_playground(
             engine = RetrievalEngine(
                 documents=load_artifact_documents(storage_root()),
                 top_k=payload.top_k,
-                relationship_index=relationship_index_for_manifest(
-                    dataset_metadata_path()
-                ),
+                relationship_index=relationship_index_for_manifest(dataset_metadata_path()),
             )
             response = engine.search(payload.question, top_k=payload.top_k)
     except RuntimeError as exc:
@@ -1231,8 +1204,7 @@ def retrieval_playground(
         metadata = document.metadata or {}
         if (
             payload.regulation_type
-            and metadata.get("regulation_type", "").lower()
-            != payload.regulation_type.lower()
+            and metadata.get("regulation_type", "").lower() != payload.regulation_type.lower()
         ):
             continue
         if payload.year is not None and metadata.get("year") != payload.year:

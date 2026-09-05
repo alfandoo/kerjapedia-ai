@@ -13,8 +13,6 @@ class ApiModel(BaseModel):
 class HealthResponse(ApiModel):
     status: str
     service: str
-    version: str
-    providers: dict[str, Any] = Field(default_factory=dict)
 
 
 class LoginRequest(ApiModel):

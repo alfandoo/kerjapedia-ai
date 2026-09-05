@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from hashlib import file_digest
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 
-from app.api.dependencies import AdminUser
+from app.api.dependencies import AdminUser, DbSession, OptionalUser
 from app.api.schemas import DocumentSummary, DocumentUpdateRequest
 from app.api.utils import (
     dataset_metadata_path,
@@ -14,6 +15,7 @@ from app.api.utils import (
     project_root,
     storage_root,
 )
+from app.models.ingestion import DocumentVersion
 from app.services.ingestion.manifest_updater import (
     MANIFEST_EDITABLE_FIELDS,
     manifest_contains,
@@ -25,9 +27,18 @@ from app.services.ingestion.uploads import (
     merge_documents,
     uploads_manifest_path,
 )
+from app.services.retrieval.governance import load_retrieval_governance
 from app.services.retrieval.store import load_artifact_documents
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+
+def private_document_response(response: Response):
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Vary"] = "Authorization"
+
+
+router = APIRouter(
+    prefix="/documents", tags=["documents"], dependencies=[Depends(private_document_response)]
+)
 
 
 def merged_documents():
@@ -42,6 +53,44 @@ def find_merged_document(document_id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Document {document_id} was not found.",
         ) from exc
+
+
+def document_access(session, user):
+    """Only a server-verified admin can preview unpublished artifacts."""
+    if user is not None and "admin" in user.roles:
+        return None
+    return load_retrieval_governance(session, allow_unpublished=False)
+
+
+def visible_document(document_id, session, access, document=None):
+    document = document if document is not None else find_merged_document(document_id)
+    if access is None:
+        return document
+    version = access.eligible_versions.get(document_id)
+    row = session.get(DocumentVersion, f"{document_id}-v{version}") if version is not None else None
+    # A manifest may already point to an unreviewed replacement upload.
+    if row is None or row.sha256 != document.sha256:
+        raise HTTPException(status_code=404, detail="Document was not found.")
+    return replace(
+        document,
+        local_file=row.local_file,
+        source_url=row.source_url,
+        legal_status=row.legal_status,
+    )
+
+
+def visible_chunks(access):
+    if access is None:
+        return load_artifact_documents(storage_root())
+    return load_artifact_documents(
+        storage_root(),
+        eligible_versions={
+            key: version
+            for key, version in access.eligible_versions.items()
+            if access.eligible_builds.get(f"{key}-v{version}")
+        },
+        eligible_builds=access.eligible_builds,
+    )
 
 
 def to_document_summary(document) -> DocumentSummary:
@@ -62,12 +111,15 @@ def to_document_summary(document) -> DocumentSummary:
 
 @router.get("", response_model=list[DocumentSummary])
 def list_documents(
+    session: DbSession,
+    user: OptionalUser,
     q: str | None = Query(default=None, max_length=200),
     regulation_type: str | None = Query(default=None, max_length=40),
     year: int | None = Query(default=None, ge=1945, le=2100),
     legal_status: str | None = Query(default=None, max_length=40),
     topic: str | None = Query(default=None, max_length=40),
 ) -> list[DocumentSummary]:
+    access = document_access(session, user)
     documents = sorted(
         merged_documents(),
         key=lambda item: (item.year, item.regulation_type, item.number),
@@ -96,16 +148,28 @@ def list_documents(
             return False
         return True
 
-    return [to_document_summary(document) for document in documents if matches(document)]
+    result = []
+    for document in documents:
+        try:
+            document = visible_document(document.document_id, session, access, document)
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            continue
+        if matches(document):
+            result.append(to_document_summary(document))
+    return result
 
 
 @router.get("/{document_id}")
-def get_document(document_id: str) -> dict:
-    document = find_merged_document(document_id)
-    chunks = [
-        item for item in load_artifact_documents(storage_root()) if item.document_id == document_id
-    ]
+def get_document(document_id: str, session: DbSession, user: OptionalUser) -> dict:
+    access = document_access(session, user)
+    document = visible_document(document_id, session, access)
+    chunks = [item for item in visible_chunks(access) if item.document_id == document_id]
     payload = asdict(document)
+    if access is not None:
+        for key in ("local_file", "sha256", "file_name"):
+            payload.pop(key, None)
     payload["chunk_count"] = len(chunks)
     payload["available_chunks"] = [
         {
@@ -121,8 +185,9 @@ def get_document(document_id: str) -> dict:
 
 
 @router.get("/{document_id}/pdf", response_class=FileResponse)
-def get_document_pdf(document_id: str) -> FileResponse:
-    document = find_merged_document(document_id)
+def get_document_pdf(document_id: str, session: DbSession, user: OptionalUser) -> FileResponse:
+    access = document_access(session, user)
+    document = visible_document(document_id, session, access)
     dataset_root = (project_root() / "dataset").resolve()
     uploads_root = (project_root() / "storage" / "ingestion" / "uploads").resolve()
     pdf_path = (project_root() / document.local_file).resolve()
@@ -137,8 +202,13 @@ def get_document_pdf(document_id: str) -> FileResponse:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Dataset PDF was not found.",
         )
+    if access is not None:
+        with pdf_path.open("rb") as source:
+            if file_digest(source, "sha256").hexdigest() != document.sha256:
+                raise HTTPException(status_code=404, detail="Dataset PDF was not found.")
     return FileResponse(
         pdf_path,
+        headers={"Cache-Control": "private, no-store", "Vary": "Authorization"},
         media_type="application/pdf",
         filename=document.file_name,
         content_disposition_type="inline",
@@ -146,10 +216,12 @@ def get_document_pdf(document_id: str) -> FileResponse:
 
 
 @router.get("/{document_id}/citations/{chunk_id}")
-def get_citation(document_id: str, chunk_id: str) -> dict:
+def get_citation(document_id: str, chunk_id: str, session: DbSession, user: OptionalUser) -> dict:
+    access = document_access(session, user)
+    visible_document(document_id, session, access)
     chunks = [
         item
-        for item in load_artifact_documents(storage_root())
+        for item in visible_chunks(access)
         if item.document_id == document_id and item.chunk_id == chunk_id
     ]
     if not chunks:
@@ -167,7 +239,24 @@ def get_citation(document_id: str, chunk_id: str) -> dict:
         "page_end": chunk.page_end,
         "quote": chunk.text,
         "source_url": chunk.source_url,
-        "metadata": chunk.metadata,
+        "metadata": chunk.metadata
+        if access is None
+        else {
+            key: value
+            for key, value in chunk.metadata.items()
+            if key
+            in {
+                "title",
+                "short_title",
+                "regulation_type",
+                "number",
+                "year",
+                "issuer",
+                "topics",
+                "legal_status",
+                "source_url",
+            }
+        },
     }
 
 

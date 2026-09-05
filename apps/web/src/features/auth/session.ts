@@ -1,62 +1,63 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
-
-export const SESSION_STORAGE_KEY = "kerjapedia-session-v1";
+import { useEffect, useSyncExternalStore } from "react";
 import type { UserSession } from "./types";
 
-function parseStoredSession(raw: string | null): UserSession | null {
-  if (!raw) return null;
-  try {
-    const value = JSON.parse(raw) as Partial<UserSession>;
-    const user = value.user;
-    if (
-      typeof value.access_token !== "string" ||
-      !value.access_token.trim() ||
-      !user ||
-      typeof user.user_id !== "string" ||
-      typeof user.email !== "string" ||
-      typeof user.name !== "string" ||
-      !Array.isArray(user.roles) ||
-      !user.roles.every((role) => typeof role === "string")
-    ) {
-      return null;
-    }
-    return value as UserSession;
-  } catch {
-    return null;
-  }
-}
-
-export function getStoredSession(): UserSession | null {
-  if (typeof window === "undefined") return null;
-  return parseStoredSession(window.localStorage.getItem(SESSION_STORAGE_KEY));
-}
-
-export function clearStoredSession(): void {
+let current: UserSession | null = null;
+let loaded = false;
+let loading: Promise<void> | null = null;
+let revision = 0;
+const listeners = new Set<() => void>();
+function emit() { for (const listener of listeners) listener(); }
+function removeLegacyTokens() {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(SESSION_STORAGE_KEY);
-  window.dispatchEvent(new Event("kerjapedia-session-change"));
+  try {
+    window.localStorage.removeItem("kerjapedia-session-v1");
+    window.sessionStorage.removeItem("kerjapedia-session-v1");
+  } catch { /* Storage can be disabled; the new session does not use it. */ }
 }
-
-function subscribe(callback: () => void) {
-  window.addEventListener("kerjapedia-session-change", callback);
-  window.addEventListener("storage", callback);
-  return () => {
-    window.removeEventListener("kerjapedia-session-change", callback);
-    window.removeEventListener("storage", callback);
-  };
+export function getStoredSession(): UserSession | null { return current; }
+export function setStoredSession(session: UserSession | null): void {
+  removeLegacyTokens();
+  // Keep only presentation data in memory, never tokens or arbitrary fields.
+  current = session ? { user: { user_id: session.user.user_id, email: session.user.email, name: session.user.name, roles: [...session.user.roles] } } : null;
+  loaded = true;
+  revision += 1;
+  emit();
 }
-
-function getClientSnapshot() {
-  return window.localStorage.getItem(SESSION_STORAGE_KEY);
+export function clearStoredSession(): void { setStoredSession(null); }
+export async function loadStoredSession(force = false): Promise<void> {
+  removeLegacyTokens();
+  if (loading) return loading;
+  if (loaded && !force) return;
+  const started = revision;
+  loading = (async () => {
+    try {
+      const { fetchWithAuthRetry } = await import("./api");
+      const response = await fetchWithAuthRetry("/api/backend/auth/session", {});
+      if (response.ok) {
+        const session = await response.json();
+        if (revision === started) setStoredSession(session);
+      } else if (response.status === 401 && revision === started) clearStoredSession();
+    } finally {
+      loaded = true;
+      loading = null;
+      emit();
+    }
+  })().catch(() => { /* A temporary network failure must not claim server logout. */ });
+  return loading;
 }
-
-function getServerSnapshot() {
-  return null;
-}
-
+function subscribe(callback: () => void) { listeners.add(callback); return () => { listeners.delete(callback); }; }
 export function useStoredSession(): UserSession | null {
-  const serializedSession = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot);
-  return useMemo(() => parseStoredSession(serializedSession), [serializedSession]);
+  const session = useSyncExternalStore(subscribe, () => current, () => null);
+  useEffect(() => {
+    void loadStoredSession();
+    const revalidate = () => { void loadStoredSession(true); };
+    window.addEventListener("focus", revalidate);
+    return () => window.removeEventListener("focus", revalidate);
+  }, []);
+  return session;
+}
+export function useSessionReady(): boolean {
+  return useSyncExternalStore(subscribe, () => loaded, () => false);
 }
