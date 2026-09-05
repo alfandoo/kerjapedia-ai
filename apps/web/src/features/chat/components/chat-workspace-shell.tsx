@@ -58,6 +58,53 @@ function formatRole(role: string) {
   return role.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function LegalDropdown({ children, label }: { children: ReactNode; label: string }) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    function dismissOutside(event: PointerEvent) {
+      const details = detailsRef.current;
+      if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
+        details.open = false;
+      }
+    }
+    function dismissOnEscape(event: KeyboardEvent) {
+      const details = detailsRef.current;
+      if (event.key !== "Escape" || !details?.open) return;
+      event.preventDefault();
+      event.stopPropagation();
+      details.open = false;
+      details.querySelector("summary")?.focus();
+    }
+    document.addEventListener("pointerdown", dismissOutside);
+    window.addEventListener("keydown", dismissOnEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside);
+      window.removeEventListener("keydown", dismissOnEscape, true);
+    };
+  }, []);
+
+  return (
+    <details ref={detailsRef} className="group/legal relative">
+      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-javanese [&::-webkit-details-marker]:hidden">
+        <FileText className="size-[18px] text-javanese" />
+        <span>{label}</span>
+        <ChevronRight className="ml-auto size-4 rotate-90 transition-transform group-open/legal:-rotate-90" />
+      </summary>
+      <div
+        className="absolute inset-x-0 top-full z-20 mt-1 grid rounded-xl border border-sidebar-border bg-sidebar p-1.5 shadow-xl"
+        onClick={(event) => {
+          if (event.target instanceof Element && event.target.closest("a") && detailsRef.current) {
+            detailsRef.current.open = false;
+          }
+        }}
+      >
+        {children}
+      </div>
+    </details>
+  );
+}
+
 export function ChatWorkspaceShell({
   children,
   conversations,
@@ -262,7 +309,7 @@ export function ChatWorkspaceShell({
   function keepMobileFocusInside(event: ReactKeyboardEvent<HTMLElement>) {
     if (event.key !== "Tab") return;
     const focusable = mobileSidebarRef.current?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+      'button:not([disabled]), a[href], summary, [tabindex]:not([tabindex="-1"])'
     );
     if (!focusable?.length) return;
     const first = focusable[0];
@@ -538,36 +585,38 @@ export function ChatWorkspaceShell({
               </span>
               <span>{translate("sidebar.settings")}</span>
             </button>
-            <Link
-              href="/legal/disclaimer"
-              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent"
-            >
-              <span className="flex size-5 shrink-0 items-center justify-center">
-                <FileText className="size-[18px] text-javanese" />
-              </span>
-              <span>{translate("sidebar.legal")}</span>
-            </Link>
-            <Link
-              href="/legal/privacy"
-              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent"
-            >
-              <span className="flex size-5 shrink-0 items-center justify-center">
-                <Shield className="size-[18px] text-javanese" />
-              </span>
-              <span>{translate("sidebar.privacy")}</span>
-            </Link>
-            <Link
-              href="/legal/terms"
-              className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent"
-            >
-              <span className="flex size-5 shrink-0 items-center justify-center">
-                <Scale className="size-[18px] text-javanese" />
-              </span>
-              <span>{translate("sidebar.terms")}</span>
-            </Link>
+            <LegalDropdown label={translate("sidebar.legal")}>
+              <Link
+                href="/legal/disclaimer"
+                className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-javanese"
+              >
+                <span className="flex size-5 shrink-0 items-center justify-center">
+                  <FileText className="size-[18px] text-javanese" />
+                </span>
+                <span>{translate("sidebar.legal")}</span>
+              </Link>
+              <Link
+                href="/legal/privacy"
+                className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-javanese"
+              >
+                <span className="flex size-5 shrink-0 items-center justify-center">
+                  <Shield className="size-[18px] text-javanese" />
+                </span>
+                <span>{translate("sidebar.privacy")}</span>
+              </Link>
+              <Link
+                href="/legal/terms"
+                className="flex min-h-10 items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-javanese"
+              >
+                <span className="flex size-5 shrink-0 items-center justify-center">
+                  <Scale className="size-[18px] text-javanese" />
+                </span>
+                <span>{translate("sidebar.terms")}</span>
+              </Link>
+            </LegalDropdown>
           </nav>
           <div className="border-t border-sidebar-border p-4">
-            <h3 className="text-[15px] font-semibold text-tinta">
+            <h3 className="text-[13px] font-medium text-tinta">
               {translate("sidebar.loginTitle")}
             </h3>
             <p className="mt-1 text-[13px] leading-[1.5] text-muted-text">
@@ -575,7 +624,7 @@ export function ChatWorkspaceShell({
             </p>
             <button
               type="button"
-              className="mt-3 flex min-h-[40px] w-full items-center justify-center rounded-full bg-white text-[13px] font-semibold text-javanese transition hover:bg-[#e2f3e6]"
+              className="chat-auth-button chat-auth-sidebar mt-3 flex min-h-[40px] w-full items-center justify-center rounded-full bg-white text-[13px] font-semibold text-javanese transition hover:bg-[#e2f3e6]"
               onClick={(event) => openAuthModal(event.currentTarget, "login")}
             >
               {translate("sidebar.loginButton")}
@@ -800,14 +849,14 @@ export function ChatWorkspaceShell({
             <div className="flex items-center justify-self-end gap-2 max-[760px]:gap-1.5">
               <button
                 type="button"
-                className="inline-flex min-h-[38px] items-center justify-center rounded-full bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
+                className="chat-auth-button chat-auth-login inline-flex min-h-[38px] items-center justify-center rounded-full px-4 text-xs font-semibold text-foreground transition hover:bg-accent focus-visible:outline-2 focus-visible:outline-javanese max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
                 onClick={(event) => openAuthModal(event.currentTarget, "login")}
               >
                 {translate("header.login")}
               </button>
               <button
                 type="button"
-                className="inline-flex min-h-[38px] items-center justify-center rounded-full bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
+                className="chat-auth-button chat-auth-signup inline-flex min-h-[38px] items-center justify-center rounded-full bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest max-[760px]:min-h-9 max-[760px]:px-[11px] max-[760px]:text-[10px]"
                 onClick={(event) => openAuthModal(event.currentTarget, "signup")}
               >
                 {translate("header.signup")}

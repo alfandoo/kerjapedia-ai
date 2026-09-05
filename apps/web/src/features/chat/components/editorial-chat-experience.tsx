@@ -346,7 +346,7 @@ export function EditorialChatExperience() {
         >
           {messages.length === 0 ? (
             <div className="mx-auto mt-[clamp(24px,5vh,60px)] flex max-w-[680px] flex-col items-center text-center max-[760px]:mt-[clamp(28px,6vh,48px)]">
-              <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#bfe3c9] bg-[#f0f8f2] px-4 py-1.5 text-[11px] font-medium tracking-wide text-[#176b3a]">
+              <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-javanese/20 bg-teal-soft px-4 py-1.5 text-[11px] font-medium tracking-wide text-teal-strong">
                 <span className="size-1.5 rounded-full bg-javanese" />
                 {translate("chat.badge")}
               </span>
@@ -366,14 +366,12 @@ export function EditorialChatExperience() {
                     key={item.text}
                     type="button"
                     onClick={() => void handleSubmit(item.text)}
-                    className="group flex min-h-[90px] w-full flex-col justify-between rounded-xl border border-[#d8e8dc] bg-white px-4 py-3.5 text-left transition hover:border-javanese/40 hover:shadow-[0_2px_12px_rgba(22,128,63,0.1)] max-[760px]:min-h-[auto] max-[760px]:py-3"
+                    className="chat-suggestion group flex min-h-[90px] w-full flex-col justify-between rounded-xl border border-[#d8e8dc] bg-white px-4 py-3.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-javanese hover:border-javanese/40 hover:shadow-[0_2px_12px_rgba(22,128,63,0.1)] max-[760px]:min-h-[auto] max-[760px]:py-3"
                   >
-                    <span className="mb-2 inline-flex self-start rounded-md bg-[#f0f8f2] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#176b3a]">
+                    <span className="mb-2 inline-flex self-start rounded-md bg-teal-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-strong">
                       {item.tag}
                     </span>
-                    <span className="text-[13px] leading-[1.45] text-[#315342] group-hover:text-tinta">
-                      {item.text}
-                    </span>
+                    <span className="text-[13px] leading-[1.55] text-foreground">{item.text}</span>
                   </button>
                 ))}
               </div>
@@ -425,26 +423,26 @@ export function EditorialChatExperience() {
           onCancel={stopRequest}
         />
         {messages.length === 0 ? (
-          <p className="relative z-[3] mx-auto mb-2 mt-[-6px] max-w-[680px] px-6 text-center text-[10px] leading-[1.5] text-[#8aa094] max-[760px]:px-[18px] max-[760px]:text-[9px]">
+          <p className="relative z-[3] mx-auto mb-2 mt-[-6px] max-w-[680px] px-6 text-center text-xs leading-relaxed text-muted-foreground max-[760px]:px-[18px]">
             KerjaPedia dapat membuat kekeliruan. Periksa selalu sumber resmi. Dengan menggunakan
             layanan ini, Anda menyetujui{" "}
             <Link
               href="/legal/terms"
-              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-javanese"
+              className="text-inherit underline underline-offset-4 transition-colors hover:text-javanese"
             >
               Ketentuan
             </Link>
             ,{" "}
             <Link
               href="/legal/privacy"
-              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-javanese"
+              className="text-inherit underline underline-offset-4 transition-colors hover:text-javanese"
             >
               Privasi
             </Link>
             , dan{" "}
             <Link
               href="/legal/disclaimer"
-              className="text-inherit [text-underline-offset:2px] transition-colors hover:text-javanese"
+              className="text-inherit underline underline-offset-4 transition-colors hover:text-javanese"
             >
               Disclaimer
             </Link>

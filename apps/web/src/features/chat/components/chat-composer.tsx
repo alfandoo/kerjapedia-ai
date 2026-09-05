@@ -55,7 +55,7 @@ export function ChatComposer({
           className="w-full resize-none rounded-2xl bg-transparent p-4 pb-11 text-[14px] leading-[1.65] text-tinta outline-none placeholder:text-[#9ca39e] disabled:cursor-not-allowed disabled:opacity-50"
         />
         <div className="absolute bottom-0 inset-x-0 flex items-center justify-between px-4 pb-3">
-          <span className="text-[10px] font-medium tabular-nums text-[#b0b8b3]">
+          <span className="text-xs font-medium tabular-nums text-muted-foreground">
             {question.length}/2000
           </span>
           {loading ? (

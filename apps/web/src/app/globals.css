@@ -854,3 +854,62 @@
 .admin-theme .text-white\/60 {
   color: rgba(255, 255, 255, 0.72) !important;
 }
+
+/* Elevate chat suggestions above the dark canvas. */
+.dark .chat-suggestion {
+  background-color: #141a17 !important;
+  border-color: #34473d !important;
+}
+.dark .chat-suggestion:hover {
+  background-color: #1b2921 !important;
+  border-color: #7cbf9d !important;
+}
+.dark .chat-composer-surface:focus-within {
+  border-color: #7cbf9d !important;
+}
+.dark .chat-composer-surface button[type="submit"]:disabled {
+  background-color: #242b27 !important;
+  color: #9eafa4 !important;
+}
+
+/* Explicit auth states take precedence over legacy dark utility overrides. */
+.chat-auth-button {
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+.chat-auth-button:focus-visible {
+  outline: 2px solid var(--javanese-green);
+  outline-offset: 3px;
+}
+.chat-auth-login:hover {
+  background-color: #e2f3e6 !important;
+  color: #104d2a !important;
+}
+.chat-auth-signup:hover {
+  background-color: #104d2a !important;
+  box-shadow: 0 0 0 2px rgba(23, 107, 58, 0.2);
+}
+.chat-auth-sidebar:hover {
+  background-color: #dcf5e3 !important;
+  color: #104d2a !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
+}
+.dark .chat-auth-login:hover,
+.dark .chat-auth-sidebar:hover {
+  background-color: #243c30 !important;
+  color: #dcf5e3 !important;
+  box-shadow: inset 0 0 0 1px #537d64;
+}
+.dark .chat-auth-signup:hover {
+  background-color: #326d50 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(124, 191, 157, 0.3);
+}
+.chat-auth-button:active {
+  box-shadow: inset 0 0 0 2px var(--javanese-green);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-auth-button {
+    transition: none;
+  }
+}
