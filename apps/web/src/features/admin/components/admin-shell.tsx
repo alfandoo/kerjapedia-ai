@@ -1,5 +1,7 @@
 "use client";
 
+import { readPreference, writePreference } from "@/lib/preference-cookie";
+
 import Link from "next/link";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
@@ -82,13 +84,13 @@ export function AdminShell({ children }: AdminShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () =>
       typeof window !== "undefined" &&
-      window.localStorage.getItem("kp-admin-sidebar") === "collapsed"
+      readPreference("kp-admin-sidebar") === "collapsed"
   );
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   function toggleCollapsed(next: boolean) {
     setSidebarCollapsed(next);
-    window.localStorage.setItem("kp-admin-sidebar", next ? "collapsed" : "expanded");
+    writePreference("kp-admin-sidebar", next ? "collapsed" : "expanded");
   }
 
   useEffect(() => {

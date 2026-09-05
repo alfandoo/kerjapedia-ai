@@ -1,5 +1,7 @@
 "use client";
 
+import { accountPins } from "../pinned-store";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -30,11 +32,11 @@ import {
 import { ConversationHistory } from "./conversation-history";
 import { ChatSidebar } from "./chat-sidebar";
 import { SettingsModal } from "@/features/settings";
-import { useStoredSession } from "@/features/auth";
+import { useStoredSession, useSessionReady } from "@/features/auth";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useSettings } from "@/features/settings";
 import type { ConversationSummary } from "@/features/chat/types";
 
-const PINNED_STORAGE_KEY = "kerjapedia.chat.pinned.v1";
 
 type ChatWorkspaceShellProps = {
   children: ReactNode;
@@ -125,14 +127,9 @@ export function ChatWorkspaceShell({
   const session = useStoredSession();
   const { t: translate } = useSettings();
   const pathname = usePathname();
-  const [hydrated, setHydrated] = useState(false);
-  const shownSession = hydrated ? session : null;
-  const showGuest = hydrated && !session; // Only render the guest chrome once hydration confirms there is no session.
-  useEffect(() => {
-    // Hydration gate: only mark ready after mount so the guest shell never flashes before session restores.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setHydrated(true);
-  }, []);
+  const sessionReady = useSessionReady();
+  const shownSession = sessionReady ? session : null;
+  const showGuest = sessionReady && !session;
 
   const mobileSidebarRef = useRef<HTMLElement>(null);
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
@@ -149,17 +146,21 @@ export function ChatWorkspaceShell({
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [pinnedConversationIds, setPinnedConversationIds] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const storedPinned = JSON.parse(window.localStorage.getItem(PINNED_STORAGE_KEY) ?? "[]");
-      return Array.isArray(storedPinned)
-        ? storedPinned.filter((id): id is string => typeof id === "string")
-        : [];
-    } catch {
-      return [];
-    }
-  });
+  const pinOwner = session?.user.user_id ?? null;
+  const [pinState, setPinState] = useState<{ owner: string; ids: string[] } | null>(null);
+  const pinnedConversationIds = pinState?.owner === pinOwner ? pinState?.ids ?? [] : [];
+  const pinRevision = useRef(0);
+  const pinLifetime = useRef<{ active: boolean } | null>(null);
+  useEffect(() => {
+    if (!pinOwner) return;
+    const lifetime = { active: true };
+    pinLifetime.current = lifetime;
+    const revision = ++pinRevision.current;
+    void accountPins(pinOwner).then(ids => {
+      if (lifetime.active && revision === pinRevision.current) setPinState({ owner: pinOwner, ids });
+    });
+    return () => { lifetime.active = false; };
+  }, [pinOwner]);
   const [pinnedExpanded, setPinnedExpanded] = useState(true);
   const [chatsExpanded, setChatsExpanded] = useState(true);
   const [sidebarContentTouchesFooter, setSidebarContentTouchesFooter] = useState(false);
@@ -179,14 +180,13 @@ export function ChatWorkspaceShell({
   );
 
   const togglePinned = useCallback((conversationId: string) => {
-    setPinnedConversationIds((current) => {
-      const next = current.includes(conversationId)
-        ? current.filter((id) => id !== conversationId)
-        : [...current, conversationId];
-      window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(next));
-      return next;
+    const lifetime = pinLifetime.current;
+    if (!pinOwner || !lifetime?.active) return;
+    const revision = ++pinRevision.current;
+    void accountPins(pinOwner, conversationId).then(ids => {
+      if (lifetime.active && revision === pinRevision.current) setPinState({ owner: pinOwner, ids });
     });
-  }, []);
+  }, [pinOwner]);
 
   const isActive = useCallback(
     (href: string) => {
@@ -783,25 +783,34 @@ export function ChatWorkspaceShell({
       ? "grid-cols-[268px_minmax(0,1fr)_minmax(340px,390px)] max-[1180px]:grid-cols-[220px_minmax(0,1fr)_340px]"
       : "grid-cols-[268px_minmax(0,1fr)]";
 
-  const topbarColumns = shownSession
+  const pendingSidebar = (
+    <div className="flex h-full flex-col gap-6 p-4" aria-hidden="true">
+      <div className="flex h-10 items-center gap-3"><Skeleton className="size-8" /><Skeleton className="h-4 w-28" /></div>
+      <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      <div className="space-y-4"><Skeleton className="h-3 w-16" /><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-4/5" /></div>
+      <Skeleton className="mt-auto h-12 w-full" />
+    </div>
+  );
+  const topbarColumns = !showGuest
     ? "grid-cols-[44px_minmax(0,1fr)_44px] max-[760px]:grid-cols-[44px_34px_minmax(0,1fr)_44px]"
     : "grid-cols-[44px_minmax(0,1fr)_auto] max-[760px]:grid-cols-[44px_34px_minmax(0,1fr)_auto]";
 
   return (
     <div
       className={[
-        "grid h-svh w-full overflow-hidden bg-arsip text-tinta transition-[grid-template-columns] duration-200 max-[760px]:block max-[760px]:h-svh",
+        "grid h-svh w-full overflow-hidden bg-arsip text-tinta max-[760px]:block max-[760px]:h-svh",
         shellColumns,
-        shownSession ? "authenticated-shell" : "guest-shell",
+        !sessionReady ? "session-pending-shell" : shownSession ? "authenticated-shell" : "guest-shell",
       ].join(" ")}
     >
       <ChatSidebar
         expanded={sidebarExpanded}
-        expandedContent={sidebarBody}
-        collapsedContent={collapsedRail}
+        expandedContent={sessionReady ? sidebarBody : pendingSidebar}
+        collapsedContent={sessionReady ? collapsedRail : <Skeleton className="mx-auto mt-4 size-9" />}
       />
       <div className="relative flex min-h-0 min-w-0 flex-col bg-white max-[760px]:h-full">
         <header
+          aria-busy={!sessionReady}
           className={`relative z-[5] grid min-h-[58px] items-center gap-2 border-b border-border bg-white/95 px-3.5 py-1.5 backdrop-blur-xl ${topbarColumns}`}
         >
           <button
@@ -823,6 +832,7 @@ export function ChatWorkspaceShell({
             className="hidden size-11 place-items-center rounded-[9px] text-javanese transition hover:bg-accent hover:text-forest max-[760px]:grid"
             aria-label={shownSession ? "Buka riwayat" : "Buka menu"}
             aria-expanded={mobileSidebarOpen}
+            disabled={!sessionReady}
             onClick={() => onMobileSidebarOpenChange(true)}
           >
             <Menu className="size-[21px]" />
@@ -834,7 +844,7 @@ export function ChatWorkspaceShell({
           </div>
           <h1
             className={`m-0 truncate text-[13px] font-medium text-javanese ${
-              shownSession ? "" : "max-[760px]:hidden"
+              !showGuest ? "" : "max-[760px]:hidden"
             }`}
           >
             {pathname === "/search" ? translate("header.search") : translate("header.assistant")}
@@ -865,7 +875,7 @@ export function ChatWorkspaceShell({
                 {translate("header.signup")}
               </button>
             </div>
-          ) : null}
+          ) : <Skeleton className="size-9 justify-self-end rounded-full" aria-hidden="true" />}
         </header>
         {shownSession && profileMenuOpen ? profileMenu : null}
         <main className="chat-workspace-surface min-h-0 flex-1 overflow-hidden bg-white max-[760px]:h-full">
@@ -910,7 +920,7 @@ export function ChatWorkspaceShell({
             onKeyDown={keepMobileFocusInside}
             className="relative z-[1] flex h-full w-[min(86vw,320px)] flex-col overflow-hidden bg-sidebar shadow-[16px_0_40px_rgba(17,36,26,0.18)]"
           >
-            {sidebarBody}
+            {sessionReady ? sidebarBody : pendingSidebar}
           </aside>
         </div>
       ) : null}

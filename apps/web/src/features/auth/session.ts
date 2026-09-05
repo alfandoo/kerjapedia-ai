@@ -9,16 +9,8 @@ let loading: Promise<void> | null = null;
 let revision = 0;
 const listeners = new Set<() => void>();
 function emit() { for (const listener of listeners) listener(); }
-function removeLegacyTokens() {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem("kerjapedia-session-v1");
-    window.sessionStorage.removeItem("kerjapedia-session-v1");
-  } catch { /* Storage can be disabled; the new session does not use it. */ }
-}
 export function getStoredSession(): UserSession | null { return current; }
 export function setStoredSession(session: UserSession | null): void {
-  removeLegacyTokens();
   // Keep only presentation data in memory, never tokens or arbitrary fields.
   current = session ? { user: { user_id: session.user.user_id, email: session.user.email, name: session.user.name, roles: [...session.user.roles] } } : null;
   loaded = true;
@@ -27,7 +19,6 @@ export function setStoredSession(session: UserSession | null): void {
 }
 export function clearStoredSession(): void { setStoredSession(null); }
 export async function loadStoredSession(force = false): Promise<void> {
-  removeLegacyTokens();
   if (loading) return loading;
   if (loaded && !force) return;
   const started = revision;

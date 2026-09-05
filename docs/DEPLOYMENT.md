@@ -115,7 +115,7 @@ Access token dan refresh token hanya diterima route server lalu disimpan dalam
 cookie host-only HttpOnly, SameSite=Lax, Path=/; production memakai Secure serta
 prefix `__Host-`. Masa simpan cookie maksimum 30 hari; validitas token tetap ditentukan
 Supabase. Browser hanya menerima profil pengguna dan menyimpannya di memori.
-Token lama di localStorage/sessionStorage dihapus saat aplikasi dimuat: pengguna
+Aplikasi tidak lagi membaca, menulis, maupun membersihkan Web Storage lama: pengguna
 perlu login ulang sekali setelah migrasi. Refresh dan logout tidak lagi menerima
 token dari JavaScript browser. Jangan log header Cookie/Authorization di proxy.
 
@@ -143,3 +143,12 @@ dengan autentikasi admin (browser lewat BFF). `GET /metrics` backend juga memerl
 bearer admin yang valid dan tidak diteruskan oleh BFF publik. Monitoring yang melakukan
 scrape harus mengirim kredensial tersebut melalui jaringan internal; jangan menaruhnya
 di URL atau membuka endpoint lewat pengecualian autentikasi reverse proxy.
+
+
+### Penyimpanan preferensi browser
+
+Tema, bahasa, dan status sidebar memakai cookie non-sensitif (`SameSite=Lax`, `Secure` pada HTTPS). Cookie tema/bahasa dibaca saat render server. Mode System mengikuti perangkat melalui skrip bernonce sebelum halaman tampil.
+
+Identitas tamu memakai cookie HttpOnly `__Host-kp-guest` di production (`kp-guest` di development). BFF memasok ID dari cookie dan mengabaikan header ID tamu dari browser. Daftar chat yang dipin disimpan per ID akun di IndexedDB; jika IndexedDB tidak tersedia, pin hanya bertahan dalam memori halaman.
+
+Tidak ada akses localStorage atau sessionStorage dalam kode aplikasi, termasuk pembersihan/migrasi data lama. Nilai lama tetap berada di browser tetapi tidak digunakan. Pengaturan yang sudah memiliki cookie tetap berlaku; pin lama, status sidebar lama, dan identitas tamu lama tidak dimigrasikan. Pengguna dapat membersihkan data situs melalui pengaturan browser jika diperlukan; pembersihan juga menghapus cookie dan IndexedDB.

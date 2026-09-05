@@ -1,5 +1,7 @@
 "use client";
 
+import { readPreference, writePreference } from "@/lib/preference-cookie";
+
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -37,7 +39,7 @@ export function SearchWorkspace() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setIsSidebarExpanded(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) !== "collapsed");
+      setIsSidebarExpanded(readPreference(SIDEBAR_STORAGE_KEY) !== "collapsed");
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -69,7 +71,7 @@ export function SearchWorkspace() {
       sourceDrawerOpen={false}
       onSidebarExpandedChange={(expanded) => {
         setIsSidebarExpanded(expanded);
-        window.localStorage.setItem(SIDEBAR_STORAGE_KEY, expanded ? "expanded" : "collapsed");
+        writePreference(SIDEBAR_STORAGE_KEY, expanded ? "expanded" : "collapsed");
       }}
       onMobileSidebarOpenChange={setIsMobileSidebarOpen}
       onSourceDrawerClose={() => undefined}

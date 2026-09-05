@@ -7,19 +7,18 @@ const ts = require("typescript");
 const user = { user_id: "owner", email: "owner@example.test", name: "Owner", roles: ["user"] };
 function load(fetchResponse) {
   const exports = {}, removed = [];
-  const storage = { removeItem: key => removed.push(key), setItem: () => { throw Error("Session must not write browser storage"); } };
   const source = fs.readFileSync(path.join(__dirname, "../src/features/auth/session.ts"), "utf8");
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
-    exports, window: { localStorage: storage, sessionStorage: storage },
+    exports, window: Object.defineProperties({}, { localStorage: { get() { throw Error("Web Storage forbidden"); } }, sessionStorage: { get() { throw Error("Web Storage forbidden"); } } }),
     require: name => name === "react" ? {} : { fetchWithAuthRetry: fetchResponse },
   });
   return { api: exports, removed };
 }
-test("session memory only contains profile and removes legacy credentials", () => {
+test("session memory only contains profile without accessing browser storage", () => {
   const h = load();
   h.api.setStoredSession({ access_token: "secret", refresh_token: "secret", user: { ...user, access_token: "nested" } });
   assert.equal(JSON.stringify(h.api.getStoredSession()), JSON.stringify({ user }));
-  assert.equal(h.removed.length, 2);
+  assert.equal(h.removed.length, 0);
   h.api.clearStoredSession();
   assert.equal(h.api.getStoredSession(), null);
 });
@@ -40,4 +39,16 @@ test("parallel bootstrap calls share one network request", async () => {
   await Promise.all([h.api.loadStoredSession(), h.api.loadStoredSession()]);
   assert.equal(calls, 1);
   assert.equal(JSON.stringify(h.api.getStoredSession()), JSON.stringify({ user }));
+});
+
+test("application sources contain no Web Storage access", () => {
+  const root = path.join(__dirname, "../src");
+  function inspect(directory) {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const filename = path.join(directory, entry.name);
+      if (entry.isDirectory()) inspect(filename);
+      else if (/\.(ts|tsx|js|jsx)$/.test(entry.name)) assert.doesNotMatch(fs.readFileSync(filename, "utf8"), /\b(localStorage|sessionStorage)\b/, filename);
+    }
+  }
+  inspect(root);
 });

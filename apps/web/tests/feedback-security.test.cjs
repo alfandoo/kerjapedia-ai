@@ -37,10 +37,10 @@ test("feedback uses cookie session through auth retry", async () => {
   assert.equal(h.calls[0].options.headers.Authorization, undefined);
   assert.equal(h.calls[0].options.headers["X-KerjaPedia-Guest-ID"], undefined);
 });
-test("guest feedback reuses the chat guest identity", async () => {
+test("guest feedback leaves identity resolution to the BFF", async () => {
   const h = harness(null);
   await h.api.submitFeedback({ question: "Question", rating: "helpful" });
-  assert.equal(h.calls[0].options.headers["X-KerjaPedia-Guest-ID"], "11111111-1111-4111-8111-111111111111");
+  assert.equal(h.calls[0].options.headers["X-KerjaPedia-Guest-ID"], undefined);
   assert.equal(h.calls[0].options.headers.Authorization, undefined);
 });
 test("rejected feedback is reported to the caller", async () => {

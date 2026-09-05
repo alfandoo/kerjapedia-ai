@@ -163,6 +163,11 @@ const en = {
   "source.feedbackFallback": "Source panel feedback",
   // Footer
   "footer.disclaimer": "KerjaPedia may make errors. Always check official sources.",
+  "footer.agreement": "By using this service, you agree to the",
+  "footer.terms": "Terms",
+  "footer.privacy": "Privacy Policy",
+  "footer.and": "and",
+  "footer.legalDisclaimer": "Disclaimer",
 };
 
 export default en;

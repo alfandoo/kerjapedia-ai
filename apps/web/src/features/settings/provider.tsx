@@ -11,7 +11,9 @@ import {
 } from "react";
 import { t, type TranslationKey } from "@/lib/translations";
 
-type Theme = "system" | "dark" | "light";
+import { type Language, type ResolvedLanguage } from "./language";
+
+import { type Theme } from "./theme";
 
 type SettingsContextType = {
   theme: Theme;
@@ -56,28 +58,43 @@ function applyDarkClass(resolved: "dark" | "light") {
   root.dataset.theme = resolved;
 }
 
-export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [language, setLanguageState] = useState<"auto" | "id" | "en">("auto");
-  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("light");
-  const [resolvedLanguage, setResolvedLanguage] = useState<"id" | "en">("id");
+export function SettingsProvider({
+  children,
+  initialLanguage = "auto",
+  initialResolvedLanguage = "id",
+  initialTheme = "system",
+}: {
+  children: ReactNode;
+  initialLanguage?: Language;
+  initialResolvedLanguage?: ResolvedLanguage;
+  initialTheme?: Theme;
+}) {
+  const [theme, setThemeState] = useState<Theme>(initialTheme);
+  const [language, setLanguageState] = useState<Language>(initialLanguage);
+  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">(
+    initialTheme === "dark" ? "dark" : "light"
+  );
+  const [resolvedLanguage, setResolvedLanguage] =
+    useState<ResolvedLanguage>(initialResolvedLanguage);
 
   const applyTheme = useCallback((t: Theme) => {
     const resolved = t === "system" ? getSystemTheme() : t;
     setResolvedTheme(resolved);
     applyDarkClass(resolved);
+    document.cookie = `settings-theme=${t}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
   }, []);
 
   const applyLanguage = useCallback((lang: "auto" | "id" | "en") => {
     const resolved = lang === "auto" ? getSystemLanguage() : lang;
     setResolvedLanguage(resolved);
     document.documentElement.lang = resolved;
+    // This non-sensitive preference lets the server render the chosen language.
+    document.cookie = `settings-language=${lang}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
   }, []);
 
   const setTheme = useCallback(
     (t: Theme) => {
       setThemeState(t);
-      localStorage.setItem("settings-theme", t);
       applyTheme(t);
     },
     [applyTheme]
@@ -86,7 +103,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const setLanguage = useCallback(
     (lang: "auto" | "id" | "en") => {
       setLanguageState(lang);
-      localStorage.setItem("settings-language", lang);
       applyLanguage(lang);
     },
     [applyLanguage]
@@ -98,12 +114,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   );
 
   useLayoutEffect(() => {
-    const storedTheme = localStorage.getItem("settings-theme");
-    const savedTheme: Theme | null =
-      storedTheme === "system" || storedTheme === "dark" || storedTheme === "light"
-        ? storedTheme
-        : null;
-    const savedLang = localStorage.getItem("settings-language") as "auto" | "id" | "en" | null;
+    const savedTheme = initialTheme;
+    const savedLang = initialLanguage;
     if (savedTheme) {
       // Hydrate persisted settings before synchronizing them to the document.
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -118,7 +130,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     } else {
       applyLanguage("auto");
     }
-  }, [applyTheme, applyLanguage]);
+  }, [applyTheme, applyLanguage, initialLanguage, initialTheme]);
 
   useEffect(() => {
     const mql = window.matchMedia("(prefers-color-scheme: dark)");

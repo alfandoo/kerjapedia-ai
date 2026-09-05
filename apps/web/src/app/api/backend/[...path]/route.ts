@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -7,6 +8,7 @@ const AUTH_BODY = 16 * 1024;
 const COOKIE_AGE = 30 * 24 * 60 * 60;
 const production = process.env.NODE_ENV === "production";
 const ACCESS = production ? "__Host-kp-access" : "kp-access";
+const GUEST = production ? "__Host-kp-guest" : "kp-guest";
 const REFRESH = production ? "__Host-kp-refresh" : "kp-refresh";
 const cookieOptions = { httpOnly: true, secure: production, sameSite: "lax" as const, path: "/", maxAge: COOKIE_AGE };
 const roots = new Set(["auth", "admin", "chat", "documents", "feedback", "ingestion", "evaluation"]);
@@ -67,6 +69,10 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
     // A refresh cookie may still be valid: let the client refresh then revoke.
     return refresh ? json({ detail: "Session refresh required." }, 401) : clearCookies(json({ status: "ok" }));
   }
+  const storedGuest = request.cookies.get(GUEST)?.value;
+  const guestRequest = !auth && ["chat", "feedback"].includes(path[0]) && !access;
+  const validGuest = storedGuest && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(storedGuest);
+  const guest = guestRequest ? (validGuest ? storedGuest : randomUUID()) : null;
   let oversized = false;
   try {
     const base = new URL(process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000");
@@ -75,10 +81,11 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
     const target = new URL(base.href.replace(/\/$/, "") + "/" + targetPath);
     target.search = request.nextUrl.search;
     const headers = new Headers();
-    for (const name of ["content-type", "accept", "range", "x-kerjapedia-guest-id"]) {
+    for (const name of ["content-type", "accept", "range"]) {
       const value = request.headers.get(name);
       if (value) headers.set(name, value);
     }
+    if (guest) headers.set("x-kerjapedia-guest-id", guest);
     // Browser Authorization and Cookie headers are never forwarded.
     if (access && !(auth && ["login", "register", "refresh"].includes(action))) headers.set("Authorization", `Bearer ${access}`);
     let body: BodyInit | null = null;
@@ -129,7 +136,9 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
       const value = upstream.headers.get(name);
       if (value) responseHeaders.set(name, value);
     }
-    return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+    const response = new NextResponse(upstream.body, { status: upstream.status, headers: responseHeaders });
+    if (guest && !validGuest) response.cookies.set(GUEST, guest, { ...cookieOptions, maxAge: 31536000 });
+    return response;
   } catch (error) {
     if (oversized || (error instanceof Error && error.message === "body_limit")) return json({ detail: "Request body is too large." }, 413);
     if (error instanceof SyntaxError) return json({ detail: "Invalid request body." }, 400);

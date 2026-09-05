@@ -166,6 +166,11 @@ const id = {
   "source.feedbackFallback": "Feedback panel sumber",
   // Footer
   "footer.disclaimer": "KerjaPedia dapat membuat kekeliruan. Periksa selalu sumber resmi.",
+  "footer.agreement": "Dengan menggunakan layanan ini, Anda menyetujui",
+  "footer.terms": "Ketentuan",
+  "footer.privacy": "Privasi",
+  "footer.and": "dan",
+  "footer.legalDisclaimer": "Disclaimer",
 };
 
 export default id;

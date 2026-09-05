@@ -91,9 +91,9 @@ test("invalid refresh expires cookies but transient failure does not", async () 
 });
 test("guest requests retain guest identity and have no bearer", async () => {
   const h = load([json([])]);
-  await h.run("chat/conversations", "GET", { "x-kerjapedia-guest-id": "guest-uuid", authorization: "Bearer forged" });
+  await h.run("chat/conversations", "GET", { cookie: "__Host-kp-guest=11111111-1111-4111-8111-111111111111", "x-kerjapedia-guest-id": "forged", authorization: "Bearer forged" });
   assert.equal(h.calls[0].options.headers.get("authorization"), null);
-  assert.equal(h.calls[0].options.headers.get("x-kerjapedia-guest-id"), "guest-uuid");
+  assert.equal(h.calls[0].options.headers.get("x-kerjapedia-guest-id"), "11111111-1111-4111-8111-111111111111");
 });
 test("profile bootstrap only exposes approved fields", async () => {
   const h = load([json({ ...user, access_token: "leak" })]);
@@ -141,4 +141,14 @@ test("BFF preserves PDF bytes below the upload limit", async () => {
   const result = await h.run("admin/documents/upload", "POST", { cookie }, "%PDF-" + "x".repeat(11));
   assert.equal(result.status, 200);
   assert.equal(h.calls[0].body, "%PDF-" + "x".repeat(11));
+});
+
+test("guest identity is generated in an HttpOnly cookie, ignoring forged headers", async () => {
+  const h = load([json([])]);
+  const result = await h.run("chat/conversations", "GET", { "x-kerjapedia-guest-id": "forged" });
+  const guest = h.calls[0].options.headers.get("x-kerjapedia-guest-id");
+  assert.match(guest, /^[0-9a-f-]{36}$/);
+  assert.notEqual(guest, "forged");
+  const cookie = result.headers.get("set-cookie");
+  for (const value of ["__Host-kp-guest=" + guest, "HttpOnly", "Secure", "SameSite=lax"]) assert.ok(cookie.includes(value));
 });

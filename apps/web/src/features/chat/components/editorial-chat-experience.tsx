@@ -1,5 +1,7 @@
 "use client";
 
+import { readPreference, writePreference } from "@/lib/preference-cookie";
+
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatComposer } from "./chat-composer";
@@ -87,7 +89,7 @@ export function EditorialChatExperience() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setIsSidebarExpanded(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) !== "collapsed");
+      setIsSidebarExpanded(readPreference(SIDEBAR_STORAGE_KEY) !== "collapsed");
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -317,7 +319,7 @@ export function EditorialChatExperience() {
       sourcePanel={sourcePanel}
       onSidebarExpandedChange={(expanded) => {
         setIsSidebarExpanded(expanded);
-        window.localStorage.setItem(SIDEBAR_STORAGE_KEY, expanded ? "expanded" : "collapsed");
+        writePreference(SIDEBAR_STORAGE_KEY, expanded ? "expanded" : "collapsed");
       }}
       onMobileSidebarOpenChange={(open) => {
         setIsMobileSidebarOpen(open);
@@ -339,13 +341,17 @@ export function EditorialChatExperience() {
       >
         <div
           ref={conversationScrollRef}
-          className="chat-scroll-region min-h-0 flex-1 overflow-y-auto overscroll-contain px-[clamp(24px,7vw,100px)] pb-[60px] pt-[36px] [scroll-padding-bottom:20px] [scrollbar-gutter:stable] [@media(max-height:680px)]:min-[761px]:pt-5 max-[760px]:px-4 max-[760px]:pb-[50px] max-[760px]:pt-[22px]"
+          className={`chat-scroll-region min-h-0 flex-1 overflow-y-auto overscroll-contain px-[clamp(24px,7vw,100px)] [scroll-padding-bottom:20px] [scrollbar-gutter:stable] max-[760px]:px-4 ${
+            messages.length === 0
+              ? "flex flex-col py-5"
+              : "pb-[60px] pt-[36px] [@media(max-height:680px)]:min-[761px]:pt-5 max-[760px]:pb-[50px] max-[760px]:pt-[22px]"
+          }`}
           aria-label={translate("chat.scrollRegion")}
           tabIndex={0}
           onScroll={handleConversationScroll}
         >
           {messages.length === 0 ? (
-            <div className="mx-auto mt-[clamp(24px,5vh,60px)] flex max-w-[680px] flex-col items-center text-center max-[760px]:mt-[clamp(28px,6vh,48px)]">
+            <div className="mx-auto my-auto flex w-full max-w-[680px] shrink-0 flex-col items-center text-center">
               <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-javanese/20 bg-teal-soft px-4 py-1.5 text-[11px] font-medium tracking-wide text-teal-strong">
                 <span className="size-1.5 rounded-full bg-javanese" />
                 {translate("chat.badge")}
@@ -424,27 +430,26 @@ export function EditorialChatExperience() {
         />
         {messages.length === 0 ? (
           <p className="relative z-[3] mx-auto mb-2 mt-[-6px] max-w-[680px] px-6 text-center text-xs leading-relaxed text-muted-foreground max-[760px]:px-[18px]">
-            KerjaPedia dapat membuat kekeliruan. Periksa selalu sumber resmi. Dengan menggunakan
-            layanan ini, Anda menyetujui{" "}
+            {translate("footer.disclaimer")}{" "}{translate("footer.agreement")}{" "}
             <Link
               href="/legal/terms"
               className="text-inherit underline underline-offset-4 transition-colors hover:text-javanese"
             >
-              Ketentuan
+              {translate("footer.terms")}
             </Link>
             ,{" "}
             <Link
               href="/legal/privacy"
               className="text-inherit underline underline-offset-4 transition-colors hover:text-javanese"
             >
-              Privasi
+              {translate("footer.privacy")}
             </Link>
-            , dan{" "}
+            , {translate("footer.and")}{" "}
             <Link
               href="/legal/disclaimer"
               className="text-inherit underline underline-offset-4 transition-colors hover:text-javanese"
             >
-              Disclaimer
+              {translate("footer.legalDisclaimer")}
             </Link>
             .
           </p>

@@ -51,3 +51,8 @@ npm run lint
 - Token akses Supabase yang sudah diterbitkan dapat tetap valid sampai kedaluwarsa setelah logout; pencabutan sesi bukan denylist token akses.
 
 Sebelum menyatakan siap production: selesaikan regresi UI umum, verifikasi konfigurasi deployment/cookie/origin dan kontrol cloud, lalu tinjau sisa risiko yang dicatat di atas.
+
+
+## Pembaruan penyimpanan setelah review
+
+Implementasi terbaru tidak mengakses localStorage/sessionStorage, termasuk penghapusan token lama. Penyebutan migrasi/penghapusan storage di hasil awal di atas merupakan catatan historis. Tema, bahasa, dan sidebar memakai cookie; pin memakai IndexedDB per akun; ID tamu memakai cookie HttpOnly yang diteruskan oleh BFF. Header ID tamu dari browser diabaikan. Data Web Storage lama tidak dimigrasikan maupun dihapus otomatis. Tes browser terbaru memblokir kedua Web Storage saat memeriksa preferensi, pin, dan sidebar.

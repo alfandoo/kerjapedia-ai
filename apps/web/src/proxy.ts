@@ -23,6 +23,11 @@ export function proxy(request: NextRequest) {
   headers.set("x-nonce", nonce);
   headers.set("Content-Security-Policy", policy);
   const response = NextResponse.next({ request: { headers } });
+  const guestName = development ? "kp-guest" : "__Host-kp-guest";
+  const guest = request.cookies.get(guestName)?.value;
+  if (!guest || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(guest)) {
+    response.cookies.set(guestName, crypto.randomUUID(), { httpOnly: true, secure: !development, sameSite: "lax", path: "/", maxAge: 31536000 });
+  }
   response.headers.set("Content-Security-Policy", policy);
   response.headers.set("Cache-Control", "private, no-store");
   return response;

@@ -44,15 +44,15 @@ const user = { user_id: "mock-admin", email: "admin@example.test", name: "Admin 
     assert.ok(ready);
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext();
+    await context.addInitScript(() => {
+      for (const key of ["localStorage", "sessionStorage"]) Object.defineProperty(window, key, { get() { throw Error("Web Storage forbidden"); } });
+    });
     const page = await context.newPage();
     page.setDefaultTimeout(20000);
     page.setDefaultNavigationTimeout(60000);
     page.on("pageerror", error => console.log("BROWSER ERROR " + error.message));
     await page.route("**/*", route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
     await page.goto(base + "/login-admin");
-    await page.evaluate(() => { localStorage.setItem("kerjapedia-session-v1", JSON.stringify({ access_token: "legacy-secret" })); });
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await page.waitForFunction(() => localStorage.getItem("kerjapedia-session-v1") === null);
     await page.getByRole("button", { name: "Tampilkan kata sandi" }).click();
     await page.getByRole("button", { name: "Sembunyikan kata sandi" }).click();
     await page.getByLabel("Email", { exact: true }).fill(user.email);
@@ -63,12 +63,12 @@ const user = { user_id: "mock-admin", email: "admin@example.test", name: "Admin 
     ]);
     assert.deepEqual(await loginResponse.json(), { user });
     await page.waitForURL("**/admin/dashboard");
-    const cookies = (await context.cookies()).filter(c => c.name.includes("kp-"));
+    const cookies = (await context.cookies()).filter(c => /kp-(access|refresh)$/.test(c.name));
     assert.equal(cookies.length, 2);
     assert.ok(cookies.every(c => c.httpOnly && c.secure && c.sameSite === "Lax"));
-    const visible = await page.evaluate(() => JSON.stringify({ cookies: document.cookie, local: { ...localStorage }, session: { ...sessionStorage } }));
-    assert.ok(!/mock-access|mock-refresh|legacy-secret/.test(visible));
-    console.log("PASS real login form, HttpOnly cookies, no browser-storage tokens, legacy purge");
+    const visible = await page.evaluate(() => document.cookie);
+    assert.ok(!/mock-access|mock-refresh/.test(visible));
+    console.log("PASS real login form, HttpOnly cookies, no browser-storage tokens with Web Storage blocked");
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByText(user.name, { exact: true }).first().waitFor({ state: "visible" });
     console.log("PASS session/profile restored after reload");
@@ -93,7 +93,7 @@ const user = { user_id: "mock-admin", email: "admin@example.test", name: "Admin 
     await page.getByRole("menuitem", { name: "Logout", exact: true }).click();
     await page.waitForURL("**/login-admin");
     assert.equal(revoked, true);
-    assert.equal((await context.cookies()).filter(c => c.name.includes("kp-")).length, 0);
+    assert.equal((await context.cookies()).filter(c => /kp-(access|refresh)$/.test(c.name)).length, 0);
     assert.ok(calls.filter(c => c.path === "/auth/logout").every(c => c.authorization?.startsWith("Bearer mock-access-")));
     assert.ok(calls.every(c => !c.cookie));
     console.log("PASS logout UI revokes backend and deletes cookies");
