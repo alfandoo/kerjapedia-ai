@@ -152,3 +152,20 @@ test("guest identity is generated in an HttpOnly cookie, ignoring forged headers
   const cookie = result.headers.get("set-cookie");
   for (const value of ["__Host-kp-guest=" + guest, "HttpOnly", "Secure", "SameSite=lax"]) assert.ok(cookie.includes(value));
 });
+
+test("profile update uses cookie authentication and returns only profile", async () => {
+  const h = load([json({ ...user, name: "New name", secret: "hidden" })]);
+  const response = await h.run("auth/profile", "PATCH", { cookie }, { name: "New name" });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { user: { ...user, name: "New name" } });
+  assert.equal(h.calls[0].options.headers.get("authorization"), "Bearer access-secret");
+  assert.deepEqual(JSON.parse(h.calls[0].options.body), { name: "New name" });
+  assert.equal(response.headers.get("set-cookie"), null);
+});
+test("profile endpoint rejects guests and privileged profile fields", async () => {
+  const h = load([]);
+  assert.equal((await h.run("auth/profile", "PATCH", {}, { name: "Name" })).status, 401);
+  assert.equal((await h.run("auth/profile", "PATCH", { cookie }, { name: "Name", roles: ["admin"] })).status, 400);
+  assert.equal((await h.run("auth/profile", "PATCH", { cookie, origin: "https://evil.test" }, { name: "Name" })).status, 403);
+  assert.equal(h.calls.length, 0);
+});

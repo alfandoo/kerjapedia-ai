@@ -1,0 +1,5 @@
+.searchPage .searchField input {
+  /* Keep the input and its icon on one surface despite legacy global dark rules. */
+  background-color: transparent !important;
+  color: var(--foreground);
+}

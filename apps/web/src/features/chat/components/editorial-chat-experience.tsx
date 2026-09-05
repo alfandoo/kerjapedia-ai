@@ -11,7 +11,7 @@ import { ConversationThread } from "./conversation-thread";
 import { AlertTriangle } from "lucide-react";
 import { SourcePanel } from "./source-panel";
 import { SourceSheet } from "./source-sheet";
-import { useStoredSession } from "@/features/auth";
+import { useConversationHistory } from "@/features/chat/use-conversation-history";
 import { useSettings } from "@/features/settings";
 import {
   askQuestionStream,
@@ -21,7 +21,7 @@ import {
   renameConversation,
   submitFeedback,
 } from "@/features/chat/api";
-import type { AnswerPayload, Citation, ConversationSummary } from "@/features/chat/types";
+import type { AnswerPayload, Citation } from "@/features/chat/types";
 import type { TranslationKey } from "@/lib/translations";
 
 const SIDEBAR_STORAGE_KEY = "kerjapedia.chat.sidebar.v1";
@@ -38,16 +38,14 @@ const STREAM_STATUS_KEYS: Record<string, TranslationKey> = {
 };
 
 export function EditorialChatExperience() {
-  const session = useStoredSession();
+  const { conversations, setConversations, historyLoading, historyError, retryHistory, setHistoryLoading } = useConversationHistory();
   const { t: translate } = useSettings();
   const [question, setQuestion] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [citations, setCitations] = useState<Citation[]>([]);
   const [citationQuestion, setCitationQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(true);
   const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
   const [isSourceDrawerOpen, setIsSourceDrawerOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -68,24 +66,9 @@ export function EditorialChatExperience() {
   }, []);
   const refreshHistory = useCallback(async (signal?: AbortSignal) => {
     setConversations(await fetchConversations(signal));
-  }, []);
+  }, [setConversations]);
 
-  useEffect(() => {
-    if (!session) return;
-    const controller = new AbortController();
-    async function loadHistory() {
-      try {
-        const nextConversations = await fetchConversations(controller.signal);
-        setConversations(nextConversations);
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") setError("Riwayat belum dapat dimuat.");
-      } finally {
-        setHistoryLoading(false);
-      }
-    }
-    void loadHistory();
-    return () => controller.abort();
-  }, [session]);
+
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -313,6 +296,8 @@ export function EditorialChatExperience() {
       conversations={conversations}
       activeConversationId={conversationId}
       historyLoading={historyLoading}
+      historyError={historyError}
+      onRetryHistory={retryHistory}
       sidebarExpanded={isSidebarExpanded}
       mobileSidebarOpen={isMobileSidebarOpen}
       sourceDrawerOpen={isSourceDrawerOpen}

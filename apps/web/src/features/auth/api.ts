@@ -1,6 +1,6 @@
 import { API_URL, parseJsonResponse } from "@/lib/api-client";
 import type { UserSession } from "./types";
-import { clearStoredSession, setStoredSession, loadStoredSession } from "./session";
+import { clearStoredSession, getStoredSession, setStoredSession, loadStoredSession } from "./session";
 
 let refreshInFlight: Promise<UserSession | null> | null = null;
 const csrfHeaders = { "Content-Type": "application/json", "X-KerjaPedia-CSRF": "1" };
@@ -59,3 +59,14 @@ export async function signOut(): Promise<void> {
   clearStoredSession();
 }
 export { clearStoredSession, getStoredSession } from "./session";
+
+export async function updateProfile(name: string): Promise<void> {
+  const owner = getStoredSession()?.user.user_id;
+  if (!owner) throw new Error("No active session");
+  const response = await fetchWithAuthRetry(`${API_URL}/auth/profile`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+  });
+  const next = await parseJsonResponse<UserSession>(response);
+  if (getStoredSession()?.user.user_id !== owner) throw new Error("Session changed");
+  setStoredSession(next);
+}

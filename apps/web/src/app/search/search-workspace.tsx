@@ -6,36 +6,19 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { RegulationSearch } from "@/features/documents";
-import { deleteConversation, fetchConversations, renameConversation } from "@/features/chat/api";
+import { deleteConversation, renameConversation } from "@/features/chat/api";
 import { ChatWorkspaceShell } from "@/features/chat/components/chat-workspace-shell";
-import type { ConversationSummary } from "@/features/chat/types";
-import { useStoredSession } from "@/features/auth";
+import { useConversationHistory } from "@/features/chat/use-conversation-history";
 
 const SIDEBAR_STORAGE_KEY = "kerjapedia.chat.sidebar.v1";
 
 export function SearchWorkspace() {
   const router = useRouter();
-  const session = useStoredSession();
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
+  const { conversations, setConversations, historyLoading, historyError, retryHistory } = useConversationHistory();
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    if (!session) return;
-    const controller = new AbortController();
-    async function loadHistory() {
-      try {
-        setConversations(await fetchConversations(controller.signal));
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") setConversations([]);
-      } finally {
-        setHistoryLoading(false);
-      }
-    }
-    void loadHistory();
-    return () => controller.abort();
-  }, [session]);
+
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -66,6 +49,8 @@ export function SearchWorkspace() {
       conversations={conversations}
       activeConversationId={null}
       historyLoading={historyLoading}
+      historyError={historyError}
+      onRetryHistory={retryHistory}
       sidebarExpanded={isSidebarExpanded}
       mobileSidebarOpen={isMobileSidebarOpen}
       sourceDrawerOpen={false}

@@ -26,6 +26,11 @@ class RegisterRequest(ApiModel):
     password: str = Field(min_length=8, max_length=256)
 
 
+class ProfileUpdateRequest(ApiModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=1, max_length=80)
+
+
 class UserResponse(ApiModel):
     user_id: str
     email: str

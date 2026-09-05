@@ -3,10 +3,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Header, HTTPException, status
 from supabase_auth.errors import AuthApiError
 
-from app.api.dependencies import CurrentUser, _extract_bearer_token
+from app.api.dependencies import CurrentUser, DbSession, _extract_bearer_token
 from app.api.schemas import (
     LoginRequest,
     LoginResponse,
+    ProfileUpdateRequest,
     RefreshRequest,
     RegisterRequest,
     UserResponse,
@@ -237,3 +238,25 @@ def logout(authorization: str | None = Header(default=None)) -> dict[str, str]:
 @router.get("/me", response_model=UserResponse)
 def current_user(user: CurrentUser) -> UserResponse:
     return to_user_response(user)
+
+
+@router.patch("/profile", response_model=UserResponse)
+def update_profile(payload: ProfileUpdateRequest, user: CurrentUser, session: DbSession):
+    try:
+        # The authenticated ID is the only target; never accept roles/email/ID from JSON.
+        supabase_service.get_supabase().auth.admin.update_user_by_id(
+            user.user_id, {"user_metadata": {"name": payload.name}}
+        )
+        profile = session.get(UserProfile, user.user_id)
+        if profile is None:
+            profile = UserProfile(
+                user_id=user.user_id, email=user.email, name=payload.name, roles=user.roles
+            )
+            session.add(profile)
+        else:
+            profile.name = payload.name
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        raise HTTPException(status_code=503, detail="Profil belum dapat disimpan.") from exc
+    return UserResponse(user_id=user.user_id, email=user.email, name=payload.name, roles=user.roles)

@@ -1,6 +1,6 @@
 "use client";
 
-import { accountPins } from "../pinned-store";
+import { accountPins, cachedAccountPins } from "../pinned-store";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -13,6 +13,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { ProfileModal } from "@/features/auth/components/profile-modal";
 import { AuthModal, signOut } from "@/features/auth";
 import { toast } from "sonner";
 import {
@@ -43,6 +44,8 @@ type ChatWorkspaceShellProps = {
   conversations: ConversationSummary[];
   activeConversationId: string | null;
   historyLoading: boolean;
+  historyError?: boolean;
+  onRetryHistory?: () => void;
   sidebarExpanded: boolean;
   mobileSidebarOpen: boolean;
   sourceDrawerOpen: boolean;
@@ -112,6 +115,8 @@ export function ChatWorkspaceShell({
   conversations,
   activeConversationId,
   historyLoading,
+  historyError = false,
+  onRetryHistory,
   sidebarExpanded,
   mobileSidebarOpen,
   sourceDrawerOpen,
@@ -143,11 +148,16 @@ export function ChatWorkspaceShell({
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const pinOwner = session?.user.user_id ?? null;
-  const [pinState, setPinState] = useState<{ owner: string; ids: string[] } | null>(null);
+  const [pinState, setPinState] = useState<{ owner: string; ids: string[] } | null>(() => {
+    const ids = pinOwner ? cachedAccountPins(pinOwner) : undefined;
+    return pinOwner && ids ? { owner: pinOwner, ids } : null;
+  });
+  const pinsReady = !pinOwner || pinState?.owner === pinOwner;
   const pinnedConversationIds = pinState?.owner === pinOwner ? pinState?.ids ?? [] : [];
   const pinRevision = useRef(0);
   const pinLifetime = useRef<{ active: boolean } | null>(null);
@@ -465,7 +475,7 @@ export function ChatWorkspaceShell({
                   }`}
                 />
               </button>
-              {pinnedExpanded && pinnedConversations.length > 0 ? (
+              {pinsReady && pinnedExpanded && pinnedConversations.length > 0 ? (
                 <div id="pinned-history" className="-mt-1">
                   <ConversationHistory
                     conversations={pinnedConversations}
@@ -507,7 +517,9 @@ export function ChatWorkspaceShell({
             <ConversationHistory
               conversations={chatConversations}
               activeConversationId={activeConversationId}
-              loading={historyLoading}
+              loading={historyLoading || !pinsReady}
+              error={historyError}
+              onRetry={onRetryHistory}
               onConversationSelect={(id) => {
                 onConversationSelect(id);
                 onMobileSidebarOpenChange(false);
@@ -526,6 +538,7 @@ export function ChatWorkspaceShell({
               compact
               pinnedConversationIds={pinnedConversationIds}
               onTogglePinned={togglePinned}
+              showEmptyState={conversations.length === 0 || Boolean(chatSearchQuery.trim())}
               emptyMessage={
                 chatSearchQuery.trim()
                   ? `${translate("sidebar.noSearchResults")} “${chatSearchQuery.trim()}”`
@@ -662,22 +675,14 @@ export function ChatWorkspaceShell({
           role="menuitem"
           className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
           onClick={() => {
-            onSidebarExpandedChange(true);
             setProfileMenuOpen(false);
+            onMobileSidebarOpenChange(false);
+            setProfileOpen(true);
           }}
         >
           <User className="size-[18px]" />
-          <span>Profil &amp; riwayat</span>
+          <span>{translate("profile.title")}</span>
         </button>
-        <Link
-          href="/search"
-          role="menuitem"
-          className="flex min-h-[38px] items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent"
-          onClick={() => setProfileMenuOpen(false)}
-        >
-          <Search className="size-[18px]" />
-          <span>{translate("sidebar.searchRegulations")}</span>
-        </Link>
         <Link
           href="/legal/disclaimer"
           role="menuitem"
@@ -933,6 +938,7 @@ export function ChatWorkspaceShell({
           onNewConversation();
         }}
       />
+      {profileOpen && session ? <ProfileModal key={session.user.user_id} user={session.user} onClose={() => setProfileOpen(false)} onReturnFocus={() => profileTriggerRef.current?.focus()} /> : null}
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );

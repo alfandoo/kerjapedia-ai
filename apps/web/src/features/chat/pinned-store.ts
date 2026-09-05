@@ -1,5 +1,8 @@
 // Pins are scoped to an account and never sent with HTTP requests.
 const fallback = new Map<string, string[]>();
+export function cachedAccountPins(owner: string): string[] | undefined {
+  return fallback.get(owner);
+}
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("kerjapedia-preferences", 1);

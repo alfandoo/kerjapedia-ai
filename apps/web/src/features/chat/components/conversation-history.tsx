@@ -23,6 +23,8 @@ type ConversationHistoryProps = {
   conversations: ConversationSummary[];
   activeConversationId?: string | null;
   loading?: boolean;
+  error?: boolean;
+  onRetry?: () => void;
   onConversationSelect?: (conversationId: string) => void;
   onNewConversation?: () => void;
   onConversationRename?: (conversationId: string, title: string) => Promise<void>;
@@ -30,6 +32,7 @@ type ConversationHistoryProps = {
   historyEnabled?: boolean;
   showNewConversation?: boolean;
   emptyMessage?: string;
+  showEmptyState?: boolean;
   mobileVisible?: boolean;
   embedded?: boolean;
   showTitle?: boolean;
@@ -95,6 +98,8 @@ export function ConversationHistory({
   conversations,
   activeConversationId,
   loading = false,
+  error = false,
+  onRetry,
   onConversationSelect,
   onNewConversation,
   onConversationRename,
@@ -102,6 +107,7 @@ export function ConversationHistory({
   historyEnabled = true,
   showNewConversation = true,
   emptyMessage,
+  showEmptyState = true,
   mobileVisible = false,
   embedded = false,
   showTitle = true,
@@ -192,6 +198,12 @@ export function ConversationHistory({
         )}
         aria-busy={historyEnabled && loading}
       >
+        {error && historyEnabled ? (
+          <div className="px-3 py-3 text-xs text-muted-foreground" role="status">
+            <p>{translate("sidebar.historyError")}</p>
+            {onRetry ? <button type="button" onClick={onRetry} className="mt-2 text-sidebar-foreground underline underline-offset-4">{translate("sidebar.retryHistory")}</button> : null}
+          </div>
+        ) : null}
         {loading && historyEnabled ? (
           <div className="flex flex-col gap-2 px-0.5 py-1" role="status">
             <span className="sr-only">{translate("sidebar.loadingHistory")}</span>
@@ -202,7 +214,7 @@ export function ConversationHistory({
           </div>
         ) : null}
 
-        {!loading && historyEnabled && conversations.length === 0 ? (
+        {!loading && !error && historyEnabled && showEmptyState && conversations.length === 0 ? (
           <div className="flex min-h-36 flex-col items-center justify-center gap-2 px-5 text-center">
             <span className="grid size-8 place-items-center rounded-full bg-sidebar-accent text-muted-foreground">
               <MessageSquare className="size-4" aria-hidden="true" />

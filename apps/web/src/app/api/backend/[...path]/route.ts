@@ -12,7 +12,7 @@ const GUEST = production ? "__Host-kp-guest" : "kp-guest";
 const REFRESH = production ? "__Host-kp-refresh" : "kp-refresh";
 const cookieOptions = { httpOnly: true, secure: production, sameSite: "lax" as const, path: "/", maxAge: COOKIE_AGE };
 const roots = new Set(["auth", "admin", "chat", "documents", "feedback", "ingestion", "evaluation"]);
-const authMethods: Record<string, string> = { login: "POST", register: "POST", refresh: "POST", logout: "POST", session: "GET", me: "GET" };
+const authMethods: Record<string, string> = { login: "POST", register: "POST", refresh: "POST", logout: "POST", session: "GET", me: "GET", profile: "PATCH" };
 
 type Context = { params: Promise<{ path: string[] }> };
 function json(body: unknown, status = 200) {
@@ -64,7 +64,7 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
   const access = request.cookies.get(ACCESS)?.value;
   const refresh = request.cookies.get(REFRESH)?.value;
   if (auth && action === "refresh" && !refresh) return clearCookies(json({ detail: "Session expired." }, 401));
-  if (auth && ["session", "me"].includes(action) && !access) return json({ detail: "No active session." }, 401);
+  if (auth && ["session", "me", "profile"].includes(action) && !access) return json({ detail: "No active session." }, 401);
   if (auth && action === "logout" && !access) {
     // A refresh cookie may still be valid: let the client refresh then revoke.
     return refresh ? json({ detail: "Session refresh required." }, 401) : clearCookies(json({ status: "ok" }));
@@ -93,6 +93,11 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
       const input = await smallJson(request);
       body = JSON.stringify(action === "register" ? { name: input.name, email: input.email, password: input.password } : { email: input.email, password: input.password });
       headers.set("content-type", "application/json");
+    } else if (auth && action === "profile") {
+      const input = await smallJson(request);
+      if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => key !== "name")) return json({ detail: "Invalid profile fields." }, 400);
+      body = JSON.stringify({ name: input.name });
+      headers.set("content-type", "application/json");
     } else if (auth && action === "refresh") {
       body = JSON.stringify({ refresh_token: refresh });
       headers.set("content-type", "application/json");
@@ -119,7 +124,7 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
       }
       if (action === "logout") return clearCookies(json({ status: "ok" }));
       const result = await upstream.json();
-      if (["session", "me"].includes(action)) {
+      if (["session", "me", "profile"].includes(action)) {
         const user = publicUser(result);
         return user ? json({ user }) : json({ detail: "Invalid session response." }, 502);
       }
