@@ -1,5 +1,7 @@
 "use client";
 
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
+import styles from "@/features/admin/components/admin-access.module.css";
 import { ScaleIcon } from "@/components/icons";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -37,78 +39,77 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_50%_0,#f4fbfa_0,#fff_32rem)] p-6">
-      <div className="w-full max-w-[400px] rounded-2xl border border-[#e5e5e5] bg-white p-[44px_36px_36px] shadow-[0_16px_40px_rgba(21,32,31,0.08)]">
-        <div className="mb-7 flex items-center gap-2.5">
-          <ScaleIcon className="size-[30px] [stroke-width:2] text-javanese" />
-          <span className="text-xl font-bold text-tinta">KerjaPedia AI</span>
+    <main className={`${styles.screen} ${styles.loginScreen}`}>
+      <div className={styles.content}>
+        <div className={styles.brand}>
+          <ScaleIcon className="size-5" aria-hidden="true" />
+          <span>KerjaPedia AI</span>
         </div>
-        <div className="mb-5 inline-flex items-center gap-1.5 rounded-lg bg-[linear-gradient(135deg,#dff4f1,#e8f7f5)] px-3 py-[5px] text-[11px] font-bold tracking-[0.04em] text-forest before:size-1.5 before:rounded-full before:bg-javanese before:content-['']">
-          Admin
-        </div>
-        <h1 className="mb-2 font-display text-2xl font-semibold text-javanese">Masuk</h1>
-        <p className="mb-7 text-sm leading-relaxed text-muted-text">
-          Masuk dengan akun admin untuk mengelola knowledge base.
-        </p>
-        <form className="grid gap-1.5" onSubmit={handleSubmit}>
-          <label
-            htmlFor="email"
-            className="mt-1 text-[13px] font-bold text-muted-text first:mt-0"
-          >
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            className="h-[46px] w-full rounded-[10px] border border-[#e5e5e5] bg-[#f7f7f8] px-3.5 text-sm text-tinta outline-none transition focus:border-javanese focus:ring-2 focus:ring-javanese/10"
-          />
-          <label
-            htmlFor="password"
-            className="mt-1 text-[13px] font-bold text-muted-text first:mt-0"
-          >
-            Password
-          </label>
-          <div className="relative">
-            <input
-              id="password"
-              type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="h-[46px] w-full rounded-[10px] border border-[#e5e5e5] bg-[#f7f7f8] px-3.5 pr-11 text-sm text-tinta outline-none transition focus:border-javanese focus:ring-2 focus:ring-javanese/10"
-            />
-            <button
-              type="button"
-              className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-tinta transition hover:opacity-70"
-              aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
-              onClick={() => setShowPassword((prev) => !prev)}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                className="size-[18px] fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:1.8]"
-              >
-                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
-                <circle cx="12" cy="12" r="2.8" />
-                {showPassword ? <path d="m4 4 16 16" /> : null}
-              </svg>
+        <div className={styles.panel}>
+          <p className={styles.eyebrow}>Konsol admin</p>
+          <h1 className={styles.title}>Masuk sebagai admin</h1>
+          <p className={styles.description}>
+            Gunakan akun admin untuk mengelola dokumen dan pengaturan KerjaPedia AI.
+          </p>
+          <form className={styles.form} onSubmit={handleSubmit} aria-busy={loading}>
+            <div className={styles.field}>
+              <label htmlFor="email">Email</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                required
+                disabled={loading}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className={styles.input}
+              />
+            </div>
+            <div className={styles.field}>
+              <label htmlFor="password">Kata sandi</label>
+              <div className={styles.passwordField}>
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  disabled={loading}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className={styles.input}
+                />
+                <button
+                  type="button"
+                  className={styles.reveal}
+                  aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+                  aria-pressed={showPassword}
+                  aria-controls="password"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} aria-hidden="true" />
+                  ) : (
+                    <Eye size={18} aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+            </div>
+            {status ? (
+              <p role="alert" className={styles.error}>
+                {status}
+              </p>
+            ) : null}
+            <button className={styles.primary} type="submit" disabled={loading}>
+              <span role="status">{loading ? "Memeriksa akun..." : "Masuk"}</span>
+              {!loading ? <ArrowRight size={18} aria-hidden="true" /> : null}
             </button>
-          </div>
-          <button
-            className="mt-5 h-[46px] w-full rounded-[10px] bg-javanese px-5 text-sm font-semibold text-white transition hover:bg-forest disabled:pointer-events-none disabled:opacity-60"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? "Memeriksa..." : "Masuk"}
-          </button>
-          {status ? <p className="mt-3 text-center text-[13px] text-red">{status}</p> : null}
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

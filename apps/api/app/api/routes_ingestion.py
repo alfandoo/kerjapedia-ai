@@ -408,7 +408,10 @@ def _job_payload(
         else None
     )
     stored = job.artifact_paths or {}
-    chunk_count = int(stored.get("chunk_count") or 0)
+    quality_report = (build.quality_report or {}) if build else {}
+    chunk_count = quality_report.get("chunks", {}).get("count")
+    if chunk_count is None:
+        chunk_count = stored.get("chunk_count")
     return {
         "job_id": job.job_id,
         "build_id": job.build_id,
@@ -420,7 +423,7 @@ def _job_payload(
         "avg_duration_seconds": avg_duration,
         "warnings": job.warnings,
         "result": {
-            "chunk_count": chunk_count,
+            **({"chunk_count": int(chunk_count)} if chunk_count is not None else {}),
             "warnings": job.warnings or [],
         },
         "error": next(

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
+  ArrowRight,
+  ShieldCheck,
   ChevronLeft,
   Database,
   FileUp,
@@ -25,6 +27,8 @@ import { ScaleIcon } from "@/components/icons";
 import { useStoredSession } from "@/features/auth";
 import { signOut } from "@/features/admin/api";
 import { cn } from "@/lib/utils";
+import accessStyles from "./admin-access.module.css";
+import sidebarStyles from "./admin-sidebar.module.css";
 
 type AdminShellProps = { children: ReactNode };
 
@@ -54,7 +58,10 @@ const adminNavGroups: {
   },
 ];
 
-const allNavItems = adminNavGroups.flatMap((group) => group.items);
+const allNavItems = [
+  ...adminNavGroups.flatMap((group) => group.items),
+  { href: "/admin/settings", label: "Pengaturan", icon: Settings },
+];
 
 function useIsClient() {
   return useSyncExternalStore(
@@ -114,36 +121,37 @@ export function AdminShell({ children }: AdminShellProps) {
 
   if (!session || !session.user.roles.includes("admin")) {
     return (
-      <div className="admin-theme flex min-h-[100svh] items-center justify-center bg-arsip px-4">
-        <div className="w-full max-w-md rounded-2xl border border-line bg-white p-10 text-center shadow-[0_16px_40px_rgba(27,67,50,0.08)]">
-          <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-javanese text-emas">
-            <ScaleIcon className="size-7" />
-          </span>
-          <h1 className="mt-6 font-display text-2xl font-semibold text-javanese">
-            Akses admin diperlukan
-          </h1>
-          <p className="mt-3 text-sm leading-relaxed text-muted-text">
-            Masuk dengan akun yang memiliki role admin untuk mengelola knowledge base.
-          </p>
-          <Link
-            href="/login-admin"
-            className="mt-7 inline-flex h-11 items-center justify-center rounded-xl bg-javanese px-6 text-sm font-semibold text-white transition hover:bg-forest"
-          >
-            Login sebagai admin
-          </Link>
-          <Link
-            href="/chat"
-            className="mt-4 block text-sm font-semibold text-forest transition hover:text-emas"
-          >
-            Kembali ke Chat
-          </Link>
+      <main className={accessStyles.screen}>
+        <div className={accessStyles.content}>
+          <div className={accessStyles.brand}>
+            <ScaleIcon className="size-5" aria-hidden="true" />
+            <span>KerjaPedia AI</span>
+          </div>
+          <div className={accessStyles.panel}>
+            <div className={accessStyles.icon}>
+              <ShieldCheck size={28} aria-hidden="true" />
+            </div>
+            <p className={accessStyles.eyebrow}>Konsol admin</p>
+            <h1 className={accessStyles.title}>Akses admin diperlukan</h1>
+            <p className={accessStyles.description}>
+              {session
+                ? "Akun Anda belum memiliki akses admin. Masuk dengan akun admin untuk mengelola dokumen dan pengaturan KerjaPedia AI."
+                : "Masuk dengan akun admin untuk mengelola dokumen dan pengaturan KerjaPedia AI."}
+            </p>
+            <Link href="/login-admin" className={accessStyles.primary}>
+              <span>Masuk sebagai admin</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   const isActive = (href: string) =>
-    href === "/documents" ? pathname === "/documents" : pathname.startsWith(href);
+    href === "/documents"
+      ? pathname === "/documents"
+      : pathname === href || pathname.startsWith(`${href}/`);
   const currentSection =
     [...allNavItems].reverse().find((item) => isActive(item.href))?.label ?? "Admin";
 
@@ -167,28 +175,28 @@ export function AdminShell({ children }: AdminShellProps) {
       ) : null}
 
       <aside
+        id="admin-sidebar"
         aria-label="Navigasi admin"
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[264px] shrink-0 flex-col bg-javanese transition-transform duration-200 motion-reduce:transition-none lg:sticky lg:top-0 lg:h-[100svh] lg:self-start lg:bottom-auto lg:translate-x-0",
+          sidebarStyles.sidebar,
+          "fixed inset-y-0 left-0 z-50 flex w-[264px] shrink-0 flex-col transition-transform duration-200 motion-reduce:transition-none lg:h-[100dvh] lg:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           sidebarCollapsed ? "lg:w-[76px]" : "lg:w-[248px]"
         )}
       >
-        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-white/10 px-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-emas">
+        <div className="flex h-[76px] shrink-0 items-center gap-2 px-4">
+          <span className={sidebarStyles.brandIcon}>
             <ScaleIcon className="size-5" />
           </span>
           <div className={cn("min-w-0 leading-tight", sidebarCollapsed ? "lg:hidden" : "flex-1")}>
-            <p className="truncate font-display text-base font-semibold tracking-wide text-white">
+            <p className="truncate font-display text-base font-semibold text-white">
               KerjaPedia AI
             </p>
-            <p className="font-mono text-[10px] tracking-[0.22em] text-emas/90 uppercase">
-              Konsol admin
-            </p>
+            <p className={sidebarStyles.brandCaption}>Konsol admin</p>
           </div>
           <button
             type="button"
-            className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white lg:hidden"
+            className={`${sidebarStyles.toggle} ml-auto flex lg:hidden`}
             aria-label="Tutup menu"
             onClick={() => setMobileOpen(false)}
           >
@@ -197,10 +205,13 @@ export function AdminShell({ children }: AdminShellProps) {
           <button
             type="button"
             className={cn(
-              "ml-auto hidden size-8 shrink-0 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white lg:flex",
+              sidebarStyles.toggle,
+              "ml-auto hidden lg:flex",
               sidebarCollapsed && "lg:hidden"
             )}
             aria-label="Ciutkan sidebar"
+            aria-controls="admin-sidebar"
+            aria-expanded={true}
             onClick={() => toggleCollapsed(true)}
           >
             <PanelLeftClose className="size-4" />
@@ -208,17 +219,12 @@ export function AdminShell({ children }: AdminShellProps) {
         </div>
 
         <nav
-          className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4"
+          className={`${sidebarStyles.navigation} flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 pt-4 pb-6`}
           aria-label="Menu admin"
         >
           {adminNavGroups.map((group) => (
             <div key={group.label} className="space-y-1">
-              <p
-                className={cn(
-                  "px-3 pb-1 font-mono text-[10px] font-semibold tracking-[0.2em] text-white/35 uppercase",
-                  sidebarCollapsed && "lg:hidden"
-                )}
-              >
+              <p className={cn(sidebarStyles.groupLabel, sidebarCollapsed && "lg:hidden")}>
                 {group.label}
               </p>
               {group.items.map((item) => {
@@ -229,28 +235,16 @@ export function AdminShell({ children }: AdminShellProps) {
                     href={item.href}
                     key={item.href}
                     aria-current={active ? "page" : undefined}
+                    aria-label={item.label}
                     title={sidebarCollapsed ? item.label : undefined}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
-                      "relative flex h-11 items-center gap-3 rounded-lg px-3 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emas",
+                      sidebarStyles.item,
                       sidebarCollapsed && "lg:justify-center lg:px-0",
-                      active
-                        ? "bg-white/10 font-semibold text-white"
-                        : "text-white/60 hover:bg-white/[0.06] hover:text-white"
+                      active && sidebarStyles.active
                     )}
                   >
-                    {active ? (
-                      <span
-                        aria-hidden="true"
-                        className="absolute inset-y-[9px] left-0 w-[3px] rounded-r-full bg-emas"
-                      />
-                    ) : null}
-                    <Icon
-                      className={cn(
-                        "size-5 shrink-0 transition-colors",
-                        active ? "text-emas" : "text-current"
-                      )}
-                    />
+                    <Icon className="size-[19px] shrink-0" aria-hidden="true" />
                     <span className={cn("truncate", sidebarCollapsed && "lg:hidden")}>
                       {item.label}
                     </span>
@@ -262,7 +256,12 @@ export function AdminShell({ children }: AdminShellProps) {
         </nav>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col bg-arsip">
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 flex-col bg-arsip",
+          sidebarCollapsed ? "lg:pl-[76px]" : "lg:pl-[248px]"
+        )}
+      >
         <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-line bg-white px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <button

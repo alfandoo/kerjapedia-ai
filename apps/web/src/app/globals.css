@@ -147,48 +147,48 @@
 
 .dark {
   color-scheme: dark;
-  --background: #0d0d0d;
-  --foreground: #ececec;
-  --card: #171717;
-  --card-foreground: #ececec;
-  --popover: #212121;
-  --popover-foreground: #ececec;
-  --primary: #ececec;
-  --primary-foreground: #171717;
-  --secondary: #212121;
-  --secondary-foreground: #ececec;
-  --muted: #212121;
-  --muted-foreground: #b4b4b4;
-  --accent: #2f2f2f;
-  --accent-foreground: #f4f4f4;
+  --background: #000000;
+  --foreground: #f2f2f2;
+  --card: #0a0a0a;
+  --card-foreground: #f2f2f2;
+  --popover: #0a0a0a;
+  --popover-foreground: #f2f2f2;
+  --primary: #f2f2f2;
+  --primary-foreground: #0a0a0a;
+  --secondary: #0f0f0f;
+  --secondary-foreground: #f2f2f2;
+  --muted: #0f0f0f;
+  --muted-foreground: #a9a9a9;
+  --accent: #161616;
+  --accent-foreground: #f5f5f5;
   --destructive: #ff7b72;
-  --border: #303030;
-  --input: #3a3a3a;
+  --border: #1f1f1f;
+  --input: #262626;
   --ring: #8f8f8f;
-  --muted-text: #b4b4b4;
-  --line: #303030;
-  --surface: #171717;
-  --surface-soft: #212121;
-  --teal: #68bfae;
-  --teal-strong: #88d2c4;
-  --teal-soft: #17332f;
+  --muted-text: #a9a9a9;
+  --line: #1f1f1f;
+  --surface: #0a0a0a;
+  --surface-soft: #0f0f0f;
+  --teal: #82d0c0;
+  --teal-strong: #9adcca;
+  --teal-soft: #14332e;
   --amber: #e5b85c;
-  --amber-soft: #3b2e16;
+  --amber-soft: #33270f;
   --red: #ff8a82;
-  --red-soft: #3c211f;
-  --blue-soft: #1d2938;
-  --shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
-  --javanese-green: #75b992;
-  --javanese-deep: #a8d2b9;
-  --teal-forest: #63a982;
+  --red-soft: #331c1b;
+  --blue-soft: #152230;
+  --shadow: 0 18px 48px rgba(0, 0, 0, 0.6);
+  --javanese-green: #7cbf9d;
+  --javanese-deep: #aad8c0;
+  --teal-forest: #6fae8c;
   --emas-keraton: #d8b85b;
-  --kertas-arsip: #0d0d0d;
-  --tinta-pena: #ececec;
+  --kertas-arsip: #000000;
+  --tinta-pena: #f2f2f2;
   --sidebar: #000000;
-  --sidebar-foreground: #ececec;
-  --sidebar-accent: #212121;
-  --sidebar-accent-foreground: #ececec;
-  --sidebar-border: #292929;
+  --sidebar-foreground: #f2f2f2;
+  --sidebar-accent: #121212;
+  --sidebar-accent-foreground: #f2f2f2;
+  --sidebar-border: #1a1a1a;
   --sidebar-ring: #8f8f8f;
 }
 
@@ -345,7 +345,7 @@
 }
 
 .dark .disabled\:bg-\[\#c9d3cb\]:disabled {
-  background-color: #252525 !important;
+  background-color: #1a1a1a !important;
 }
 
 /* Application frame and sidebars */
@@ -465,20 +465,20 @@
 }
 
 .dark .user-message-bubble {
-  background-color: #2f2f2f !important;
-  border-color: #424242 !important;
-  color: #ececec !important;
+  background-color: #161616 !important;
+  border-color: #2a2a2a !important;
+  color: #f2f2f2 !important;
 }
 
 .dark .chat-composer-surface {
   background-color: var(--surface-soft) !important;
-  border-color: #424242 !important;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02) !important;
+  border-color: #2a2a2a !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03) !important;
 }
 
 .dark .chat-composer-surface:focus-within {
-  border-color: #565656 !important;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+  border-color: #3a3a3a !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
 }
 
 .dark .chat-composer-surface textarea {
@@ -912,4 +912,29 @@
   .chat-auth-button {
     transition: none;
   }
+}
+
+/* Legal documents share a continuous reading surface in dark mode. */
+.dark .legal-page {
+  background-color: var(--card);
+}
+.dark .legal-page main > header {
+  background-color: transparent !important;
+  border-color: var(--border) !important;
+}
+.dark .legal-page .legal-topbar {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+}
+.dark .legal-page .legal-notice {
+  background-color: var(--teal-soft) !important;
+  border-color: #345749 !important;
+  color: var(--foreground);
+}
+.dark .legal-page .legal-back-link {
+  color: var(--javanese-deep);
+}
+.dark .legal-page .legal-back-link:hover {
+  background-color: var(--teal-soft);
+  border-color: var(--javanese-green) !important;
 }

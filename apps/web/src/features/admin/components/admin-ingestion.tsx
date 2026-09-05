@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
+import styles from "./admin-ingestion.module.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
-  Clock,
   Database,
   FileSearch,
   RefreshCw,
@@ -13,11 +14,26 @@ import {
 import { Toaster, toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Callout, EmptyState, PageHeader, StatusBadge } from "./primitives";
 import { cn } from "@/lib/utils";
-import { createIngestionJob, fetchIngestionJob, fetchIngestionJobs } from "@/features/admin/api";
+import { createIngestionJob, fetchIngestionJobs } from "@/features/admin/api";
 import type { IngestionJob } from "@/features/admin/types";
 
 const jobLabels: Record<IngestionJob["status"], string> = {
@@ -37,14 +53,6 @@ const jobTones: Record<
   failed: "danger",
   running: "info",
   queued: "neutral",
-};
-
-const statusBorder: Record<IngestionJob["status"], string> = {
-  completed: "border-l-forest",
-  needs_review: "border-l-amber",
-  failed: "border-l-red",
-  running: "border-l-javanese",
-  queued: "border-l-muted-text/30",
 };
 
 function safeDate(value: string) {
@@ -79,6 +87,7 @@ function relativeTime(value: string) {
 
 function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null || seconds <= 0) return "—";
+  if (seconds < 60) return "Kurang dari 1 menit";
   const mins = Math.round(seconds / 60);
   if (mins < 60) return `${mins} menit`;
   const hours = Math.floor(mins / 60);
@@ -93,11 +102,6 @@ function ProgressEta({ job }: { job: IngestionJob }) {
   const isActive = job.status === "running" || job.status === "queued";
   if (!isActive) return null;
 
-  const pct =
-    elapsed != null && avg != null && avg > 0
-      ? Math.min(99, Math.round((elapsed / avg) * 100))
-      : null;
-
   return (
     <div className="space-y-1.5 rounded-lg border border-line bg-surface-soft/60 px-3 py-2.5">
       <div className="flex items-center justify-between gap-2">
@@ -110,19 +114,14 @@ function ProgressEta({ job }: { job: IngestionJob }) {
           </span>
         ) : null}
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted/40">
-        <div
-          className={cn(
-            "h-full rounded-full transition-all",
-            job.status === "running" ? "bg-javanese" : "bg-muted-text/40"
-          )}
-          style={{ width: pct != null ? `${pct}%` : "8%" }}
-        />
-      </div>
       <p className="text-[11px] text-muted-text">
-        {avg != null
-          ? `Perkiraan selesai ${formatDuration(avg - (elapsed ?? 0))} lagi`
-          : "Sedang mengukur durasi berdasarkan rancangan rata-rata pekerjaan yang selesai"}
+        {job.status === "queued"
+          ? "Pemrosesan akan dimulai setelah antrean tersedia."
+          : avg != null && avg > 0 && elapsed != null
+            ? elapsed < avg
+              ? `Estimasi sisa waktu ${formatDuration(avg - elapsed)}. Durasi dapat berubah.`
+              : "Proses lebih lama dari rata-rata. Status akan diperbarui otomatis."
+            : "Estimasi waktu belum tersedia. Status akan diperbarui otomatis."}
       </p>
     </div>
   );
@@ -134,6 +133,7 @@ const filterOptions = [
   { value: "needs_review", label: "Review" },
   { value: "failed", label: "Gagal" },
   { value: "running", label: "Berjalan" },
+  { value: "queued", label: "Antre" },
 ] as const;
 
 function IngestionSkeleton() {
@@ -154,7 +154,7 @@ function IngestionSkeleton() {
           <Skeleton key={index} className="h-8 w-20 rounded-lg" />
         ))}
       </div>
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="grid min-w-0 gap-6">
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} className="h-24 w-full rounded-xl" />
@@ -172,9 +172,16 @@ function IngestionSkeleton() {
 export function AdminIngestion() {
   const [jobs, setJobs] = useState<IngestionJob[]>([]);
   const [filter, setFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadStatus, setLoadStatus] = useState("Memuat job ingestion...");
+  const [loadStatus, setLoadStatus] = useState("");
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [rerunPending, setRerunPending] = useState(false);
+  const rerunBusy = useRef(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -185,25 +192,24 @@ export function AdminIngestion() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const minDelay = new Promise((resolve) => setTimeout(resolve, 400));
     fetchIngestionJobs(controller.signal)
-      .then(async (items) => {
-        await minDelay;
+      .then((items) => {
+        if (controller.signal.aborted) return;
+        setLoadError(false);
         setJobs(items);
         setSelectedJobId(items[0]?.job_id ?? null);
-        setLoadStatus(
-          items.length
-            ? "Data tersinkron dengan API."
-            : "Belum ada job ingestion — mulai dari halaman dokumen."
-        );
+        setLoadStatus(items.length ? "" : "Belum ada job ingestion — mulai dari halaman dokumen.");
       })
       .catch((err) => {
         if ((err as Error)?.name === "AbortError") return;
-        setLoadStatus("API belum tersedia — muat ulang untuk mencoba lagi.");
+        setLoadError(true);
+        setLoadStatus("Daftar pemrosesan belum dapat dimuat. Periksa koneksi lalu coba lagi.");
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (!controller.signal.aborted) setIsLoading(false);
+      });
     return () => controller.abort();
-  }, []);
+  }, [reloadKey]);
 
   const stats = useMemo(() => {
     const total = jobs.length;
@@ -218,32 +224,56 @@ export function AdminIngestion() {
     () => jobs.filter((job) => filter === "all" || job.status === filter),
     [filter, jobs]
   );
-  const selectedJob = jobs.find((job) => job.job_id === selectedJobId) ?? null;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * pageSize;
+  const visibleJobs = filtered.slice(pageStart, pageStart + pageSize);
+  const showDetail = (jobId: string) => {
+    setSelectedJobId(jobId);
+    setDetailOpen(true);
+  };
+  const selectedJob = filtered.find((job) => job.job_id === selectedJobId) ?? filtered[0] ?? null;
 
-  function startPolling(jobId: string) {
-    if (pollingRef.current) clearInterval(pollingRef.current);
+  const hasActiveJobs = jobs.some((job) => job.status === "running" || job.status === "queued");
+  useEffect(() => {
+    if (!hasActiveJobs) return;
+    const controller = new AbortController();
+    let inFlight = false;
     pollingRef.current = setInterval(async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
-        const updated = await fetchIngestionJob(jobId);
-        setJobs((current) => current.map((j) => (j.job_id === jobId ? { ...j, ...updated } : j)));
-        if (updated.status !== "running" && updated.status !== "queued") {
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          pollingRef.current = null;
-          if (updated.status === "completed") {
-            toast.success(`Ingestion selesai — ${updated.document_id}`);
-          } else if (updated.status === "failed") {
-            toast.error(`Ingestion gagal — ${updated.document_id}`);
-          } else {
-            toast.info(`Ingestion ${jobLabels[updated.status]} — ${updated.document_id}`);
-          }
+        const items = await fetchIngestionJobs(controller.signal);
+        if (!controller.signal.aborted) {
+          setJobs(items);
+          setLoadStatus("Status diperbarui otomatis setiap 3 detik.");
         }
       } catch {
-        // keep polling, transient network error
+        if (!controller.signal.aborted)
+          setLoadStatus(
+            "Pembaruan tertunda. Menampilkan status terakhir; mencoba kembali otomatis."
+          );
+      } finally {
+        inFlight = false;
       }
     }, 3000);
-  }
+    return () => {
+      controller.abort();
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [hasActiveJobs]);
 
   async function rerun(documentId: string, force = false) {
+    if (
+      rerunBusy.current ||
+      jobs.some(
+        (job) =>
+          job.document_id === documentId && (job.status === "running" || job.status === "queued")
+      )
+    )
+      return;
+    rerunBusy.current = true;
+    setRerunPending(true);
     try {
       const next = await createIngestionJob(documentId, force);
       setJobs((current) => {
@@ -251,12 +281,16 @@ export function AdminIngestion() {
         return [next, ...withoutPrevious];
       });
       setSelectedJobId(next.job_id);
+      setFilter("all");
+      setPage(1);
       toast.info(
         force ? `Ingestion dipaksa diulang — ${documentId}` : `Ingestion dimulai — ${documentId}`
       );
-      startPolling(next.job_id);
     } catch {
-      toast.error("Gagal memulai ingestion. Periksa koneksi API.");
+      toast.error("Gagal memulai pemrosesan. Periksa koneksi lalu coba lagi.");
+    } finally {
+      rerunBusy.current = false;
+      setRerunPending(false);
     }
   }
 
@@ -271,13 +305,41 @@ export function AdminIngestion() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`${styles.ingestion} space-y-6`}>
       <Toaster position="bottom-right" richColors />
 
-      <PageHeader eyebrow="Pipeline pemrosesan" title="Ingestion" description={loadStatus} />
+      <PageHeader
+        eyebrow="Pengelolaan dokumen"
+        title="Pemrosesan dokumen"
+        description="Pantau antrean, periksa hasil, dan tangani dokumen yang perlu ditinjau."
+        actions={
+          <Button
+            variant="outline"
+            disabled={isLoading}
+            onClick={() => {
+              setIsLoading(true);
+              setLoadError(false);
+              setReloadKey((key) => key + 1);
+            }}
+          >
+            <RefreshCw /> Muat ulang
+          </Button>
+        }
+      />
+      {loadStatus && (
+        <p role="status" className="text-xs text-muted-text">
+          {loadStatus}
+        </p>
+      )}
 
       {isLoading ? (
         <IngestionSkeleton />
+      ) : loadError ? (
+        <div role="alert">
+          <Callout tone="danger" title="Data belum tersedia">
+            {loadStatus}
+          </Callout>
+        </div>
       ) : (
         <div className="space-y-6">
           {/* Stats row */}
@@ -333,18 +395,22 @@ export function AdminIngestion() {
             ))}
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <div className="grid min-w-0 gap-6">
             {/* Left — job list */}
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4">
               {/* Filter bar */}
               <div className="flex flex-wrap items-center gap-2">
                 {filterOptions.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setFilter(opt.value)}
+                    aria-pressed={filter === opt.value}
+                    onClick={() => {
+                      setFilter(opt.value);
+                      setPage(1);
+                    }}
                     className={cn(
-                      "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
+                      "min-h-10 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
                       filter === opt.value
                         ? "bg-javanese text-white"
                         : "bg-surface-soft text-muted-text hover:bg-teal-soft hover:text-tinta"
@@ -362,140 +428,226 @@ export function AdminIngestion() {
               {filtered.length === 0 ? (
                 <EmptyState
                   icon={FileSearch}
-                  title="Tidak ada job ditemukan"
-                  hint="Ubah filter atau jalankan ingestion dari halaman upload."
+                  title={
+                    jobs.length === 0
+                      ? "Belum ada pemrosesan"
+                      : "Tidak ada pekerjaan dengan status ini"
+                  }
+                  hint={
+                    jobs.length === 0
+                      ? "Unggah PDF untuk mulai menyiapkan dokumen."
+                      : "Pilih status lain untuk melihat pekerjaan."
+                  }
+                  action={
+                    jobs.length === 0 ? (
+                      <Button asChild>
+                        <Link href="/admin/upload">Upload PDF</Link>
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setFilter("all");
+                          setPage(1);
+                        }}
+                      >
+                        Tampilkan semua
+                      </Button>
+                    )
+                  }
                 />
               ) : (
-                <div className="space-y-2">
-                  {filtered.map((job) => {
-                    const selected = job.job_id === selectedJobId;
-                    return (
-                      <div
-                        key={job.job_id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setSelectedJobId(job.job_id)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            setSelectedJobId(job.job_id);
-                          }
-                        }}
-                        className={cn(
-                          "w-full rounded-xl border-l-4 p-4 text-left transition-all",
-                          statusBorder[job.status],
-                          selected
-                            ? "border border-forest/30 bg-teal-soft/40 shadow-sm"
-                            : "border border-line bg-white hover:border-forest/20 hover:shadow-sm"
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <p className="truncate text-sm font-semibold text-tinta">
+                <div className="overflow-hidden rounded-xl border border-line bg-white">
+                  <Table className="min-w-[600px]" aria-label="Daftar ingestion dokumen">
+                    <TableHeader className="bg-surface-soft">
+                      <TableRow className="border-line hover:bg-transparent">
+                        <TableHead scope="col" className="px-4 text-muted-text">
+                          Dokumen
+                        </TableHead>
+                        <TableHead scope="col" className="text-muted-text">
+                          Status
+                        </TableHead>
+                        <TableHead scope="col" className="text-muted-text">
+                          Diperbarui
+                        </TableHead>
+                        <TableHead scope="col" className="px-4 text-right text-muted-text">
+                          Tindakan
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleJobs.map((job) => {
+                        const selected = job.job_id === selectedJob?.job_id;
+                        return (
+                          <TableRow
+                            key={job.job_id}
+                            data-state={selected ? "selected" : undefined}
+                            className="border-line"
+                          >
+                            <TableCell className="max-w-64 whitespace-normal px-4 py-4">
+                              <button
+                                type="button"
+                                aria-pressed={selected}
+                                title={job.document_id}
+                                onClick={() => showDetail(job.job_id)}
+                                className="block min-h-8 text-left text-sm font-semibold text-tinta underline-offset-4 hover:underline break-all"
+                              >
                                 {job.document_id}
+                              </button>
+                              <p
+                                title={job.job_id}
+                                className="mt-1 truncate font-mono text-xs text-muted-text"
+                              >
+                                {job.job_id}
                               </p>
+                              {job.result?.chunk_count != null && (
+                                <p className="mt-1 text-xs text-muted-text">
+                                  {job.result.chunk_count} chunk
+                                </p>
+                              )}
+                              {job.error && (
+                                <p title={job.error} className="mt-1 line-clamp-2 text-xs text-red">
+                                  {job.error}
+                                </p>
+                              )}
+                            </TableCell>
+                            <TableCell>
                               <StatusBadge
                                 tone={jobTones[job.status]}
                                 pulse={job.status === "running"}
                               >
                                 {jobLabels[job.status]}
                               </StatusBadge>
-                            </div>
-                            <div className="flex items-center gap-3 text-xs text-muted-text">
-                              <span className="font-mono">{job.job_id}</span>
-                              <span>·</span>
-                              <span>{relativeTime(job.updated_at)}</span>
-                              {job.result?.chunk_count && (
-                                <>
-                                  <span>·</span>
-                                  <span className="font-mono">{job.result.chunk_count} chunk</span>
-                                </>
-                              )}
-                            </div>
-                            {job.error && (
-                              <p className="mt-1 line-clamp-1 text-xs text-red">{job.error}</p>
-                            )}
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="shrink-0"
-                            aria-label={`Jalankan ulang ${job.document_id}`}
-                            title={
-                              job.status === "completed"
-                                ? "Klik untuk memaksa ulang (force)"
-                                : undefined
-                            }
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              if (job.status === "completed") {
-                                void rerunForce(job.document_id);
-                              } else {
-                                void rerun(job.document_id);
-                              }
-                            }}
-                          >
-                            <RefreshCw className="size-3.5" /> Re-ingest
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-text">
+                              <span title={formatDateTime(job.updated_at)}>
+                                {relativeTime(job.updated_at)}
+                              </span>
+                            </TableCell>
+                            <TableCell className="px-4 text-right">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="mr-2"
+                                aria-label={`Detail ${job.document_id}`}
+                                aria-controls="ingestion-detail"
+                                onClick={() => showDetail(job.job_id)}
+                              >
+                                <FileSearch className="size-3.5" /> Detail
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="shrink-0"
+                                aria-label={`Jalankan ulang ${job.document_id}`}
+                                disabled={
+                                  rerunPending ||
+                                  jobs.some(
+                                    (item) =>
+                                      item.document_id === job.document_id &&
+                                      (item.status === "running" || item.status === "queued")
+                                  )
+                                }
+                                title={
+                                  job.status === "completed"
+                                    ? "Klik untuk memaksa ulang (force)"
+                                    : undefined
+                                }
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (job.status === "completed") {
+                                    void rerunForce(job.document_id);
+                                  } else {
+                                    void rerun(job.document_id);
+                                  }
+                                }}
+                              >
+                                <RefreshCw className="size-3.5" /> Ulangi
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line px-4 py-3 text-xs text-muted-text">
+                    <label className="flex items-center gap-2">
+                      Baris per halaman
+                      <select
+                        value={pageSize}
+                        onChange={(event) => {
+                          setPageSize(Number(event.target.value));
+                          setPage(1);
+                        }}
+                        className="min-h-9 rounded-md border border-line bg-white px-2 text-sm text-tinta focus-visible:outline-2 focus-visible:outline-forest"
+                      >
+                        {[5, 10, 20, 50].map((size) => (
+                          <option key={size} value={size}>
+                            {size}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <span role="status">
+                      {pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} dari{" "}
+                      {filtered.length} pekerjaan
+                    </span>
+                    <nav
+                      aria-label="Pagination daftar ingestion"
+                      className="flex items-center gap-2"
+                    >
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === 1}
+                        onClick={() => setPage(currentPage - 1)}
+                      >
+                        Sebelumnya
+                      </Button>
+                      <span className="tabular-nums">
+                        {currentPage} / {pageCount}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === pageCount}
+                        onClick={() => setPage(currentPage + 1)}
+                      >
+                        Berikutnya
+                      </Button>
+                    </nav>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Right — detail panel */}
-            <div className="space-y-4">
-              {selectedJob ? (
-                <>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Detail job</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-5">
-                      {/* Pipeline stages */}
-                      <div className="space-y-2">
-                        <p className="text-xs font-semibold text-tinta">Pipeline</p>{" "}
-                        <div className="space-y-1.5">
-                          {[
-                            { label: "PDF diekstrak", done: selectedJob.status !== "queued" },
-                            {
-                              label: "Parsing & chunking",
-                              done:
-                                selectedJob.status === "completed" ||
-                                selectedJob.status === "needs_review" ||
-                                selectedJob.status === "failed",
-                            },
-                            {
-                              label: "Embedding & simpan",
-                              done: selectedJob.status === "completed",
-                            },
-                          ].map((stage) => (
-                            <div key={stage.label} className="flex items-center gap-2 text-sm">
-                              <span
-                                className={cn(
-                                  "flex size-5 shrink-0 items-center justify-center rounded-full",
-                                  stage.done
-                                    ? "bg-forest text-white"
-                                    : "bg-surface-soft text-muted-text"
-                                )}
-                              >
-                                {stage.done ? (
-                                  <CheckCircle2 className="size-3" />
-                                ) : (
-                                  <Clock className="size-3" />
-                                )}
-                              </span>
-                              <span className={stage.done ? "text-tinta" : "text-muted-text"}>
-                                {stage.label}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+            <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+              <DialogContent
+                id="ingestion-detail"
+                className={`admin-theme ${styles.ingestion} ${styles.detailModal} max-h-[85dvh] overflow-y-auto sm:max-w-xl p-6`}
+              >
+                <DialogHeader className="pr-8">
+                  <DialogTitle>Detail pemrosesan</DialogTitle>
+                  <DialogDescription>
+                    Status dan hasil pemrosesan dokumen dari API.
+                  </DialogDescription>
+                </DialogHeader>
+                {loadStatus && (
+                  <p role="status" className="text-xs text-muted-text">
+                    {loadStatus}
+                  </p>
+                )}
+                {selectedJob ? (
+                  <>
+                    <div className="space-y-5">
+                      <p className="text-sm leading-relaxed text-muted-text">
+                        Status tahapan terperinci belum tersedia. Ringkasan di bawah mengikuti
+                        status pekerjaan dari server.
+                      </p>
 
                       <ProgressEta job={selectedJob} />
 
@@ -503,13 +655,13 @@ export function AdminIngestion() {
                       <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
                         <div className="min-w-0">
                           <dt className="text-xs text-muted-text">Job ID</dt>
-                          <dd className="truncate font-mono text-sm font-medium">
+                          <dd className="break-all font-mono text-xs font-medium">
                             {selectedJob.job_id}
                           </dd>
                         </div>
                         <div className="min-w-0">
                           <dt className="text-xs text-muted-text">Dokumen</dt>
-                          <dd className="truncate text-sm font-medium">
+                          <dd className="break-words text-sm font-medium">
                             {selectedJob.document_id}
                           </dd>
                         </div>
@@ -536,12 +688,10 @@ export function AdminIngestion() {
                           <dd className="text-sm">{formatDateTime(selectedJob.updated_at)}</dd>
                         </div>
                       </dl>
-                    </CardContent>
-                  </Card>
+                    </div>
 
-                  {/* Status callout + action */}
-                  <Card>
-                    <CardContent className="space-y-3">
+                    {/* Status callout + action */}
+                    <div className="space-y-3 border-t border-line pt-4">
                       {selectedJob.status === "failed" ? (
                         <Callout tone="danger" title="Ingestion gagal">
                           {selectedJob.error ?? "Pipeline berhenti karena kegagalan internal."}
@@ -553,7 +703,12 @@ export function AdminIngestion() {
                         </Callout>
                       ) : selectedJob.status === "completed" ? (
                         <Callout tone="success" title="Pipeline selesai">
-                          Semua tahapan pemrosesan berhasil. Dokumen siap digunakan.
+                          Pemrosesan selesai. Tinjau dokumen dan status publikasinya sebelum
+                          digunakan sebagai sumber jawaban.
+                        </Callout>
+                      ) : selectedJob.status === "running" ? (
+                        <Callout tone="info" title="Sedang diproses">
+                          Status diperbarui otomatis. Tidak perlu menjalankan ulang pekerjaan ini.
                         </Callout>
                       ) : (
                         <Callout tone="info" title="Menunggu pemrosesan">
@@ -564,6 +719,14 @@ export function AdminIngestion() {
                       <Button
                         variant="outline"
                         className="w-full"
+                        disabled={
+                          rerunPending ||
+                          jobs.some(
+                            (item) =>
+                              item.document_id === selectedJob.document_id &&
+                              (item.status === "running" || item.status === "queued")
+                          )
+                        }
                         onClick={() =>
                           void (selectedJob.status === "completed"
                             ? rerunForce(selectedJob.document_id)
@@ -575,17 +738,17 @@ export function AdminIngestion() {
                           ? "Paksa ulang (force)"
                           : "Jalankan ulang"}
                       </Button>
-                    </CardContent>
-                  </Card>
-                </>
-              ) : (
-                <EmptyState
-                  icon={FileSearch}
-                  title="Pilih job untuk melihat detail"
-                  hint="Klik salah satu job di daftar sebelah kiri."
-                />
-              )}
-            </div>
+                    </div>
+                  </>
+                ) : (
+                  <EmptyState
+                    icon={FileSearch}
+                    title="Pilih job untuk melihat detail"
+                    hint="Pilih tombol Detail pada daftar ingestion."
+                  />
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       )}

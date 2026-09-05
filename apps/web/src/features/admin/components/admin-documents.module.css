@@ -1,0 +1,51 @@
+/* Local admin styling avoids inherited chat dark-mode colors. */
+.documents.documents {
+  color: #172e23;
+  --muted-text: #607067;
+  --teal-soft: #e7f1ec;
+}
+.documents h1 {
+  color: #183e2c !important;
+}
+.documents .summary {
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+.documents .summary:hover {
+  background: #edf5ef !important;
+}
+.documents .summaryActive {
+  box-shadow: inset 0 -3px 0 #286246;
+}
+.documents button:focus-visible,
+.documents a:focus-visible {
+  outline: 2px solid #286246;
+  outline-offset: 2px;
+}
+.documents .documentTitle {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  color: #214f38;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.documents .documentTitle:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.loadError {
+  padding: 24px;
+  border: 1px solid #dce7e0;
+  border-radius: 12px;
+  background: #ffffff;
+}
+@media (prefers-reduced-motion: reduce) {
+  .documents .summary {
+    transition: none;
+  }
+}

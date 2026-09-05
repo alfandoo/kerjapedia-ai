@@ -1,0 +1,55 @@
+/* Fixed admin palette for processing status and controls. */
+.ingestion.ingestion {
+  --line: #d7e5dc;
+  --muted-text: #607267;
+  --surface-soft: #f2f7f3;
+  --teal-soft: #e5f1e9;
+  --amber: #885710;
+  --amber-soft: #fff7e5;
+  --red: #ab3329;
+  --red-soft: #fff0ec;
+  color: #183e2c;
+}
+.ingestion h1 {
+  color: #183e2c !important;
+}
+.ingestion button:focus-visible,
+.ingestion a:focus-visible {
+  outline: 2px solid #286246;
+  outline-offset: 3px;
+}
+.ingestion button[aria-pressed="true"] {
+  font-weight: 600;
+}
+.ingestion button:disabled {
+  cursor: not-allowed;
+}
+
+.ingestion [data-slot="table-row"][data-state="selected"] {
+  background: #e5f1e9;
+}
+
+.ingestion tbody [data-slot="table-row"]:hover {
+  background: #f2f7f3;
+}
+
+.ingestion [data-slot="table-row"][data-state="selected"] td:first-child {
+  box-shadow: inset 3px 0 #286246;
+}
+
+.detailModal.detailModal[role="dialog"] {
+  background: #fff !important;
+  color: #183e2c !important;
+  border: 1px solid #d7e5dc;
+  --tinta: #183e2c;
+  --forest: #286246;
+  --javanese: #286246;
+  --popover: #fff;
+  --popover-foreground: #183e2c;
+}
+.detailModal.detailModal [data-slot="dialog-title"] {
+  color: #183e2c !important;
+}
+.detailModal.detailModal [data-slot="dialog-description"] {
+  color: #607267 !important;
+}

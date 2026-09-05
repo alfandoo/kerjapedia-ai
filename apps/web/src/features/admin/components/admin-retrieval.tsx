@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -8,7 +8,6 @@ import {
   ChevronUp,
   FlaskConical,
   Loader2,
-  Play,
   Search,
 } from "lucide-react";
 
@@ -27,24 +26,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { PageHeader, StatusBadge } from "./primitives";
 import { cn } from "@/lib/utils";
 import { runRetrievalPlayground } from "@/features/admin/api";
-import { fallbackRetrievalResults } from "@/features/admin/sample-data";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import styles from "./admin-ingestion.module.css";
 import type { RetrievalPlaygroundResult } from "@/features/admin/types";
 
 function ScoreBadge({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
-  const tone = score >= 0.8 ? "text-forest" : score >= 0.5 ? "text-amber" : "text-muted-text";
-  return <span className={cn("font-mono text-sm font-semibold tabular-nums", tone)}>{pct}%</span>;
-}
-
-function ScoreBar({ score }: { score: number }) {
-  const color = score >= 0.8 ? "bg-forest" : score >= 0.5 ? "bg-amber" : "bg-muted-text/40";
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-soft">
-      <div
-        className={cn("h-full rounded-full transition-all", color)}
-        style={{ width: `${Math.min(100, score * 100)}%` }}
-      />
-    </div>
+    <span className="font-mono text-sm font-semibold tabular-nums text-forest">
+      {Number.isFinite(score) ? score.toFixed(3) : "—"}
+    </span>
   );
 }
 
@@ -55,28 +51,45 @@ export function AdminRetrieval() {
   const [year, setYear] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const [results, setResults] = useState(fallbackRetrievalResults);
-  const [selectedId, setSelectedId] = useState(fallbackRetrievalResults[0]?.chunk_id ?? "");
-  const [latency, setLatency] = useState(184);
+  const [results, setResults] = useState<RetrievalPlaygroundResult[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [latency, setLatency] = useState<number | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [hasRun, setHasRun] = useState(false);
-  const [status, setStatus] = useState("Hasil contoh siap untuk ditinjau.");
+  const [status, setStatus] = useState("");
 
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const busy = useRef(false);
+  const valid =
+    question.trim().length >= 4 &&
+    Number.isInteger(topK) &&
+    topK >= 1 &&
+    topK <= 10 &&
+    (!year || (Number.isInteger(Number(year)) && Number(year) >= 1945 && Number(year) <= 2100));
   const selected = results.find((item) => item.chunk_id === selectedId) ?? null;
 
   async function run() {
+    if (busy.current || !valid) return;
+    busy.current = true;
     setRunning(true);
+    setFailed(false);
+    setResults([]);
+    setWarnings([]);
+    setLatency(null);
+    setHasRun(false);
+    setDetailOpen(false);
     setStatus("Menjalankan hybrid retrieval dan rerank...");
     try {
       const response = await runRetrievalPlayground(
-        question,
+        question.trim(),
         topK,
         regulationType === "all" ? undefined : regulationType,
         year ? Number(year) : undefined
       );
       setResults(response.results);
-      setSelectedId(response.results[0]?.chunk_id ?? "");
+      setSelectedId("");
       setLatency(response.latency_ms);
       setWarnings(response.warnings);
       setHasRun(true);
@@ -84,32 +97,38 @@ export function AdminRetrieval() {
         response.should_refuse ? "Hasil berada di bawah ambang jawaban." : "Retrieval selesai."
       );
     } catch {
-      setStatus("API belum tersedia; hasil contoh tetap ditampilkan.");
+      setFailed(true);
+      setStatus("Pencarian gagal. Periksa koneksi lalu jalankan kembali.");
     } finally {
+      busy.current = false;
       setRunning(false);
     }
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`${styles.ingestion} space-y-6`}>
       <PageHeader
-        eyebrow="Pengujian retrieval"
+        eyebrow="Evaluasi"
         title="Retrieval Playground"
-        description="Uji kualitas retrieval sebelum perubahan dipublikasikan."
+        description="Uji pertanyaan, periksa sumber yang ditemukan, dan bandingkan skor relevansinya."
       />
 
-      <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
+      <div className="grid items-start gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
         {/* Left — config */}
         <div className="space-y-4">
           <Card>
             <CardContent className="space-y-4 pt-5">
               {/* Question */}
               <div className="space-y-1.5">
-                <Label className="text-sm font-semibold">Pertanyaan uji</Label>
+                <Label htmlFor="retrieval-question" className="text-sm font-semibold">
+                  Pertanyaan uji
+                </Label>
                 <Textarea
+                  id="retrieval-question"
+                  disabled={running}
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
-                  rows={3}
+                  rows={5}
                   placeholder="Tulis pertanyaan tentang regulasi ketenagakerjaan..."
                 />
               </div>
@@ -117,8 +136,12 @@ export function AdminRetrieval() {
               {/* Top K + Run */}
               <div className="flex items-end gap-3">
                 <div className="w-24 shrink-0 space-y-1.5">
-                  <Label className="text-sm font-semibold">Top K</Label>
+                  <Label htmlFor="retrieval-count" className="text-sm font-semibold">
+                    Jumlah hasil
+                  </Label>
                   <Input
+                    id="retrieval-count"
+                    disabled={running}
                     type="number"
                     min={1}
                     max={10}
@@ -128,17 +151,22 @@ export function AdminRetrieval() {
                 </div>
                 <Button
                   className="flex-1 bg-javanese text-white hover:bg-forest"
-                  disabled={running || question.trim().length < 4}
+                  disabled={running || !valid}
                   onClick={() => void run()}
                 >
                   {running ? <Loader2 className="animate-spin" /> : <Search className="size-4" />}
-                  {running ? "Mencari..." : "Jalankan"}
+                  {running ? "Mencari..." : "Cari sumber"}
                 </Button>
               </div>
 
+              <p className="text-xs text-muted-text">
+                Masukkan minimal 4 karakter. Jumlah hasil 1–10; tahun opsional antara 1945–2100.
+              </p>
               {/* Advanced filters toggle */}
               <button
                 type="button"
+                aria-expanded={showFilters}
+                aria-controls="retrieval-filters"
                 onClick={() => setShowFilters(!showFilters)}
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-muted-text transition-colors hover:bg-surface-soft hover:text-tinta"
               >
@@ -152,15 +180,24 @@ export function AdminRetrieval() {
 
               {/* Advanced filters */}
               {showFilters && (
-                <div className="space-y-3 rounded-lg border border-line bg-surface-soft/50 p-3">
+                <div
+                  id="retrieval-filters"
+                  className="space-y-3 rounded-lg border border-line bg-surface-soft/50 p-3"
+                >
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Jenis regulasi</Label>
-                      <Select value={regulationType} onValueChange={setRegulationType}>
-                        <SelectTrigger className="w-full">
+                      <Label htmlFor="retrieval-type" className="text-xs">
+                        Jenis regulasi
+                      </Label>
+                      <Select
+                        disabled={running}
+                        value={regulationType}
+                        onValueChange={setRegulationType}
+                      >
+                        <SelectTrigger id="retrieval-type" className="w-full">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className={`admin-theme ${styles.ingestion}`}>
                           <SelectItem value="all">Semua</SelectItem>
                           <SelectItem value="PP">PP</SelectItem>
                           <SelectItem value="UU">UU</SelectItem>
@@ -170,9 +207,13 @@ export function AdminRetrieval() {
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Tahun</Label>
+                      <Label htmlFor="retrieval-year" className="text-xs">
+                        Tahun
+                      </Label>
                       <Input
                         type="number"
+                        id="retrieval-year"
+                        disabled={running}
                         min={1945}
                         max={2100}
                         placeholder="Semua"
@@ -187,13 +228,16 @@ export function AdminRetrieval() {
               {/* Status */}
               {status && (
                 <p
+                  role={failed ? "alert" : "status"}
                   className={cn(
                     "rounded-lg px-3 py-2 text-xs",
-                    hasRun && !warnings.length
-                      ? "bg-teal-soft/50 text-forest"
-                      : hasRun && warnings.length
-                        ? "bg-amber-soft text-amber"
-                        : "bg-surface-soft text-muted-text"
+                    failed
+                      ? "bg-red-soft text-red"
+                      : hasRun && !warnings.length
+                        ? "bg-teal-soft/50 text-forest"
+                        : hasRun && warnings.length
+                          ? "bg-amber-soft text-amber"
+                          : "bg-surface-soft text-muted-text"
                   )}
                 >
                   {status}
@@ -203,71 +247,103 @@ export function AdminRetrieval() {
           </Card>
 
           {/* Selected quote — integrated */}
-          {selected && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Kutipan terpilih</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <blockquote className="rounded-lg border-l-4 border-forest bg-teal-soft/30 px-4 py-3 text-sm leading-relaxed text-tinta">
-                  &ldquo;{selected.quote}&rdquo;
-                </blockquote>
+          <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+            <DialogContent
+              className={`admin-theme ${styles.ingestion} ${styles.detailModal} max-h-[85dvh] overflow-y-auto p-6 sm:max-w-xl`}
+            >
+              <DialogHeader className="pr-8">
+                <DialogTitle>Detail sumber</DialogTitle>
+                <DialogDescription>
+                  {selected?.short_title} {selected?.article} · Halaman {selected?.page_start}–
+                  {selected?.page_end}
+                </DialogDescription>
+              </DialogHeader>
+              {selected && (
+                <div className="space-y-4">
+                  <blockquote className="rounded-lg border-l-4 border-forest bg-teal-soft/30 px-4 py-3 text-sm leading-relaxed text-tinta">
+                    &ldquo;{selected.quote}&rdquo;
+                  </blockquote>
 
-                {/* Score breakdown */}
-                <div className="space-y-2">
-                  {[
-                    { label: "Lexical", value: selected.lexical_score },
-                    { label: "Semantic", value: selected.semantic_score },
-                    { label: "Rerank", value: selected.rerank_score },
-                    { label: "Final", value: selected.final_score },
-                  ].map((m) => (
-                    <div key={m.label} className="flex items-center gap-3">
-                      <span className="w-14 shrink-0 text-xs text-muted-text">{m.label}</span>
-                      <div className="flex-1">
-                        <ScoreBar score={m.value} />
+                  {/* Score breakdown */}
+                  <div className="space-y-2">
+                    {[
+                      { label: "Lexical", value: selected.lexical_score },
+                      { label: "Semantic", value: selected.semantic_score },
+                      { label: "Rerank", value: selected.rerank_score },
+                      { label: "Final", value: selected.final_score },
+                    ].map((m) => (
+                      <div key={m.label} className="flex flex-wrap items-center gap-3">
+                        <span className="w-14 shrink-0 text-xs text-muted-text">{m.label}</span>
+                        <div className="flex-1" />
+                        <ScoreBadge score={m.value} />
                       </div>
-                      <ScoreBadge score={m.value} />
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-                {/* Warnings */}
-                {warnings.length > 0 && (
-                  <div className="flex items-start gap-2 rounded-lg border border-amber/25 bg-amber-soft/60 px-3 py-2 text-xs text-amber">
-                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                    <span>{warnings.join(", ")}</span>
-                  </div>
-                )}
-                {hasRun && warnings.length === 0 && (
-                  <div className="flex items-center gap-2 rounded-lg border border-forest/20 bg-teal-soft/50 px-3 py-2 text-xs text-forest">
-                    <CheckCircle2 className="size-3.5 shrink-0" />
-                    <span>Tidak ada peringatan</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                  {/* Warnings */}
+                  {warnings.length > 0 && (
+                    <div className="flex items-start gap-2 rounded-lg border border-amber/25 bg-amber-soft/60 px-3 py-2 text-xs text-amber">
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                      <span>{warnings.join(", ")}</span>
+                    </div>
+                  )}
+                  {hasRun && warnings.length === 0 && (
+                    <div className="flex items-center gap-2 rounded-lg border border-forest/20 bg-teal-soft/50 px-3 py-2 text-xs text-forest">
+                      <CheckCircle2 className="size-3.5 shrink-0" />
+                      <span>Tidak ada peringatan</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-text">
+                    Skor dari API, bukan persentase kepastian jawaban. Skala tiap metode dapat
+                    berbeda.
+                  </p>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Right — results */}
-        <Card className="h-fit">
+        <Card className="min-w-0 h-fit">
           <CardHeader>
-            <CardTitle className="flex items-center gap-3">
+            <CardTitle className="flex flex-wrap items-center gap-3">
               Hasil retrieval
-              <StatusBadge tone="info">
-                {results.length} chunk · {latency} ms
-              </StatusBadge>
+              {hasRun && (
+                <StatusBadge tone="info">
+                  {results.length} sumber · {latency} ms
+                </StatusBadge>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
+            {warnings.length > 0 && (
+              <div
+                role="status"
+                className="mx-4 mb-4 rounded-lg bg-amber-soft p-3 text-xs text-amber"
+              >
+                {warnings.join(" · ")}
+              </div>
+            )}
             {results.length === 0 ? (
               <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
                 <span className="flex size-12 items-center justify-center rounded-2xl bg-surface-soft text-muted-text">
                   <FlaskConical className="size-6" />
                 </span>
-                <p className="text-sm font-semibold text-tinta">Tidak ada hasil</p>
+                <p className="text-sm font-semibold text-tinta">
+                  {running
+                    ? "Mencari sumber…"
+                    : failed
+                      ? "Pencarian belum berhasil"
+                      : hasRun
+                        ? "Tidak ada sumber ditemukan"
+                        : "Siap menguji pencarian"}
+                </p>
                 <p className="max-w-xs text-sm text-muted-text">
-                  Jalankan retrieval dengan pertanyaan atau filter yang berbeda.
+                  {running
+                    ? "Hasil akan muncul setelah pencarian selesai."
+                    : hasRun
+                      ? "Coba pertanyaan atau filter yang berbeda."
+                      : "Isi pertanyaan, lalu pilih Cari sumber untuk melihat hasil dari API."}
                 </p>
               </div>
             ) : (
@@ -275,24 +351,7 @@ export function AdminRetrieval() {
                 {results.map((result, index) => {
                   const active = result.chunk_id === selectedId;
                   return (
-                    <li
-                      key={result.chunk_id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedId(result.chunk_id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setSelectedId(result.chunk_id);
-                        }
-                      }}
-                      className={cn(
-                        "flex cursor-pointer items-start gap-4 px-4 py-3.5 transition-colors",
-                        active
-                          ? "bg-teal-soft/40 shadow-[inset_3px_0_0_var(--teal)]"
-                          : "hover:bg-surface-soft"
-                      )}
-                    >
+                    <li key={result.chunk_id} className="flex items-start gap-3 px-4 py-4">
                       {/* Rank */}
                       <span
                         className={cn(
@@ -305,8 +364,8 @@ export function AdminRetrieval() {
 
                       {/* Info */}
                       <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-tinta">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="break-words text-sm font-semibold text-tinta">
                             {result.short_title}
                           </p>
                           {result.article && (
@@ -323,7 +382,18 @@ export function AdminRetrieval() {
                       {/* Score */}
                       <div className="w-20 shrink-0 space-y-1">
                         <ScoreBadge score={result.final_score} />
-                        <ScoreBar score={result.final_score} />
+                        <p className="text-xs text-muted-text">Skor final</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          aria-label={`Detail ${result.short_title}`}
+                          onClick={() => {
+                            setSelectedId(result.chunk_id);
+                            setDetailOpen(true);
+                          }}
+                        >
+                          Detail
+                        </Button>
                       </div>
                     </li>
                   );

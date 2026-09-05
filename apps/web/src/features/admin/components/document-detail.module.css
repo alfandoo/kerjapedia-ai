@@ -1,0 +1,153 @@
+/* Portal content needs its own palette: it sits outside AdminShell. */
+.modal,
+.popup {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #183e2c;
+  --popover: #ffffff;
+  --popover-foreground: #183e2c;
+  --primary: #286246;
+  --primary-foreground: #ffffff;
+  --secondary: #edf5ef;
+  --secondary-foreground: #244e38;
+  --muted: #f2f7f3;
+  --muted-foreground: #607267;
+  --accent: #e5f1e9;
+  --accent-foreground: #183e2c;
+  --border: #d5e5da;
+  --input: #c3d8ca;
+  --ring: #286246;
+  --line: #d5e5da;
+  --surface-soft: #edf5ef;
+  --muted-text: #607267;
+  --tinta-pena: #183e2c;
+  --javanese-green: #286246;
+  --teal-forest: #286246;
+  --teal-soft: #e5f1e9;
+  --amber: #8a5a10;
+  --amber-soft: #fff7e5;
+  --red: #ab3329;
+  --red-soft: #fff0ec;
+}
+.modal.modal[role="dialog"],
+.popup.popup {
+  background: #ffffff !important;
+  color: #183e2c !important;
+  border: 1px solid #d5e5da !important;
+}
+.modal.modal [data-slot="sheet-header"],
+.modal.modal [data-slot="sheet-footer"] {
+  background: #f2f8f4 !important;
+  border-color: #d5e5da !important;
+}
+.modal.modal [data-slot="sheet-title"] {
+  color: #183e2c !important;
+}
+.modal.modal input,
+.modal.modal textarea,
+.modal.modal [data-slot="select-trigger"] {
+  background: #ffffff !important;
+  color: #183e2c !important;
+  border-color: #c3d8ca !important;
+}
+.modal.modal input::placeholder,
+.modal.modal textarea::placeholder {
+  color: #73867b !important;
+}
+.modal.modal [data-slot="tabs-list"] {
+  background: #edf5ef !important;
+}
+.modal.modal [role="tab"] {
+  color: #536e5d !important;
+}
+.modal.modal [role="tab"][data-state="active"] {
+  background: #286246 !important;
+  color: #ffffff !important;
+  border-color: #286246 !important;
+}
+.modal.modal :global(.bg-javanese) {
+  background: #286246 !important;
+  color: #ffffff !important;
+}
+.modal.modal :global(.bg-javanese):hover {
+  background: #1b4932 !important;
+}
+.modal.modal :global(.text-javanese),
+.modal.modal :global(.text-forest) {
+  color: #286246 !important;
+}
+.modal.modal :global(.text-red) {
+  color: #ab3329 !important;
+}
+.modal.modal :global(.bg-white) {
+  background: #ffffff !important;
+}
+.modal.modal button:focus-visible,
+.popup.popup [role="option"]:focus-visible {
+  outline: 2px solid #286246;
+  outline-offset: 2px;
+}
+.popup.popup [data-highlighted] {
+  background: #e5f1e9 !important;
+  color: #183e2c !important;
+}
+
+/* Do not apply the global dialog shadow to individual controls. */
+.modal.modal[role="dialog"] [class*="shadow-"] {
+  box-shadow: none !important;
+}
+.modal.modal[role="dialog"] [data-slot="tabs-list"] {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  height: 44px;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d5e5da;
+  border-radius: 10px;
+  box-shadow: none !important;
+}
+.modal.modal[role="dialog"] [role="tab"] {
+  height: 34px;
+  min-width: 0;
+  padding: 6px 12px;
+  border: 0 !important;
+  border-radius: 7px;
+  background: transparent !important;
+  font-weight: 500;
+  box-shadow: none !important;
+}
+.modal.modal[role="dialog"] [role="tab"][data-state="active"] {
+  background: #286246 !important;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+.modal.modal[role="dialog"] [role="tab"]:not([data-state="active"]):hover {
+  background: #dfebe3 !important;
+  color: #183e2c !important;
+}
+.modal.modal[role="dialog"] [data-slot="tabs-content"] {
+  margin-top: 20px;
+  background: #ffffff !important;
+}
+.modal.modal[role="dialog"] input,
+.modal.modal[role="dialog"] [data-slot="select-trigger"] {
+  min-height: 42px;
+  border-radius: 8px;
+}
+.modal.modal[role="dialog"] textarea {
+  min-height: 92px;
+  border-radius: 8px;
+}
+.modal.modal[role="dialog"] label {
+  color: #344f3e;
+  font-size: 13px;
+  font-weight: 600;
+}
+.modal.modal[role="dialog"] input:focus-visible,
+.modal.modal[role="dialog"] textarea:focus-visible,
+.modal.modal[role="dialog"] [data-slot="select-trigger"]:focus-visible {
+  border-color: #286246 !important;
+  outline: 2px solid #286246;
+  outline-offset: 2px;
+}

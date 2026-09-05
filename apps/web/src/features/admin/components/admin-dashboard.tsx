@@ -3,25 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import {
-  BadgeCheck,
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  Plus,
-  RefreshCw,
-  Search,
-  Trash2,
-  Upload,
-  X,
-} from "lucide-react";
-import { Toaster, toast } from "sonner";
+import { ChevronLeft, ChevronRight, FileText, RefreshCw, Search, Upload, X } from "lucide-react";
+import { Toaster } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -29,16 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -47,19 +27,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
-import { Callout, EmptyState, PageHeader, StatusBadge } from "./primitives";
+import { EmptyState, PageHeader, StatusBadge } from "./primitives";
 import { cn } from "@/lib/utils";
-import {
-  clearStoredSession,
-  createIngestionJob,
-  fetchAdminOverview,
-  updateAdminDocument,
-  updateAdminPublication,
-  updateAdminRelationships,
-} from "@/features/admin/api";
-import { fallbackAdminDocuments } from "@/features/admin/sample-data";
-import type { AdminDocument, AdminRelationship } from "@/features/admin/types";
+import { clearStoredSession, fetchAdminOverview } from "@/features/admin/api";
+import styles from "./admin-documents.module.css";
+import detailStyles from "./document-detail.module.css";
+import type { AdminDocument } from "@/features/admin/types";
 
 import {
   DocumentInspector,
@@ -107,22 +80,23 @@ function DocumentsSkeleton() {
 
 export function AdminDashboard() {
   const router = useRouter();
-  const [documents, setDocuments] = useState(fallbackAdminDocuments);
+  const [documents, setDocuments] = useState<AdminDocument[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [publicationFilter, setPublicationFilter] = useState("all");
   const [page, setPage] = useState(1);
-  const [loadStatus, setLoadStatus] = useState("Memuat data admin...");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const deferredSearch = useDeferredValue(search.toLowerCase());
+  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
   useEffect(() => {
     const controller = new AbortController();
     fetchAdminOverview(controller.signal)
       .then((overview) => {
         setDocuments(overview.documents);
-        setLoadStatus("Data tersinkron dengan API.");
+        setLoadError(null);
         setIsLoading(false);
       })
       .catch((err) => {
@@ -133,17 +107,17 @@ export function AdminDashboard() {
           router.push("/login-admin");
           return;
         }
-        setLoadStatus("API tidak dapat dihubungi — menampilkan data contoh.");
+        setLoadError("Daftar dokumen belum dapat dimuat. Periksa koneksi lalu coba lagi.");
         setIsLoading(false);
       });
     return () => controller.abort();
-  }, [router]);
+  }, [router, reloadKey]);
 
   const filteredDocuments = useMemo(
     () =>
       documents.filter((document) => {
         const matchesSearch =
-          `${document.short_title} ${document.title} ${document.topics.join(" ")}`
+          `${document.document_id} ${document.short_title} ${document.title} ${document.regulation_type} ${document.year} ${document.topics.join(" ")}`
             .toLowerCase()
             .includes(deferredSearch);
         const matchesStatus = statusFilter === "all" || document.ingestion_status === statusFilter;
@@ -206,23 +180,44 @@ export function AdminDashboard() {
     {
       label: "Gagal",
       value: summary.failed,
-      note: "Ingestion error",
+      note: "Pemrosesan gagal",
       dot: "bg-red",
       tone: "text-red",
     },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className={`${styles.documents} space-y-6`}>
       <Toaster position="bottom-right" richColors />
 
       {isLoading ? (
         <DocumentsSkeleton />
+      ) : loadError ? (
+        <div role="alert" className={styles.loadError}>
+          <EmptyState
+            icon={FileText}
+            title="Dokumen tidak dapat dimuat"
+            hint={loadError}
+            action={
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setLoadError(null);
+                  setIsLoading(true);
+                  setReloadKey((value) => value + 1);
+                }}
+              >
+                <RefreshCw /> Coba lagi
+              </Button>
+            }
+          />
+        </div>
       ) : (
         <>
           <PageHeader
             eyebrow="Regulasi ketenagakerjaan"
-            title="Knowledge Base"
+            title="Dokumen"
             description="Kelola dokumen regulasi yang menjadi sumber jawaban KerjaPedia AI."
             actions={
               <Button
@@ -238,22 +233,34 @@ export function AdminDashboard() {
 
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4">
             {summaryCells.map((cell) => {
-              const actionable =
-                (cell.label === "Review" && summary.needsReview > 0) ||
-                (cell.label === "Gagal" && summary.failed > 0);
+              const active =
+                cell.label === "Dokumen"
+                  ? statusFilter === "all" && publicationFilter === "all"
+                  : cell.label === "Terbit"
+                    ? publicationFilter === "published" && statusFilter === "all"
+                    : statusFilter === (cell.label === "Gagal" ? "failed" : "needs_review") &&
+                      publicationFilter === "all";
               return (
                 <button
                   key={cell.label}
                   type="button"
-                  disabled={!actionable}
+                  aria-pressed={active}
                   onClick={() => {
-                    setStatusFilter(cell.label === "Gagal" ? "failed" : "needs_review");
-                    setPublicationFilter("all");
+                    setStatusFilter(
+                      cell.label === "Gagal"
+                        ? "failed"
+                        : cell.label === "Review"
+                          ? "needs_review"
+                          : "all"
+                    );
+                    setPublicationFilter(cell.label === "Terbit" ? "published" : "all");
+                    setSearch("");
                     setPage(1);
                   }}
                   className={cn(
                     "flex flex-col items-start gap-0.5 bg-white px-5 py-4 text-left",
-                    actionable ? "transition-colors hover:bg-surface-soft" : "cursor-default"
+                    styles.summary,
+                    active && styles.summaryActive
                   )}
                 >
                   <p className="flex items-center gap-1.5 font-mono text-xl font-bold text-tinta tabular-nums">
@@ -268,23 +275,17 @@ export function AdminDashboard() {
           </div>
 
           <Card>
-            <CardHeader className="flex flex-row items-start justify-between space-y-0">
+            <CardHeader className="flex flex-wrap items-start justify-between gap-3 space-y-0">
               <div className="space-y-1.5">
                 <CardTitle>Daftar dokumen</CardTitle>
                 <CardDescription>
                   Menampilkan {filteredDocuments.length} dari {documents.length} dokumen
                 </CardDescription>
               </div>
-              <StatusBadge
-                tone={loadStatus.startsWith("Data tersinkron") ? "info" : "neutral"}
-                pulse={!loadStatus.startsWith("Data tersinkron")}
-              >
-                {loadStatus}
-              </StatusBadge>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="relative min-w-56 flex-1">
+                <div className="relative min-w-0 basis-full sm:min-w-56 sm:flex-1 sm:basis-auto">
                   <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-text" />
                   <Input
                     value={search}
@@ -294,7 +295,7 @@ export function AdminDashboard() {
                     }}
                     placeholder="Cari judul, nomor, topik..."
                     aria-label="Cari dokumen"
-                    className="pl-8"
+                    className="h-11 pl-8"
                   />
                 </div>
                 <Select
@@ -304,12 +305,17 @@ export function AdminDashboard() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger aria-label="Filter status ingestion" className="w-[150px]">
+                  <SelectTrigger
+                    aria-label="Filter status pemrosesan"
+                    className="h-11 w-full sm:w-[170px]"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Semua status</SelectItem>
                     <SelectItem value="completed">Selesai</SelectItem>
+                    <SelectItem value="queued">Antre</SelectItem>
+                    <SelectItem value="running">Diproses</SelectItem>
                     <SelectItem value="needs_review">Perlu review</SelectItem>
                     <SelectItem value="failed">Gagal</SelectItem>
                   </SelectContent>
@@ -321,7 +327,7 @@ export function AdminDashboard() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger aria-label="Filter publikasi" className="w-[150px]">
+                  <SelectTrigger aria-label="Filter publikasi" className="h-11 w-full sm:w-[170px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -352,11 +358,13 @@ export function AdminDashboard() {
                   <TableRow>
                     <TableHead>Dokumen</TableHead>
                     <TableHead>Topik</TableHead>
-                    <TableHead>Ingestion</TableHead>
+                    <TableHead>Pemrosesan</TableHead>
                     <TableHead>Publikasi</TableHead>
                     <TableHead>Versi</TableHead>
                     <TableHead>Diperbarui</TableHead>
-                    <TableHead className="w-10" />
+                    <TableHead className="w-14">
+                      <span className="sr-only">Tindakan</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -367,9 +375,18 @@ export function AdminDashboard() {
                       onClick={() => setSelectedId(document.document_id)}
                     >
                       <TableCell className="max-w-64">
-                        <span className="block truncate text-sm font-medium group-hover:text-javanese">
+                        <button
+                          type="button"
+                          className={styles.documentTitle}
+                          title={document.title}
+                          aria-label={`Lihat detail ${document.short_title}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedId(document.document_id);
+                          }}
+                        >
                           {document.short_title}
-                        </span>
+                        </button>
                         <span className="block font-mono text-xs text-muted-text">
                           {document.regulation_type} · {document.year}
                         </span>
@@ -417,8 +434,8 @@ export function AdminDashboard() {
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`Edit ${document.short_title}`}
-                          className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                          aria-label={`Buka ${document.short_title}`}
+                          className="size-10 text-forest"
                           onClick={(event) => {
                             event.stopPropagation();
                             setSelectedId(document.document_id);
@@ -434,22 +451,38 @@ export function AdminDashboard() {
                       <TableCell colSpan={7}>
                         <EmptyState
                           icon={FileText}
-                          title="Tidak ada dokumen yang cocok"
-                          hint="Ubah kata kunci atau filter untuk melihat hasil lain."
+                          title={
+                            documents.length === 0
+                              ? "Belum ada dokumen"
+                              : "Tidak ada dokumen yang cocok"
+                          }
+                          hint={
+                            documents.length === 0
+                              ? "Unggah PDF pertama untuk menyiapkan sumber jawaban."
+                              : "Coba kata kunci lain atau hapus filter yang dipilih."
+                          }
                           action={
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSearch("");
-                                setStatusFilter("all");
-                                setPublicationFilter("all");
-                                setPage(1);
-                              }}
-                            >
-                              <X /> Reset filter
-                            </Button>
+                            documents.length === 0 ? (
+                              <Button asChild>
+                                <Link href="/admin/upload">
+                                  <Upload /> Upload dokumen
+                                </Link>
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSearch("");
+                                  setStatusFilter("all");
+                                  setPublicationFilter("all");
+                                  setPage(1);
+                                }}
+                              >
+                                <X /> Reset filter
+                              </Button>
+                            )
                           }
                         />
                       </TableCell>
@@ -475,24 +508,12 @@ export function AdminDashboard() {
                       >
                         <ChevronLeft className="size-4" />
                       </Button>
-                      {Array.from({ length: totalPages }, (_, index) => index + 1).map(
-                        (pageNumber) => (
-                          <button
-                            key={pageNumber}
-                            type="button"
-                            aria-current={pageNumber === safePage ? "page" : undefined}
-                            onClick={() => goToPage(pageNumber)}
-                            className={cn(
-                              "flex size-8 items-center justify-center rounded-lg font-mono text-xs font-semibold transition-colors",
-                              pageNumber === safePage
-                                ? "bg-javanese text-white"
-                                : "text-muted-text hover:bg-surface-soft hover:text-tinta"
-                            )}
-                          >
-                            {pageNumber}
-                          </button>
-                        )
-                      )}
+                      <span
+                        aria-live="polite"
+                        className="px-3 text-xs tabular-nums text-muted-text"
+                      >
+                        Halaman {safePage} dari {totalPages}
+                      </span>
                       <Button
                         type="button"
                         variant="outline"
@@ -516,7 +537,11 @@ export function AdminDashboard() {
               if (!open) setSelectedId(null);
             }}
           >
-            <SheetContent side="center" className="w-full sm:max-w-lg" showCloseButton={false}>
+            <SheetContent
+              side="center"
+              className={`${detailStyles.modal} w-full sm:max-w-lg`}
+              showCloseButton={false}
+            >
               {selectedDocument ? (
                 <DocumentInspector
                   key={selectedDocument.document_id}

@@ -18,18 +18,18 @@ export default function DisclaimerPage() {
         <h1 className="max-w-[760px] font-display text-[clamp(34px,5vw,54px)] font-medium leading-[1.08] tracking-[-0.035em] text-javanese-deep">
           Gunakan sebagai panduan, bukan keputusan hukum akhir
         </h1>
-        <p className="mt-5 max-w-[720px] text-[15px] leading-7 text-muted-text">
+        <p className="mt-5 max-w-[720px] text-[15px] leading-7 text-muted-foreground">
           KerjaPedia AI membantu Anda memahami regulasi ketenagakerjaan Indonesia berdasarkan
           dokumen yang tersedia. Layanan ini bukan pengganti nasihat dari advokat, konsultan hukum,
           mediator hubungan industrial, atau instansi pemerintah.
         </p>
-        <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-muted-text">
+        <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
           <span>Versi 1.0</span>
           <span>Terakhir diperbarui: 4 September 2026</span>
         </div>
       </header>
 
-      <aside className="my-8 flex items-start gap-3 rounded-xl border border-[#bfe3c9] bg-[#f0f8f2] px-4 py-4 text-sm leading-6 text-javanese-deep">
+      <aside className="my-8 flex items-start gap-3 rounded-xl legal-notice border border-javanese/20 bg-teal-soft px-4 py-4 text-sm leading-6 text-foreground">
         <AlertTriangle className="mt-0.5 size-5 shrink-0 text-javanese" />
         <p>
           Jawaban AI dapat tidak lengkap, keliru, atau belum mencerminkan perubahan regulasi
@@ -68,7 +68,7 @@ export default function DisclaimerPage() {
             {verifications.map((item) => (
               <div
                 key={item}
-                className="flex items-start gap-3 rounded-lg border border-border bg-surface-soft px-4 py-3"
+                className="flex items-start gap-3 rounded-lg border border-border bg-secondary px-4 py-3"
               >
                 <CheckCircle2 className="mt-1 size-4 shrink-0 text-javanese" />
                 <span>{item}</span>
@@ -100,7 +100,7 @@ export default function DisclaimerPage() {
         </section>
       </div>
 
-      <footer className="mt-12 flex items-center gap-2 border-t border-border pt-5 text-xs text-muted-text">
+      <footer className="mt-12 flex items-center gap-2 border-t border-border pt-5 text-xs text-muted-foreground">
         <FileText className="size-4 text-javanese" />
         Dokumen informasi KerjaPedia AI
       </footer>

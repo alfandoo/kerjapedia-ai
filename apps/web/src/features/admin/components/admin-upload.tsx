@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/select";
 import { PageHeader } from "./primitives";
 import { cn } from "@/lib/utils";
+import styles from "./admin-upload.module.css";
+import detailStyles from "./document-detail.module.css";
 import {
   createIngestionJob,
   fetchIngestionJob,
@@ -72,7 +74,7 @@ export function AdminUpload() {
   const dragCounter = useRef(0);
 
   const [file, setFile] = useState<File | null>(null);
-  const [topic, setTopic] = useState("pkwt");
+  const [topic, setTopic] = useState("");
   const [dragging, setDragging] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -94,7 +96,11 @@ export function AdminUpload() {
   const selectedTopic = topics.find((t) => t.value === topic);
 
   function acceptFile(nextFile: File | undefined) {
-    if (!nextFile) return;
+    if (!nextFile || submitting || ingesting || uploaded) return;
+    if (nextFile.size === 0) {
+      setUploadError("File kosong. Pilih PDF yang memiliki isi.");
+      return;
+    }
     if (nextFile.type !== "application/pdf" && !nextFile.name.toLowerCase().endsWith(".pdf")) {
       setUploadError("File harus berformat PDF.");
       return;
@@ -111,10 +117,17 @@ export function AdminUpload() {
     event.preventDefault();
     dragCounter.current = 0;
     setDragging(false);
+    if (submitting || ingesting || uploaded) return;
+    if (event.dataTransfer.files.length > 1) {
+      setUploadError("Unggah satu PDF dalam satu proses.");
+      return;
+    }
     acceptFile(event.dataTransfer.files[0]);
   }
 
   function clearFile() {
+    if (submitting || ingesting) return;
+    if (inputRef.current) inputRef.current.value = "";
     setFile(null);
     setUploadError(null);
     setUploaded(null);
@@ -123,7 +136,7 @@ export function AdminUpload() {
   }
 
   async function handleUpload() {
-    if (!file) return;
+    if (!file || !topic || submitting || uploaded) return;
     setSubmitting(true);
     setUploadError(null);
     try {
@@ -137,7 +150,7 @@ export function AdminUpload() {
   }
 
   async function handleIngest() {
-    if (!uploaded) return;
+    if (!uploaded || ingesting || ingestDone) return;
     setIngesting(true);
     setIngestError(null);
     try {
@@ -177,32 +190,42 @@ export function AdminUpload() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`${styles.upload} space-y-6`}>
       <PageHeader
         eyebrow="Tambah regulasi"
         title="Upload PDF"
-        description="Unggah dokumen resmi ketenagakerjaan untuk diproses pipeline ingestion."
+        description="Unggah PDF resmi, pilih topiknya, lalu proses dokumen untuk ditinjau sebelum diterbitkan."
         actions={
           <Button asChild variant="outline">
             <Link href="/documents">
-              <ArrowLeft /> Kembali
+              <ArrowLeft /> Daftar dokumen
             </Link>
           </Button>
         }
       />
 
       {/* Step indicator */}
-      <div className="flex items-center gap-3">
+      <div
+        className="flex flex-wrap items-center gap-x-3 gap-y-3"
+        aria-label="Tahapan unggah dokumen"
+      >
         {(["select", "configure", "done"] as const).map((s, i) => {
           const active = step === s;
           const completed =
             (s === "select" && (step === "configure" || step === "done")) ||
             (s === "configure" && step === "done");
           return (
-            <div key={s} className="flex items-center gap-3">
+            <div
+              key={s}
+              aria-current={active ? "step" : undefined}
+              className="flex items-center gap-3"
+            >
               {i > 0 && (
                 <span
-                  className={cn("h-px w-8 transition-colors", completed ? "bg-forest" : "bg-line")}
+                  className={cn(
+                    "h-px w-3 sm:w-8 transition-colors",
+                    completed ? "bg-forest" : "bg-line"
+                  )}
                 />
               )}
               <div className="flex items-center gap-2">
@@ -226,7 +249,7 @@ export function AdminUpload() {
                         : "text-muted-text"
                   )}
                 >
-                  {s === "select" ? "Pilih file" : s === "configure" ? "Konfigurasi" : "Selesai"}
+                  {s === "select" ? "Pilih dokumen" : s === "configure" ? "Proses" : "Selesai"}
                 </span>
               </div>
             </div>
@@ -234,12 +257,14 @@ export function AdminUpload() {
         })}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Left — upload zone */}
         <div className="space-y-4">
           <div
             className={cn(
-              "relative flex min-h-[320px] flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-200",
+              styles.dropzone,
+              dragging && styles.dragging,
+              "relative flex min-h-[300px] min-w-0 flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed p-6 text-center sm:p-8",
               dragging
                 ? "border-forest bg-teal-soft/50 scale-[1.01]"
                 : file
@@ -248,6 +273,7 @@ export function AdminUpload() {
             )}
             onDragEnter={(event) => {
               event.preventDefault();
+              if (submitting || ingesting || uploaded) return;
               dragCounter.current += 1;
               setDragging(true);
             }}
@@ -259,23 +285,6 @@ export function AdminUpload() {
             onDragOver={(event) => event.preventDefault()}
             onDrop={handleDrop}
           >
-            {/* Background pattern */}
-            {!file && !dragging && (
-              <div
-                className="pointer-events-none absolute inset-0 rounded-2xl opacity-[0.03]"
-                aria-hidden="true"
-              >
-                <svg className="size-full" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                      <circle cx="1.5" cy="1.5" r="1" fill="currentColor" />
-                    </pattern>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#grid)" />
-                </svg>
-              </div>
-            )}
-
             {file ? (
               /* File selected state */
               <div className="flex w-full max-w-md flex-col items-center gap-4">
@@ -283,18 +292,23 @@ export function AdminUpload() {
                   <FileText className="size-7" />
                 </span>
                 <div className="min-w-0 w-full space-y-1 text-center">
-                  <p className="truncate text-base font-semibold text-tinta">{file.name}</p>
+                  <p title={file.name} className="break-words text-base font-semibold text-tinta">
+                    {file.name}
+                  </p>
                   <p className="text-sm text-muted-text">{formatBytes(file.size)}</p>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-text hover:text-red"
-                  onClick={clearFile}
-                >
-                  <X className="size-4" /> Hapus file
-                </Button>
+                {!uploaded && (
+                  <Button
+                    type="button"
+                    disabled={submitting || ingesting}
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-text hover:text-red"
+                    onClick={clearFile}
+                  >
+                    <X className="size-4" /> Ganti file
+                  </Button>
+                )}
               </div>
             ) : (
               /* Empty state */
@@ -323,7 +337,7 @@ export function AdminUpload() {
                 >
                   <FileText className="size-4" /> Pilih file dari komputer
                 </Button>
-                <p className="text-xs text-muted-text/70">Format PDF, maksimum 50 MB</p>
+                <p className="text-xs text-muted-text">Format PDF, maksimum 50 MB</p>
               </>
             )}
 
@@ -332,13 +346,22 @@ export function AdminUpload() {
               type="file"
               accept="application/pdf,.pdf"
               className="sr-only"
-              onChange={(event) => acceptFile(event.target.files?.[0])}
+              aria-label="Pilih dokumen PDF"
+              tabIndex={-1}
+              disabled={submitting || ingesting || !!uploaded}
+              onChange={(event) => {
+                acceptFile(event.target.files?.[0]);
+                event.target.value = "";
+              }}
             />
           </div>
 
           {/* Error */}
           {uploadError ? (
-            <div className="rounded-xl border border-red/25 bg-red-soft px-4 py-3 text-sm text-red">
+            <div
+              role="alert"
+              className="rounded-xl border border-red/25 bg-red-soft px-4 py-3 text-sm text-red"
+            >
               {uploadError}
             </div>
           ) : null}
@@ -350,16 +373,18 @@ export function AdminUpload() {
           <Card>
             <CardContent className="space-y-4 p-5">
               <div className="space-y-1.5">
-                <Label className="text-sm font-semibold">Topik regulasi</Label>
+                <Label htmlFor="upload-topic" className="text-sm font-semibold">
+                  Topik regulasi
+                </Label>
                 <p className="text-xs text-muted-text">
                   Pilih kategori yang paling sesuai untuk dokumen ini.
                 </p>
               </div>
-              <Select value={topic} onValueChange={setTopic}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
+              <Select value={topic} onValueChange={setTopic} disabled={submitting || !!uploaded}>
+                <SelectTrigger id="upload-topic" className="min-h-11 w-full">
+                  <SelectValue placeholder="Pilih topik regulasi" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={detailStyles.popup}>
                   {topics.map((item) => (
                     <SelectItem key={item.value} value={item.value}>
                       {item.label}
@@ -373,9 +398,9 @@ export function AdminUpload() {
                 <p className="text-xs font-medium text-tinta">Yang akan terjadi:</p>
                 <ul className="mt-2 space-y-1.5">
                   {[
-                    "Header PDF akan divalidasi",
-                    "Dokumen terdaftar sebagai draft",
-                    "Publikasi menunggu review admin",
+                    "Format dan ukuran PDF diperiksa",
+                    "File disimpan sebagai dokumen draft",
+                    "Tinjau dokumen sebelum diterbitkan",
                   ].map((item) => (
                     <li key={item} className="flex items-center gap-2 text-xs text-muted-text">
                       <CheckCircle2 className="size-3.5 shrink-0 text-forest" />
@@ -387,12 +412,21 @@ export function AdminUpload() {
             </CardContent>
           </Card>
 
+          {!uploaded && (
+            <p className="text-xs leading-relaxed text-muted-text" role="status">
+              {!file
+                ? "Pilih satu PDF untuk melanjutkan."
+                : !topic
+                  ? "Pilih topik sebelum mengunggah."
+                  : "Dokumen siap diunggah. Pemrosesan dimulai setelah unggahan selesai."}
+            </p>
+          )}
           {/* Upload button */}
           {!uploaded && (
             <Button
-              className="w-full bg-javanese text-white hover:bg-forest"
+              className={`${styles.primary} w-full bg-javanese text-white hover:bg-forest`}
               size="lg"
-              disabled={!file || submitting}
+              disabled={!file || !topic || submitting}
               onClick={() => void handleUpload()}
             >
               {submitting ? (
@@ -425,7 +459,7 @@ export function AdminUpload() {
                   </div>
                 </div>
                 <Button
-                  className="w-full bg-javanese text-white hover:bg-forest"
+                  className={`${styles.primary} w-full bg-javanese text-white hover:bg-forest`}
                   size="lg"
                   disabled={ingesting}
                   onClick={() => void handleIngest()}
@@ -436,11 +470,21 @@ export function AdminUpload() {
                     </>
                   ) : (
                     <>
-                      <PlayCircle /> Mulai ingestion
+                      <PlayCircle /> Proses dokumen
                     </>
                   )}
                 </Button>
-                {ingestError && <p className="text-xs text-red">{ingestError}</p>}
+                {ingestError && (
+                  <p role="alert" className="text-xs text-red">
+                    {ingestError}
+                  </p>
+                )}
+                <Link
+                  href="/admin/ingestion"
+                  className="block text-center text-xs font-semibold text-forest underline underline-offset-4"
+                >
+                  Lihat status pemrosesan
+                </Link>
               </CardContent>
             </Card>
           )}
@@ -453,7 +497,7 @@ export function AdminUpload() {
                   <CheckCircle2 className="size-6" />
                 </span>
                 <div className="space-y-1">
-                  <p className="font-semibold text-tinta">Upload & ingestion selesai</p>
+                  <p className="font-semibold text-tinta">Pemrosesan selesai</p>
                   <p className="text-xs text-muted-text">
                     Dokumen telah diproses dan siap untuk direview.
                   </p>

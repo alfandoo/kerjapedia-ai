@@ -12,17 +12,17 @@ export default function TermsPage() {
         <h1 className="max-w-[760px] font-display text-[clamp(32px,4.5vw,44px)] font-medium leading-[1.1] tracking-[-0.03em] text-javanese-deep">
           Ketentuan penggunaan
         </h1>
-        <p className="mt-5 max-w-[720px] text-[15px] leading-7 text-muted-text">
+        <p className="mt-5 max-w-[720px] text-[15px] leading-7 text-muted-foreground">
           Dengan menggunakan KerjaPedia AI, Anda setuju untuk memanfaatkan layanan ini secara
           bertanggung jawab dan memahami batasan alat bantu berbasis AI.
         </p>
-        <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-muted-text">
+        <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
           <span>Versi 1.0</span>
           <span>Terakhir diperbarui: 4 September 2026</span>
         </div>
       </header>
 
-      <div className="grid gap-10 text-[15px] leading-7 text-foreground">
+      <div className="mt-8 grid gap-10 text-[15px] leading-7 text-foreground">
         <section>
           <h2 className="mb-3 font-display text-2xl font-medium text-javanese-deep">
             Tanggung jawab pengguna
@@ -53,7 +53,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <div className="flex items-start gap-3 rounded-xl border border-[#bfe3c9] bg-[#f0f8f2] px-4 py-4 text-sm leading-6 text-javanese-deep">
+        <div className="flex items-start gap-3 rounded-xl legal-notice border border-javanese/20 bg-teal-soft px-4 py-4 text-sm leading-6 text-foreground">
           <FileText className="mt-0.5 size-5 shrink-0 text-javanese" />
           <p>
             Dengan melanjutkan penggunaan, Anda dianggap telah membaca dan menyetujui ketentuan yang

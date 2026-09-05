@@ -1,5 +1,5 @@
+import styles from "./admin-ingestion.module.css";
 import { AlertTriangle, CheckCircle2, Trophy } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -91,16 +91,10 @@ function MetricBar({ label, value }: { label: string; value: number }) {
 }
 
 export function ModeMetricsCard({ mode, metrics }: { mode: string; metrics: EvaluationMetricSet }) {
-  const bestMode = mode === "hybrid" || mode === "rerank";
   return (
-    <div
-      className={cn(
-        "rounded-xl border p-4 transition-all",
-        bestMode ? "border-forest/25 bg-teal-soft/20" : "border-line bg-white"
-      )}
-    >
+    <div className="rounded-xl border border-line bg-white p-4">
       <div className="flex items-center justify-between">
-        <StatusBadge tone={bestMode ? "success" : "neutral"}>{modeLabel[mode] ?? mode}</StatusBadge>
+        <StatusBadge tone="neutral">{modeLabel[mode] ?? mode}</StatusBadge>
         {metrics.recall_at_5 >= 0.8 && <Trophy className="size-4 text-emas" />}
       </div>
       <div className="mt-3">
@@ -130,13 +124,38 @@ export function RunDetailDialog({
   open,
   onOpenChange,
   datasetName,
+  loading = false,
+  error = false,
 }: {
   detail: EvaluationRunDetail | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   datasetName?: string;
+  loading?: boolean;
+  error?: boolean;
 }) {
-  if (!detail) return null;
+  if (!detail)
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className={`admin-theme ${styles.ingestion} ${styles.detailModal}`}>
+          <DialogHeader>
+            <DialogTitle>Detail evaluasi</DialogTitle>
+            <DialogDescription>
+              {error
+                ? "Detail belum dapat dimuat. Tutup modal dan pilih Detail untuk mencoba lagi."
+                : "Memuat hasil evaluasi…"}
+            </DialogDescription>
+          </DialogHeader>
+          <p role={error ? "alert" : "status"} className="text-sm text-muted-text">
+            {loading
+              ? "Mengambil laporan dari API…"
+              : error
+                ? "Gagal memuat laporan."
+                : "Laporan tidak tersedia."}
+          </p>
+        </DialogContent>
+      </Dialog>
+    );
 
   const modes = sortModes(detail.metrics);
   const experiments = detail.report?.experiments ?? [];
@@ -148,7 +167,9 @@ export function RunDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+      <DialogContent
+        className={`admin-theme ${styles.ingestion} ${styles.detailModal} max-h-[85dvh] overflow-y-auto p-6 sm:max-w-4xl`}
+      >
         <DialogHeader>
           <DialogTitle>Detail evaluasi</DialogTitle>
           <DialogDescription>

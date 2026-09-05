@@ -1,0 +1,229 @@
+/* This access screen has a fixed palette, independent of the chat theme. */
+.screen {
+  color-scheme: light;
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: 40px 20px;
+  background: #f5f8f6;
+  color: #172e23;
+}
+.content {
+  width: 100%;
+  max-width: 448px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-bottom: 24px;
+  color: #285e45;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+}
+.panel {
+  padding: 36px;
+  border: 1px solid #dce6df;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 12px 36px rgba(26, 57, 40, 0.06);
+}
+.icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border: 1px solid #d4e6da;
+  border-radius: 16px;
+  background: #edf5ef;
+  color: #286246;
+}
+.eyebrow {
+  margin: 24px 0 8px;
+  color: #52705e;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.title {
+  margin: 0;
+  color: #183e2c;
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.description {
+  margin: 14px 0 28px;
+  color: #53645a;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.screen .primary,
+.screen .secondary {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+.screen .primary {
+  padding: 12px 18px;
+  background: #286246;
+  color: #ffffff;
+}
+.screen .primary:hover {
+  background: #1b4932;
+}
+.screen .secondary {
+  margin-top: 8px;
+  color: #355b45;
+  background: transparent;
+}
+.screen .secondary:hover {
+  color: #183e2c;
+  background: #edf5ef;
+}
+.screen a:focus-visible {
+  outline: 2px solid #286246;
+  outline-offset: 4px;
+}
+.note {
+  margin: 24px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid #e3ebe6;
+  color: #617067;
+  font-size: 12px;
+  line-height: 1.7;
+}
+@media (max-width: 480px) {
+  .screen {
+    padding: 28px 16px;
+  }
+  .panel {
+    padding: 28px 24px;
+  }
+  .title {
+    font-size: 28px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .screen .primary,
+  .screen .secondary {
+    transition: none;
+  }
+}
+
+.form {
+  display: grid;
+  gap: 20px;
+}
+.field {
+  display: grid;
+  gap: 8px;
+}
+.field label {
+  color: #344c3e;
+  font-size: 13px;
+  font-weight: 600;
+}
+.screen .input {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid #bdcec2 !important;
+  border-radius: 10px;
+  background: #ffffff !important;
+  color: #172e23 !important;
+  caret-color: #286246;
+  font-size: 16px;
+  outline: none;
+}
+.screen .input:focus {
+  border-color: #286246 !important;
+  box-shadow: 0 0 0 3px #e0eee4;
+}
+.screen .input:disabled {
+  background: #f1f5f2 !important;
+  cursor: wait;
+}
+.passwordField {
+  position: relative;
+}
+.passwordField .input {
+  padding-right: 52px;
+}
+.screen .reveal {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 8px;
+  background: transparent;
+  color: #53645a;
+  cursor: pointer;
+}
+.screen .reveal:hover {
+  background: #edf5ef;
+  color: #183e2c;
+}
+.screen button:focus-visible {
+  outline: 2px solid #286246;
+  outline-offset: 3px;
+}
+.screen button.primary[type="submit"] {
+  width: 100%;
+  margin-top: 4px;
+  background: #286246 !important;
+  color: #ffffff !important;
+  cursor: pointer;
+}
+.screen button.primary[type="submit"]:hover {
+  background: #1b4932 !important;
+}
+.screen button.primary[type="submit"]:disabled {
+  background: #dfe8e2 !important;
+  color: #42594b !important;
+  cursor: wait;
+}
+.error {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #edc9c2;
+  border-radius: 10px;
+  background: #fff3f0;
+  color: #922e24;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.loginScreen {
+  padding-block: 24px;
+}
+.loginScreen .panel {
+  padding: 28px;
+}
+.loginScreen .brand {
+  margin-bottom: 18px;
+}
+.loginScreen .eyebrow {
+  margin-top: 0;
+}
+.loginScreen .description {
+  margin-bottom: 22px;
+}

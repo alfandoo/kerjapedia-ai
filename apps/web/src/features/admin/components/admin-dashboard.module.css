@@ -1,0 +1,47 @@
+/* Keep the admin overview readable regardless of the chat appearance setting. */
+.dashboard.dashboard {
+  --teal-soft: #e7f1ec;
+  --amber-soft: #fff7e5;
+  --red-soft: #fff0ec;
+  --amber: #8a5a10;
+  --red: #a83126;
+  --muted-text: #607067;
+  --line: #dce7e0;
+  color: #172e23;
+}
+.dashboard h1,
+.dashboard h2 {
+  color: #183e2c !important;
+}
+.dashboard header {
+  background: #ffffff !important;
+  border-color: #dce7e0 !important;
+}
+.dashboard a:focus-visible,
+.dashboard button:focus-visible {
+  outline: 2px solid #286246;
+  outline-offset: 4px;
+}
+.dashboard .upload {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: #286246;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+}
+.dashboard .upload:hover {
+  background: #1b4932;
+}
+.metric {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #dce7e0;
+  border-radius: 12px;
+  background: #ffffff;
+}

@@ -1,5 +1,7 @@
 "use client";
 
+import detailStyles from "./document-detail.module.css";
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
@@ -540,7 +542,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={detailStyles.popup}>
                   <SelectItem value="active">Berlaku</SelectItem>
                   <SelectItem value="needs_verification">Perlu verifikasi</SelectItem>
                   <SelectItem value="historical">Historis</SelectItem>
@@ -684,7 +686,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Pilih dokumen" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className={detailStyles.popup}>
                         {allDocuments
                           .filter((item) => item.document_id !== document.document_id)
                           .map((item) => (

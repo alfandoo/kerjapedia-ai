@@ -1,0 +1,47 @@
+/* Admin upload uses a fixed white and green palette. */
+.upload.upload {
+  --muted-text: #607267;
+  --teal-soft: #e5f1e9;
+  --surface-soft: #f2f8f4;
+  --line: #c9ddcf;
+  --red: #ab3329;
+  --red-soft: #fff0ec;
+  color: #183e2c;
+}
+.upload h1 {
+  color: #183e2c !important;
+}
+.upload .dropzone {
+  background: #ffffff !important;
+  border-color: #b9d2c2 !important;
+}
+.upload .dropzone:focus-within {
+  border-color: #286246 !important;
+}
+.upload .primary {
+  min-height: 44px;
+  background: #286246 !important;
+  color: #ffffff !important;
+}
+.upload .primary:hover {
+  background: #1b4932 !important;
+}
+.upload .primary:disabled {
+  background: #dce8e0 !important;
+  color: #536c5d !important;
+  opacity: 1;
+}
+.upload button:focus-visible,
+.upload a:focus-visible {
+  outline: 2px solid #286246;
+  outline-offset: 3px;
+}
+.upload [data-slot="select-trigger"] {
+  background: #ffffff !important;
+  color: #183e2c !important;
+}
+
+.upload .dropzone.dragging {
+  background: #edf5ef !important;
+  border-color: #286246 !important;
+}
