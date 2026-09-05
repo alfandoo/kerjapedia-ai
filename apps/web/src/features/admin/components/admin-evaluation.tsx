@@ -78,6 +78,14 @@ export function AdminEvaluation() {
   const [runModes, setRunModes] = useState<string[]>(["hybrid", "rerank"]);
   const [runTopK, setRunTopK] = useState("5");
   const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<EvaluationRunDetail | null>(null);
@@ -147,6 +155,8 @@ export function AdminEvaluation() {
     )
       return;
     runBusy.current = true;
+    setRunError("");
+    setElapsed(0);
     setRunning(true);
     try {
       const next = await createEvaluationRun({
@@ -171,7 +181,9 @@ export function AdminEvaluation() {
       setDetailOpen(true);
       toast.success("Evaluasi selesai dijalankan.");
     } catch {
-      toast.error("Evaluasi gagal dijalankan. Pengaturan tetap tersimpan; silakan coba lagi.");
+      setRunError(
+        "Hasil evaluasi belum dapat diterima. Periksa koneksi dan muat ulang riwayat sebelum mencoba lagi agar tidak membuat evaluasi ganda."
+      );
     } finally {
       runBusy.current = false;
       setRunning(false);
@@ -256,6 +268,7 @@ export function AdminEvaluation() {
               Belum ada dataset. Pilih Muat dataset untuk menyiapkan pertanyaan evaluasi.
             </p>
           )}
+
           {/* Latest run comparison */}
           {latestRun ? (
             <Card>
@@ -412,105 +425,270 @@ export function AdminEvaluation() {
           </Card>
         </>
       )}
-      {/* Run dialog */}
-      <Dialog
-        open={runDialogOpen}
-        onOpenChange={(open) => {
-          if (!running) setRunDialogOpen(open);
-        }}
+      {(running || runError) && !runDialogOpen && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-white p-4">
+          <p role="status" className="text-sm text-tinta">
+            {running
+              ? "Evaluasi masih berjalan. Tetap buka halaman ini."
+              : "Hasil evaluasi belum dapat diterima."}
+          </p>
+          <Button variant="outline" onClick={() => setRunDialogOpen(true)}>
+            Lihat status
+          </Button>
+        </div>
+      )}
+      <section
+        aria-labelledby="evaluation-guide-title"
+        className="rounded-xl border border-line bg-white p-5 sm:p-6"
       >
+        <h2 id="evaluation-guide-title" className="text-base font-semibold text-tinta">
+          Memahami mode dan metrik
+        </h2>
+        <p className="mt-1 text-sm text-muted-text">
+          Gunakan panduan ini untuk membaca hasil perbandingan evaluasi.
+        </p>
+        <div className="mt-6 space-y-6">
+          <div>
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-text">
+              Retrieval modes
+            </h3>
+            <dl className="grid gap-x-8 gap-y-5 md:grid-cols-2">
+              {[
+                [
+                  "Baseline",
+                  "Mengurutkan hasil berdasarkan kecocokan kata atau istilah (lexical score), sebagai pembanding awal.",
+                ],
+                [
+                  "Dense",
+                  "Mengurutkan hasil berdasarkan kemiripan makna (semantic score), sehingga tidak harus memakai kata yang sama.",
+                ],
+                [
+                  "Hybrid",
+                  "Menggabungkan peringkat lexical dan semantic melalui fusion score untuk memanfaatkan keduanya.",
+                ],
+                [
+                  "Re-rank",
+                  "Mengurutkan ulang kandidat menggunakan final score setelah penilaian relevansi lanjutan.",
+                ],
+              ].map(([label, description]) => (
+                <div key={label} className="min-w-0 border-l-2 border-line pl-4">
+                  <dt className="text-sm font-semibold text-tinta">{label}</dt>
+                  <dd className="mt-1 text-sm leading-relaxed text-muted-text">{description}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <div>
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-text">
+              Evaluation metrics
+            </h3>
+            <dl className="grid gap-x-8 gap-y-5 md:grid-cols-2">
+              {[
+                [
+                  "Recall@5",
+                  "Proporsi dokumen acuan relevan yang ditemukan dalam lima hasil teratas.",
+                ],
+                [
+                  "MRR (Mean Reciprocal Rank)",
+                  "Rata-rata kebalikan posisi hasil relevan pertama. Posisi pertama bernilai 1; posisi kedua bernilai 0,5.",
+                ],
+                [
+                  "Citation correctness",
+                  "Kesesuaian kutipan dengan dokumen dan pasal acuan pada dataset evaluasi.",
+                ],
+                [
+                  "Faithfulness",
+                  "Dukungan sumber terhadap klaim jawaban. Perhitungan memakai skor dukungan klaim, atau kecocokan kata dengan kutipan jika data klaim tidak tersedia.",
+                ],
+                [
+                  "Refusal accuracy",
+                  "Ketepatan keputusan menjawab atau menolak dibandingkan jawaban acuan dalam dataset.",
+                ],
+                [
+                  "Hard-negative recall@5",
+                  "Recall@5 khusus pertanyaan yang ditandai hard negative: kasus sulit dengan sumber pengecoh yang tampak relevan.",
+                ],
+              ].map(([label, description]) => (
+                <div key={label} className="min-w-0 border-l-2 border-line pl-4">
+                  <dt className="text-sm font-semibold text-tinta">{label}</dt>
+                  <dd className="mt-1 text-sm leading-relaxed text-muted-text">{description}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
+        <p className="mt-6 rounded-lg bg-surface-soft px-4 py-3 text-xs leading-relaxed text-muted-text">
+          Semakin tinggi nilai metrik di atas, semakin baik hasil pada dataset ini. Nilai tersebut
+          bukan persentase kepastian jawaban. Top K menentukan jumlah hasil yang diambil; pilih
+          minimal 5 untuk membandingkan Recall@5 dengan lima hasil penuh.
+        </p>
+      </section>
+
+      {/* Run dialog */}
+      <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
         <DialogContent
           className={`admin-theme ${styles.ingestion} ${styles.detailModal} max-h-[85dvh] overflow-y-auto p-6 sm:max-w-lg`}
         >
           <DialogHeader>
-            <DialogTitle>Jalankan evaluasi</DialogTitle>
+            <DialogTitle>{running ? "Evaluasi sedang berjalan" : "Jalankan evaluasi"}</DialogTitle>
             <DialogDescription>
-              Benchmark retrieval terhadap dataset pertanyaan terverifikasi.
+              {running
+                ? "Permintaan sudah dikirim. Hasil akan ditampilkan setelah API selesai merespons."
+                : "Pilih dataset dan mode pencarian yang ingin dibandingkan."}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="eval-dataset">Dataset</Label>
-              <Select disabled={running} value={runDatasetId} onValueChange={setRunDatasetId}>
-                <SelectTrigger id="eval-dataset" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className={`admin-theme ${styles.ingestion}`}>
-                  {datasets.map((dataset) => (
-                    <SelectItem key={dataset.dataset_id} value={dataset.dataset_id}>
-                      {dataset.name} ({dataset.questions.length} pertanyaan)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {running ? (
+            <div className="space-y-5 py-2">
+              <div
+                className="flex items-center gap-4 rounded-xl border border-line bg-surface-soft p-5"
+                role="status"
+              >
+                <Loader2
+                  className="size-7 shrink-0 animate-spin text-forest motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+                <div>
+                  <p className="font-semibold text-tinta">Memproses dataset evaluasi</p>
+                  <p className="mt-1 text-sm text-muted-text">
+                    Waktu proses bergantung pada jumlah pertanyaan dan mode yang dipilih.
+                  </p>
+                </div>
+              </div>
+              <dl className="grid grid-cols-2 gap-4 text-sm">
+                <div className="col-span-2">
+                  <dt className="text-xs text-muted-text">Dataset</dt>
+                  <dd className="mt-1 font-medium break-words">{datasetName(runDatasetId)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-text">Pertanyaan</dt>
+                  <dd className="mt-1">
+                    {datasets.find((item) => item.dataset_id === runDatasetId)?.questions.length ??
+                      "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-text">Jumlah hasil</dt>
+                  <dd className="mt-1">{runTopK} per pertanyaan</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-xs text-muted-text">Mode</dt>
+                  <dd className="mt-2 flex flex-wrap gap-2">
+                    {runModes.map((mode) => (
+                      <StatusBadge key={mode} tone="neutral">
+                        {modeLabel[mode] ?? mode}
+                      </StatusBadge>
+                    ))}
+                  </dd>
+                </div>
+              </dl>
+              <p className="text-xs text-muted-text">
+                Waktu berjalan:{" "}
+                <span className="font-mono tabular-nums">
+                  {Math.floor(elapsed / 60)}m {elapsed % 60}s
+                </span>
+                . Tetap buka halaman ini hingga proses selesai.
+              </p>
             </div>
+          ) : (
+            <div className="space-y-4">
+              {runError && (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-line bg-red-soft p-3 text-sm text-red"
+                >
+                  {runError}
+                </p>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="eval-dataset">Dataset</Label>
+                <Select disabled={running} value={runDatasetId} onValueChange={setRunDatasetId}>
+                  <SelectTrigger id="eval-dataset" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className={`admin-theme ${styles.ingestion}`}>
+                    {datasets.map((dataset) => (
+                      <SelectItem key={dataset.dataset_id} value={dataset.dataset_id}>
+                        {dataset.name} ({dataset.questions.length} pertanyaan)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div className="space-y-1.5">
-              <Label>Mode eksperimen</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {modeOrder.map((mode) => {
-                  const selected = runModes.includes(mode);
-                  return (
-                    <button
-                      type="button"
-                      key={mode}
-                      aria-pressed={selected}
-                      disabled={running}
-                      onClick={() => toggleMode(mode)}
-                      className={cn(
-                        "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors",
-                        selected
-                          ? "border-forest bg-teal-soft text-forest"
-                          : "border-line text-muted-text hover:bg-surface-soft"
-                      )}
-                    >
-                      <span
+              <div className="space-y-1.5">
+                <Label>Mode eksperimen</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {modeOrder.map((mode) => {
+                    const selected = runModes.includes(mode);
+                    return (
+                      <button
+                        type="button"
+                        key={mode}
+                        aria-pressed={selected}
+                        disabled={running}
+                        onClick={() => toggleMode(mode)}
                         className={cn(
-                          "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
-                          selected ? "border-forest bg-forest text-white" : "border-muted-text/30"
+                          "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors",
+                          selected
+                            ? "border-forest bg-teal-soft text-forest"
+                            : "border-line text-muted-text hover:bg-surface-soft"
                         )}
                       >
-                        {selected ? <Check className="size-3" /> : null}
-                      </span>
-                      {modeLabel[mode] ?? mode}
-                    </button>
-                  );
-                })}
+                        <span
+                          className={cn(
+                            "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
+                            selected ? "border-forest bg-forest text-white" : "border-muted-text/30"
+                          )}
+                        >
+                          {selected ? <Check className="size-3" /> : null}
+                        </span>
+                        {modeLabel[mode] ?? mode}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="eval-top-k">Jumlah hasil (Top K)</Label>
-              <Select disabled={running} value={runTopK} onValueChange={setRunTopK}>
-                <SelectTrigger id="eval-top-k" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className={`admin-theme ${styles.ingestion}`}>
-                  <SelectItem value="3">3</SelectItem>
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {datasets.length === 0 && (
-              <div className="rounded-lg border border-amber/25 bg-amber-soft px-3 py-2.5 text-sm text-amber">
-                Belum ada dataset. Muat golden questions terlebih dahulu.
+              <div className="space-y-1.5">
+                <Label htmlFor="eval-top-k">Jumlah hasil (Top K)</Label>
+                <Select disabled={running} value={runTopK} onValueChange={setRunTopK}>
+                  <SelectTrigger id="eval-top-k" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className={`admin-theme ${styles.ingestion}`}>
+                    <SelectItem value="3">3</SelectItem>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {datasets.length === 0 && (
+                <div className="rounded-lg border border-amber/25 bg-amber-soft px-3 py-2.5 text-sm text-amber">
+                  Belum ada dataset. Muat golden questions terlebih dahulu.
+                </div>
+              )}
+              {!runModes.length && (
+                <p role="status" className="text-xs text-amber">
+                  Pilih minimal satu mode untuk menjalankan evaluasi.
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter className="mx-0 mb-0 mt-2 rounded-none border-line bg-transparent px-0 pb-0 pt-4">
+            <Button variant="outline" onClick={() => setRunDialogOpen(false)}>
+              {running ? "Sembunyikan" : "Batal"}
+            </Button>
+            {!running && (
+              <Button
+                className="bg-javanese text-white hover:bg-forest"
+                disabled={runModes.length === 0 || !runDatasetId}
+                onClick={() => void startRun()}
+              >
+                <FlaskConical />
+                {runError ? "Coba lagi" : "Jalankan evaluasi"}
+              </Button>
             )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" disabled={running} onClick={() => setRunDialogOpen(false)}>
-              Batal
-            </Button>
-            <Button
-              className="bg-javanese text-white hover:bg-forest"
-              disabled={running || runModes.length === 0 || !runDatasetId}
-              onClick={() => void startRun()}
-            >
-              {running ? <Loader2 className="animate-spin" /> : <FlaskConical />}
-              {running ? "Menjalankan..." : "Jalankan evaluasi"}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

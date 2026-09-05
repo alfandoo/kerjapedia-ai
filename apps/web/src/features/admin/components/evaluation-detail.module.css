@@ -1,0 +1,106 @@
+.modal.modal[role="dialog"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: min(960px, calc(100vw - 32px));
+  max-width: 960px;
+  max-height: 90dvh;
+  padding: 0;
+  overflow: hidden;
+}
+.header {
+  padding: 24px 56px 20px 24px;
+  flex-shrink: 0;
+}
+.tabs {
+  display: flex;
+  gap: 20px;
+  padding: 0 24px;
+  border-bottom: 1px solid #d7e5dc;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+.tabs button {
+  padding: 12px 0;
+  border-bottom: 2px solid transparent;
+  color: #607267;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tabs button[aria-pressed="true"] {
+  color: #286246;
+  border-bottom-color: #286246;
+  font-weight: 600;
+}
+.tabs button:hover {
+  color: #183e2c;
+}
+.body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px;
+}
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid #d7e5dc;
+  border-radius: 10px;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.table th,
+.table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e3ece6;
+}
+.table thead {
+  background: #f2f7f3;
+  color: #607267;
+}
+.table thead th {
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+.table tbody th {
+  font-weight: 500;
+  min-width: 160px;
+}
+.table td {
+  white-space: nowrap;
+}
+.table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.table tbody tr:hover {
+  background: #f8faf8;
+}
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-top: 1px solid #d7e5dc;
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .header {
+    padding-left: 16px;
+  }
+  .body {
+    padding: 16px;
+  }
+  .tabs {
+    padding: 0 16px;
+    gap: 16px;
+  }
+  .footer {
+    padding: 12px 16px;
+  }
+}
