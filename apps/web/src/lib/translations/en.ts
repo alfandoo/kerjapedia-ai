@@ -174,6 +174,14 @@ const en = {
   "profile.saved": "Profile updated.",
   "profile.error": "Your profile could not be saved. Please try again.",
   "profile.invalid": "Enter a name between 1 and 80 characters.",
+  // Not found
+  "notFound.error": "Error 404",
+  "notFound.title": "Page not found",
+  "notFound.description":
+    "The address you opened may have changed, been removed, or never existed.",
+  "notFound.backToChat": "Back to chat",
+  "notFound.searchRegulations": "Browse regulations",
+  "notFound.homeAriaLabel": "KerjaPedia AI, back to chat",
   // Footer
   "footer.disclaimer": "KerjaPedia may make errors. Always check official sources.",
   "footer.agreement": "By using this service, you agree to the",

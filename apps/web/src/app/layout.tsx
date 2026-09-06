@@ -25,6 +25,9 @@ const playfairDisplay = Playfair_Display({
 export const metadata: Metadata = {
   title: "KerjaPedia AI",
   description: "Asisten regulasi ketenagakerjaan Indonesia berbasis RAG.",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default async function RootLayout({

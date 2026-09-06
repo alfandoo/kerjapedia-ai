@@ -177,6 +177,14 @@ const id = {
   "profile.saved": "Profil berhasil diperbarui.",
   "profile.error": "Profil belum dapat disimpan. Silakan coba lagi.",
   "profile.invalid": "Masukkan nama sepanjang 1–80 karakter.",
+  // Not found
+  "notFound.error": "Galat 404",
+  "notFound.title": "Halaman tidak ditemukan",
+  "notFound.description":
+    "Alamat yang Anda buka mungkin sudah berubah, dihapus, atau tidak pernah tersedia.",
+  "notFound.backToChat": "Kembali ke chat",
+  "notFound.searchRegulations": "Telusuri regulasi",
+  "notFound.homeAriaLabel": "KerjaPedia AI, kembali ke chat",
   // Footer
   "footer.disclaimer": "KerjaPedia dapat membuat kekeliruan. Periksa selalu sumber resmi.",
   "footer.agreement": "Dengan menggunakan layanan ini, Anda menyetujui",
