@@ -1,4 +1,68 @@
 const id = {
+  // Regulations search
+  "search.eyebrow": "Basis hukum ketenagakerjaan",
+  "search.title": "Temukan dasar hukum yang tepat",
+  "search.subtitle":
+    "Telusuri regulasi ketenagakerjaan Indonesia dari sumber resmi pemerintah — UU, PP, dan Permenaker yang telah dikurasi.",
+  "search.placeholder": "Cari judul, nomor, atau topik...",
+  "search.searchAria": "Cari judul, nomor, atau topik regulasi",
+  "search.filterTopic": "Topik",
+  "search.filterType": "Jenis",
+  "search.filterYear": "Tahun",
+  "search.filterStatus": "Status",
+  "search.allTopics": "Semua topik",
+  "search.allTypes": "Semua jenis",
+  "search.allYears": "Semua tahun",
+  "search.allStatus": "Semua status",
+  "search.statusActive": "Berlaku",
+  "search.statusNeedsVerification": "Perlu verifikasi",
+  "search.reset": "Reset pencarian",
+  "search.apiError": "Katalog API belum tersedia. Menampilkan daftar referensi lokal sementara.",
+  "search.listAria": "Daftar regulasi",
+  "search.emptyTitle": "Regulasi tidak ditemukan",
+  "search.emptyDescription": "Coba gunakan judul, nomor, atau topik yang lebih umum.",
+  "search.clearFilters": "Hapus filter",
+  "search.colType": "Jenis regulasi",
+  "search.colDocument": "Dokumen",
+  "search.colYear": "Tahun",
+  "search.colStatus": "Status",
+  "search.colAccess": "Akses",
+  "search.numberYear": "Nomor {number} Tahun {year}",
+  "search.openSource": "Buka sumber",
+  "search.downloadPdf": "Download PDF",
+  "search.prevAria": "Halaman sebelumnya",
+  "search.nextAria": "Halaman berikutnya",
+  "search.prev": "Sebelumnya",
+  "search.next": "Berikutnya",
+  "search.fromTo": "{start}–{end} dari {total}",
+
+  // Kalkulator Ketenagakerjaan (belum diimplementasikan)
+  "kalkulator.title": "Kalkulator Ketenagakerjaan",
+  "kalkulator.description":
+    "Estimasi indikatif hak pekerja — pesangon, THR, cuti, dan upah lembur.",
+  "kalkulator.comingSoon": "Fitur ini sedang dalam pengembangan.",
+  "kalkulator.note":
+    "Hasil hanyalah estimasi dan tidak mengikat. Selalu verifikasi ke sumber resmi sebelum digunakan.",
+  "kalkulator.backToChat": "Kembali ke chat",
+
+  // Review CV (belum diimplementasikan)
+  "reviewCv.title": "Review CV",
+  "reviewCv.description":
+    "Tinjau isi CV atau iklan lowongan terhadap prinsip kesetaraan dan larangan diskriminasi dalam dunia kerja.",
+  "reviewCv.comingSoon": "Fitur ini sedang dalam pengembangan.",
+  "reviewCv.note":
+    "Hasil hanyalah penilaian kepatuhan indikatif dan tidak mengikat. Selalu verifikasi ke sumber resmi sebelum digunakan.",
+  "reviewCv.backToChat": "Kembali ke chat",
+
+  // Cek Kepatuhan Rekrutmen (belum diimplementasikan)
+  "compliance.title": "Cek Kepatuhan Rekrutmen",
+  "compliance.description":
+    "Nilai kepatuhan CV atau iklan lowongan terhadap prinsip kesetaraan dan larangan diskriminasi dalam dunia kerja.",
+  "compliance.comingSoon": "Fitur ini sedang dalam pengembangan.",
+  "compliance.note":
+    "Hasil hanyalah penilaian kepatuhan indikatif dan tidak mengikat. Selalu verifikasi ke sumber resmi sebelum digunakan.",
+  "compliance.backToChat": "Kembali ke chat",
+
   // Chat
   "chat.title": "Apa yang ingin Anda pahami?",
   "chat.subtitle":
@@ -52,6 +116,9 @@ const id = {
   "sidebar.noSearchResults": "Tidak ada percakapan yang cocok.",
   "sidebar.viewAllRegulations": "Lihat semua regulasi",
   "sidebar.searchRegulations": "Cari Regulasi",
+  "sidebar.kalkulator": "Kalkulator Ketenagakerjaan",
+  "sidebar.reviewCv": "Review CV",
+  "sidebar.compliance": "Cek Kepatuhan Rekrutmen",
 
   // Header
   "header.login": "Masuk",

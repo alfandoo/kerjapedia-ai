@@ -17,6 +17,7 @@ import { ProfileModal } from "@/features/auth/components/profile-modal";
 import { AuthModal, signOut } from "@/features/auth";
 import { toast } from "sonner";
 import {
+  Calculator,
   ChevronRight,
   FileText,
   LogOut,
@@ -94,10 +95,10 @@ function LegalDropdown({ children, label }: { children: ReactNode; label: string
       <summary className="flex min-h-10 cursor-pointer list-none items-center gap-3 rounded-lg px-3 text-[13px] text-tinta transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-javanese [&::-webkit-details-marker]:hidden">
         <FileText className="size-[18px] text-javanese" />
         <span>{label}</span>
-        <ChevronRight className="ml-auto size-4 rotate-90 transition-transform group-open/legal:-rotate-90" />
+        <ChevronRight className="ml-auto size-4 -rotate-90 transition-transform group-open/legal:rotate-90" />
       </summary>
       <div
-        className="absolute inset-x-0 top-full z-20 mt-1 grid rounded-xl border border-sidebar-border bg-sidebar p-1.5 shadow-xl"
+        className="absolute inset-x-0 bottom-full z-20 mb-1 grid rounded-xl border border-sidebar-border bg-sidebar p-1.5 shadow-xl"
         onClick={(event) => {
           if (event.target instanceof Element && event.target.closest("a") && detailsRef.current) {
             detailsRef.current.open = false;
@@ -457,6 +458,42 @@ export function ChatWorkspaceShell({
             >
               <Search className="size-[18px] text-javanese" />
               <span>{translate("sidebar.searchRegulations")}</span>
+            </Link>
+            <Link
+              href="/kalkulator"
+              aria-current={isActive("/kalkulator") ? "page" : undefined}
+              className={`flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs transition hover:bg-sidebar-accent ${
+                isActive("/kalkulator")
+                  ? "bg-sidebar-accent font-semibold text-[#d9f2df]"
+                  : "text-sidebar-foreground"
+              }`}
+            >
+              <Calculator className="size-[18px] text-javanese" />
+              <span>{translate("sidebar.kalkulator")}</span>
+            </Link>
+            <Link
+              href="/review-cv"
+              aria-current={isActive("/review-cv") ? "page" : undefined}
+              className={`flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs transition hover:bg-sidebar-accent ${
+                isActive("/review-cv")
+                  ? "bg-sidebar-accent font-semibold text-[#d9f2df]"
+                  : "text-sidebar-foreground"
+              }`}
+            >
+              <FileText className="size-[18px] text-javanese" />
+              <span>{translate("sidebar.reviewCv")}</span>
+            </Link>
+            <Link
+              href="/compliance"
+              aria-current={isActive("/compliance") ? "page" : undefined}
+              className={`flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs transition hover:bg-sidebar-accent ${
+                isActive("/compliance")
+                  ? "bg-sidebar-accent font-semibold text-[#d9f2df]"
+                  : "text-sidebar-foreground"
+              }`}
+            >
+              <Scale className="size-[18px] text-javanese" />
+              <span>{translate("sidebar.compliance")}</span>
             </Link>
           </nav>
           {shownSession ? (

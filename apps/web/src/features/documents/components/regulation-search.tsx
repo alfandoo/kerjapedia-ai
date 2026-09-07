@@ -13,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useSettings } from "@/features/settings";
 import { fetchDocuments } from "@/features/documents/api";
 import { fallbackDocuments } from "@/features/documents/sample-data";
 import type { DocumentSummary } from "@/features/documents/types";
@@ -59,6 +61,7 @@ function FilterSelect({
 }
 
 export function RegulationSearch() {
+  const { t: translate } = useSettings();
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [query, setQuery] = useState("");
   const [topic, setTopic] = useState("all");
@@ -151,8 +154,8 @@ export function RegulationSearch() {
   }
 
   function formatStatus(status: string) {
-    if (status === "active") return "Berlaku";
-    if (status === "needs_verification") return "Perlu verifikasi";
+    if (status === "active") return translate("search.statusActive");
+    if (status === "needs_verification") return translate("search.statusNeedsVerification");
     return status.replaceAll("_", " ");
   }
 
@@ -160,14 +163,13 @@ export function RegulationSearch() {
     <section className={`${styles.searchPage} w-full text-foreground`}>
       <div className="mb-7 max-w-[760px]">
         <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-javanese">
-          Basis hukum ketenagakerjaan
+          {translate("search.eyebrow")}
         </p>
         <h1 className="font-display text-[clamp(34px,3.5vw,46px)] font-medium leading-[1.12] tracking-[-0.02em] text-javanese-deep">
-          Temukan dasar hukum yang tepat
+          {translate("search.title")}
         </h1>
         <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-          Telusuri regulasi ketenagakerjaan Indonesia dari sumber resmi pemerintah — UU, PP, dan
-          Permenaker yang telah dikurasi.
+          {translate("search.subtitle")}
         </p>
       </div>
 
@@ -179,51 +181,51 @@ export function RegulationSearch() {
           <SearchIcon className="size-5 [stroke-width:1.8] shrink-0 text-javanese" />
           <input
             id="regulation-search"
-            aria-label="Cari judul, nomor, atau topik regulasi"
+            aria-label={translate("search.searchAria")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Cari judul, nomor, atau topik..."
+            placeholder={translate("search.placeholder")}
             className="h-full w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </label>
         <FilterSelect
           id="topic-filter"
-          label="Topik"
+          label={translate("search.filterTopic")}
           value={topic}
           options={topics.map((item) => ({
             value: item,
-            label: item === "all" ? "Semua topik" : item.replaceAll("_", " "),
+            label: item === "all" ? translate("search.allTopics") : item.replaceAll("_", " "),
           }))}
           onValueChange={setTopic}
         />
         <FilterSelect
           id="type-filter"
-          label="Jenis"
+          label={translate("search.filterType")}
           value={regulationType}
           options={regulationTypes.map((item) => ({
             value: item,
-            label: item === "all" ? "Semua jenis" : item,
+            label: item === "all" ? translate("search.allTypes") : item,
           }))}
           onValueChange={setRegulationType}
         />
         <FilterSelect
           id="year-filter"
-          label="Tahun"
+          label={translate("search.filterYear")}
           value={year || "all"}
           options={years.map((item) => ({
             value: item,
-            label: item === "all" ? "Semua tahun" : item,
+            label: item === "all" ? translate("search.allYears") : item,
           }))}
           onValueChange={(value) => setYear(value === "all" ? "" : value)}
         />
         <FilterSelect
           id="status-filter"
-          label="Status"
+          label={translate("search.filterStatus")}
           value={status}
           options={[
-            { value: "all", label: "Semua status" },
-            { value: "active", label: "Berlaku" },
-            { value: "needs_verification", label: "Perlu verifikasi" },
+            { value: "all", label: translate("search.allStatus") },
+            { value: "active", label: translate("search.statusActive") },
+            { value: "needs_verification", label: translate("search.statusNeedsVerification") },
           ]}
           onValueChange={setStatus}
         />
@@ -231,8 +233,8 @@ export function RegulationSearch() {
           <button
             type="button"
             onClick={resetSearch}
-            aria-label="Reset pencarian"
-            title="Reset pencarian"
+            aria-label={translate("search.reset")}
+            title={translate("search.reset")}
             className="inline-flex size-12 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition hover:border-javanese hover:bg-accent hover:text-javanese"
           >
             <XIcon className="size-4" />
@@ -246,23 +248,50 @@ export function RegulationSearch() {
           role="status"
         >
           <AlertIcon className="size-4 [stroke-width:1.8] shrink-0" />
-          Katalog API belum tersedia. Menampilkan daftar referensi lokal sementara.
+          {translate("search.apiError")}
         </div>
       ) : null}
 
-      <div aria-label="Daftar regulasi" aria-busy={loading} className="overflow-x-auto">
+      <div aria-label={translate("search.listAria")} aria-busy={loading} className="overflow-x-auto">
+        {loading ? (
+          <div className="overflow-x-auto rounded-xl border border-border bg-card">
+            <div className="flex items-center gap-4 border-b border-border bg-muted px-4 py-3">
+              <Skeleton className="h-3 w-[17%] max-w-[120px]" />
+              <Skeleton className="h-3 w-[38%] max-w-[220px]" />
+              <Skeleton className="h-3 w-[10%] max-w-[60px]" />
+              <Skeleton className="h-3 w-[16%] max-w-[100px]" />
+              <Skeleton className="h-3 w-[19%] max-w-[120px] ml-auto" />
+            </div>
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-4 border-b border-border px-4 py-4 last:border-b-0"
+              >
+                <Skeleton className="h-4 w-[17%] max-w-[120px]" />
+                <Skeleton className="h-4 w-[38%] max-w-[220px]" />
+                <Skeleton className="h-4 w-[10%] max-w-[60px]" />
+                <Skeleton className="h-3 w-[16%] max-w-[100px]" />
+                <div className="ml-auto flex gap-2">
+                  <Skeleton className="h-10 w-28 rounded-lg" />
+                  <Skeleton className="size-10 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {!loading && filtered.length === 0 ? (
           <div className="py-16 text-center">
-            <h2 className="text-lg font-semibold text-foreground">Regulasi tidak ditemukan</h2>
+            <h2 className="text-lg font-semibold text-foreground">{translate("search.emptyTitle")}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Coba gunakan judul, nomor, atau topik yang lebih umum.
+              {translate("search.emptyDescription")}
             </p>
             <button
               type="button"
               onClick={resetSearch}
               className="mt-5 h-11 rounded-xl border border-input px-5 text-sm font-semibold text-javanese transition hover:border-javanese hover:bg-accent"
             >
-              Hapus filter
+              {translate("search.clearFilters")}
             </button>
           </div>
         ) : null}
@@ -273,19 +302,19 @@ export function RegulationSearch() {
               <thead>
                 <tr className="border-b border-border bg-muted">
                   <th className="w-[17%] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Jenis regulasi
+                    {translate("search.colType")}
                   </th>
                   <th className="w-[38%] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Dokumen
+                    {translate("search.colDocument")}
                   </th>
                   <th className="w-[10%] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Tahun
+                    {translate("search.colYear")}
                   </th>
                   <th className="w-[16%] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Status
+                    {translate("search.colStatus")}
                   </th>
                   <th className="w-[19%] px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Akses
+                    {translate("search.colAccess")}
                   </th>
                 </tr>
               </thead>
@@ -300,7 +329,9 @@ export function RegulationSearch() {
                         {document.regulation_type}
                       </span>
                       <small className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">
-                        Nomor {document.number} Tahun {document.year}
+                        {translate("search.numberYear")
+                          .replace("{number}", String(document.number))
+                          .replace("{year}", String(document.year))}
                       </small>
                     </td>
                     <td className="px-4 py-4 align-middle">
@@ -340,13 +371,13 @@ export function RegulationSearch() {
                           rel="noreferrer"
                           className="inline-flex h-10 items-center whitespace-nowrap rounded-lg border border-input px-3.5 text-xs font-semibold text-javanese transition hover:border-javanese hover:bg-accent"
                         >
-                          Buka sumber
+                          {translate("search.openSource")}
                         </a>
                         <a
                           href={document.pdf_url}
                           download
-                          aria-label={`Download PDF ${document.short_title}`}
-                          title="Download PDF"
+                          aria-label={`${translate("search.downloadPdf")} ${document.short_title}`}
+                          title={translate("search.downloadPdf")}
                           className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-input text-javanese transition hover:border-javanese hover:bg-accent"
                         >
                           <Download className="size-4" />
@@ -363,8 +394,10 @@ export function RegulationSearch() {
         {!loading && filtered.length > 0 && totalPages > 1 ? (
           <div className="mt-5 flex items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">
-              {Math.min((safePage - 1) * PAGE_SIZE + 1, filtered.length)}–
-              {Math.min(safePage * PAGE_SIZE, filtered.length)} dari {filtered.length}
+              {translate("search.fromTo")
+                .replace("{start}", String(Math.min((safePage - 1) * PAGE_SIZE + 1, filtered.length)))
+                .replace("{end}", String(Math.min(safePage * PAGE_SIZE, filtered.length)))
+                .replace("{total}", String(filtered.length))}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -372,10 +405,10 @@ export function RegulationSearch() {
                 onClick={() => setPage(safePage - 1)}
                 disabled={safePage <= 1}
                 className="inline-flex h-9 items-center gap-1 rounded-lg border border-input px-3 text-xs font-semibold text-javanese transition hover:border-javanese hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Halaman sebelumnya"
+                aria-label={translate("search.prevAria")}
               >
                 <ChevronLeft className="size-4" />
-                Sebelumnya
+                {translate("search.prev")}
               </button>
               <span className="min-w-[72px] text-center text-xs font-semibold text-foreground">
                 {safePage} / {totalPages}
@@ -385,9 +418,9 @@ export function RegulationSearch() {
                 onClick={() => setPage(safePage + 1)}
                 disabled={safePage >= totalPages}
                 className="inline-flex h-9 items-center gap-1 rounded-lg border border-input px-3 text-xs font-semibold text-javanese transition hover:border-javanese hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Halaman berikutnya"
+                aria-label={translate("search.nextAria")}
               >
-                Berikutnya
+                {translate("search.next")}
                 <ChevronRight className="size-4" />
               </button>
             </div>

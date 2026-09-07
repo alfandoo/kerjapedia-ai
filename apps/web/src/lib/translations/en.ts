@@ -1,4 +1,68 @@
 const en = {
+  // Regulations search
+  "search.eyebrow": "Employment law sources",
+  "search.title": "Find the right legal basis",
+  "search.subtitle":
+    "Explore Indonesian employment regulations from official government sources — curated UU, PP, and Permenaker.",
+  "search.placeholder": "Search title, number, or topic...",
+  "search.searchAria": "Search regulations by title, number, or topic",
+  "search.filterTopic": "Topic",
+  "search.filterType": "Type",
+  "search.filterYear": "Year",
+  "search.filterStatus": "Status",
+  "search.allTopics": "All topics",
+  "search.allTypes": "All types",
+  "search.allYears": "All years",
+  "search.allStatus": "All statuses",
+  "search.statusActive": "In force",
+  "search.statusNeedsVerification": "Needs verification",
+  "search.reset": "Reset search",
+  "search.apiError": "The catalog API is unavailable. Showing a temporary local reference list.",
+  "search.listAria": "Regulation list",
+  "search.emptyTitle": "No regulations found",
+  "search.emptyDescription": "Try a more general title, number, or topic.",
+  "search.clearFilters": "Clear filters",
+  "search.colType": "Regulation type",
+  "search.colDocument": "Document",
+  "search.colYear": "Year",
+  "search.colStatus": "Status",
+  "search.colAccess": "Access",
+  "search.numberYear": "No. {number} Year {year}",
+  "search.openSource": "Open source",
+  "search.downloadPdf": "Download PDF",
+  "search.prevAria": "Previous page",
+  "search.nextAria": "Next page",
+  "search.prev": "Previous",
+  "search.next": "Next",
+  "search.fromTo": "{start}–{end} of {total}",
+
+  // Employment calculator (not yet implemented)
+  "kalkulator.title": "Employment Calculator",
+  "kalkulator.description":
+    "Indicative estimate of workers' entitlements — severance, THR, leave, and overtime.",
+  "kalkulator.comingSoon": "This feature is under development.",
+  "kalkulator.note":
+    "Results are only an estimate and are not binding. Always verify against official sources before use.",
+  "kalkulator.backToChat": "Back to chat",
+
+  // CV Review (not yet implemented)
+  "reviewCv.title": "CV Review",
+  "reviewCv.description":
+    "Review CV or job-ad content against equality and anti-discrimination principles in the workplace.",
+  "reviewCv.comingSoon": "This feature is under development.",
+  "reviewCv.note":
+    "Results are only an indicative compliance assessment and are not binding. Always verify against official sources before use.",
+  "reviewCv.backToChat": "Back to chat",
+
+  // Recruitment Compliance (not yet implemented)
+  "compliance.title": "Recruitment Compliance",
+  "compliance.description":
+    "Assess CV or job-ad content against equality and anti-discrimination principles in the workplace.",
+  "compliance.comingSoon": "This feature is under development.",
+  "compliance.note":
+    "Results are only an indicative compliance assessment and are not binding. Always verify against official sources before use.",
+  "compliance.backToChat": "Back to chat",
+
   // Chat
   "chat.title": "What would you like to understand?",
   "chat.subtitle":
@@ -52,6 +116,9 @@ const en = {
   "sidebar.noSearchResults": "No matching conversations.",
   "sidebar.viewAllRegulations": "View all regulations",
   "sidebar.searchRegulations": "Search Regulations",
+  "sidebar.kalkulator": "Employment Calculator",
+  "sidebar.reviewCv": "CV Review",
+  "sidebar.compliance": "Recruitment Compliance",
 
   // Header
   "header.login": "Sign in",
