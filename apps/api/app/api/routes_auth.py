@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import secrets
+from datetime import UTC, datetime, timedelta
+
+import jwt as pyjwt
+from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, Header, HTTPException, status
 from supabase_auth.errors import AuthApiError
 
 from app.api.dependencies import CurrentUser, DbSession, _extract_bearer_token
 from app.api.schemas import (
+    EmailOtpVerifyRequest,
+    EmailResendRequest,
     GoogleAuthRequest,
     LoginRequest,
     LoginResponse,
@@ -16,8 +25,15 @@ from app.api.schemas import (
 from app.api.state import UserRecord
 from app.core.config import settings
 from app.db.session import create_session
-from app.models.business import Conversation, Feedback, Message, UserProfile
+from app.models.business import (
+    Conversation,
+    Feedback,
+    Message,
+    PendingRegistration,
+    UserProfile,
+)
 from app.services import supabase as supabase_service
+from app.services.mailer import send_verification_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -37,6 +53,57 @@ def _session_tokens(session) -> tuple[str, str]:
     access_token = getattr(session, "access_token", None) or ""
     refresh_token = getattr(session, "refresh_token", None) or ""
     return str(access_token), str(refresh_token)
+
+
+def _google_email_verified(id_token: str) -> bool:
+    """Read the `email_verified` claim from a Google ID token.
+
+    The token signature is validated upstream by Supabase
+    (`sign_in_with_id_token`). We only inspect the already-trusted claim.
+    Fails closed (returns False) on any decoding error.
+    """
+    try:
+        payload = pyjwt.decode(id_token, options={"verify_signature": False})
+        return bool(payload.get("email_verified", False))
+    except Exception:
+        return False
+
+
+def _generate_otp() -> str:
+    return f"{secrets.randbelow(10**8):08d}"
+
+
+def _otp_hash(email: str, code: str) -> str:
+    digest = hmac.new(
+        settings.secret_key.encode(), f"{email.lower()}:{code}".encode(), hashlib.sha256
+    )
+    return digest.hexdigest()
+
+
+def _otp_valid(email: str, code: str, expected_hash: str) -> bool:
+    return hmac.compare_digest(_otp_hash(email, code), expected_hash)
+
+
+def _fernet() -> Fernet:
+    return Fernet(settings.secret_key.encode())
+
+
+_SESSION_CREATE_FAILED = (
+    "Akun berhasil dibuat, namun sesi belum dapat dibuat. Silakan masuk kembali."
+)
+
+
+def _purge_expired_pending(session) -> None:
+    """Delete expired pending registrations so the table never accumulates."""
+    session.query(PendingRegistration).filter(
+        PendingRegistration.expires_at < datetime.now(UTC)
+    ).delete(synchronize_session=False)
+    # Drop any pending row whose email already belongs to a confirmed user;
+    # those can never be verified again, so they are stale.
+    confirmed_emails = session.query(UserProfile.email).subquery()
+    session.query(PendingRegistration).filter(
+        PendingRegistration.email.in_(confirmed_emails)
+    ).delete(synchronize_session=False)
 
 
 def _sync_user_profile(
@@ -145,67 +212,68 @@ def refresh(payload: RefreshRequest) -> LoginResponse:
 
 @router.post("/register", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest) -> LoginResponse:
-    with create_session() as session:
-        existing = session.query(UserProfile).filter(UserProfile.email == payload.email).first()
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Email sudah terdaftar.",
-            )
+    """Start a deferred email signup. No Supabase user is created yet; an OTP
+    email is sent and the user is only created after the code is verified."""
     try:
-        supabase = supabase_service.get_supabase_anon()
-        result = supabase.auth.sign_up(
-            {
-                "email": payload.email,
-                "password": payload.password,
-                "options": {"data": {"name": payload.name}},
-            }
-        )
-        user = result.user
-        if result.session:
-            uid = user.id
-            record = _sync_user_profile(uid, payload.email, payload.name)
-            access_token, refresh_token = _session_tokens(result.session)
-            return LoginResponse(
-                access_token=access_token,
-                refresh_token=refresh_token,
-                user=to_user_response(record),
+        code = _generate_otp()
+        encrypted = _fernet().encrypt(payload.password.encode("utf-8")).decode("ascii")
+        expires_at = datetime.now(UTC) + timedelta(minutes=settings.email_otp_expiry_minutes)
+        with create_session() as session:
+            _purge_expired_pending(session)
+            existing = (
+                session.query(UserProfile)
+                .filter(UserProfile.email == payload.email.lower())
+                .first()
             )
-        uid = user.id
-        record = _sync_user_profile(uid, payload.email, payload.name)
+            if existing is not None:
+                # Persist the stale-pending cleanup even though this signup
+                # is rejected as a duplicate.
+                session.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Email sudah terdaftar.",
+                )
+            pending = session.get(PendingRegistration, payload.email.lower())
+            if pending is None:
+                pending = PendingRegistration(
+                    email=payload.email.lower(),
+                    name=payload.name,
+                    password_encrypted=encrypted,
+                    otp_hash=_otp_hash(payload.email.lower(), code),
+                    attempts=0,
+                    expires_at=expires_at,
+                )
+                session.add(pending)
+            else:
+                pending.name = payload.name
+                pending.password_encrypted = encrypted
+                pending.otp_hash = _otp_hash(payload.email.lower(), code)
+                pending.attempts = 0
+                pending.expires_at = expires_at
+                pending.created_at = datetime.now(UTC)
+            session.commit()
+        try:
+            send_verification_email(payload.email.lower(), code)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Kode verifikasi gagal dikirim. Silakan coba lagi.",
+            ) from exc
         return LoginResponse(
             access_token="",
             refresh_token="",
-            user=to_user_response(record),
+            user=UserResponse(
+                user_id="",
+                email=payload.email.lower(),
+                name=payload.name,
+                roles=[],
+            ),
         )
     except HTTPException:
         raise
     except Exception as exc:
-        err = str(exc).lower()
-        if "already registered" in err or "already exists" in err:
-            try:
-                supabase = supabase_service.get_supabase_anon()
-                result = supabase.auth.sign_in_with_password(
-                    {"email": payload.email, "password": payload.password}
-                )
-                user = result.user
-                if user:
-                    uid = user.id
-                    record = _sync_user_profile(uid, payload.email, payload.name)
-                    access_token, refresh_token = _session_tokens(result.session)
-                    return LoginResponse(
-                        access_token=access_token,
-                        refresh_token=refresh_token,
-                        user=to_user_response(record),
-                    )
-            except Exception:
-                pass
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Email sudah terdaftar.",
-            ) from exc
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Registrasi gagal. Silakan coba lagi.",
         ) from exc
 
@@ -231,6 +299,15 @@ def google_login(payload: GoogleAuthRequest) -> LoginResponse:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Akun Google tidak memiliki email.",
             )
+        # Security: never auto-link an account based on an unverified email.
+        if not _google_email_verified(payload.id_token):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=(
+                    "Email Google belum terverifikasi. "
+                    "Gunakan akun Google dengan email terverifikasi."
+                ),
+            )
         name = user.user_metadata.get("name") or email.split("@")[0] or "User"
         record = _sync_user_profile(uid, email, name)
         access_token, refresh_token = _session_tokens(result.session)
@@ -246,6 +323,126 @@ def google_login(payload: GoogleAuthRequest) -> LoginResponse:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Autentikasi Google gagal. Silakan coba lagi.",
         ) from exc
+
+
+@router.post("/verify-email-otp", response_model=LoginResponse)
+def verify_email_otp(payload: EmailOtpVerifyRequest) -> LoginResponse:
+    """Validate the OTP, then (and only then) create the Supabase user."""
+    email = payload.email.lower()
+    with create_session() as session:
+        pending = session.get(PendingRegistration, email)
+        if pending is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Kode verifikasi salah atau telah kedaluwarsa.",
+            )
+        if datetime.now(UTC) > pending.expires_at:
+            session.delete(pending)
+            session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Kode verifikasi telah kedaluwarsa. Silakan kirim ulang.",
+            )
+        if not _otp_valid(email, payload.token, pending.otp_hash):
+            pending.attempts = int(pending.attempts) + 1
+            session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Kode verifikasi salah.",
+            )
+        if int(pending.attempts) > 8:
+            session.delete(pending)
+            session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Terlalu banyak percobaan. Silakan kirim ulang kode.",
+            )
+        encrypted_password = pending.password_encrypted
+        name = pending.name
+        session.delete(pending)
+        session.commit()
+    try:
+        password = _fernet().decrypt(encrypted_password.encode("ascii")).decode("utf-8")
+    except InvalidToken:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Sesi pendaftaran tidak valid. Silakan daftar ulang.",
+        ) from None
+    try:
+        created = supabase_service.get_supabase().auth.admin.create_user(
+            {
+                "email": email,
+                "password": password,
+                "user_metadata": {"name": name},
+                "email_confirm": True,
+            }
+        )
+        uid = created.user.id
+        record = _sync_user_profile(uid, email, name)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        err = str(exc).lower()
+        if "already registered" in err or "already exists" in err:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email sudah terdaftar.",
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Pendaftaran gagal. Silakan coba lagi.",
+        ) from exc
+    # Log the user in so a fresh session is issued to the app.
+    try:
+        result = supabase_service.get_supabase_anon().auth.sign_in_with_password(
+            {"email": email, "password": password}
+        )
+        access_token, refresh_token = _session_tokens(result.session)
+        if not access_token:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=_SESSION_CREATE_FAILED,
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_SESSION_CREATE_FAILED,
+        ) from exc
+    return LoginResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user=to_user_response(record),
+    )
+
+
+@router.post("/resend-otp")
+def resend_otp(payload: EmailResendRequest) -> dict[str, str]:
+    """Regenerate and resend the OTP for an existing pending signup."""
+    email = payload.email.lower()
+    with create_session() as session:
+        _purge_expired_pending(session)
+        pending = session.get(PendingRegistration, email)
+        if pending is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Belum ada pendaftaran untuk email ini.",
+            )
+        code = _generate_otp()
+        pending.otp_hash = _otp_hash(email, code)
+        pending.attempts = 0
+        pending.expires_at = datetime.now(UTC) + timedelta(
+            minutes=settings.email_otp_expiry_minutes
+        )
+        session.commit()
+    try:
+        send_verification_email(email, code)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail="Kode verifikasi belum dapat dikirim ulang. Silakan coba lagi."
+        ) from exc
+    return {"status": "resent"}
 
 
 @router.post("/logout")

@@ -25,9 +25,15 @@ function RegisterPageContent() {
     setLoading(true);
     setStatus(null);
     try {
-      await (isSignup
-        ? register(name.trim(), email.trim(), password)
-        : login(email.trim(), password));
+      if (isSignup) {
+        const { session } = await register(name.trim(), email.trim(), password);
+        if (!session) {
+          setStatus("Periksa email Anda untuk kode verifikasi, lalu selesaikan pendaftaran.");
+          return;
+        }
+      } else {
+        await login(email.trim(), password);
+      }
       router.push("/chat");
     } catch (err) {
       setStatus((err as Error).message || "Gagal. Coba lagi.");

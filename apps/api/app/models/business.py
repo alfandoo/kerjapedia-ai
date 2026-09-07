@@ -23,6 +23,22 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+class PendingRegistration(Base):
+    """Deferred email signup: no Supabase user is created until the OTP is
+    verified. The password is stored encrypted (Fernet), never in plaintext.
+    """
+
+    __tablename__ = "pending_registrations"
+
+    email: Mapped[str] = mapped_column(String(320), primary_key=True)
+    name: Mapped[str] = mapped_column(String(240), nullable=False)
+    password_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    otp_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 

@@ -12,7 +12,7 @@ const GUEST = production ? "__Host-kp-guest" : "kp-guest";
 const REFRESH = production ? "__Host-kp-refresh" : "kp-refresh";
 const cookieOptions = { httpOnly: true, secure: production, sameSite: "lax" as const, path: "/", maxAge: COOKIE_AGE };
 const roots = new Set(["auth", "admin", "chat", "documents", "feedback", "ingestion", "evaluation"]);
-const authMethods: Record<string, string> = { login: "POST", register: "POST", refresh: "POST", logout: "POST", session: "GET", me: "GET", profile: "PATCH", google: "POST", account: "DELETE" };
+const authMethods: Record<string, string> = { login: "POST", register: "POST", refresh: "POST", logout: "POST", session: "GET", me: "GET", profile: "PATCH", google: "POST", account: "DELETE", "verify-email-otp": "POST", "resend-otp": "POST" };
 
 type Context = { params: Promise<{ path: string[] }> };
 function json(body: unknown, status = 200) {
@@ -44,6 +44,18 @@ async function smallJson(request: NextRequest) {
     } finally { reader.releaseLock(); }
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+async function readDetail(response: Response): Promise<string | null> {
+  try {
+    const body: unknown = await response.json();
+    if (body && typeof body === "object") {
+      const detail = (body as Record<string, unknown>).detail;
+      if (typeof detail === "string" && detail.length > 0 && detail.length <= 160) return detail;
+    }
+  } catch {
+    /* fall through to generic message */
+  }
+  return null;
 }
 
 async function handle(request: NextRequest, context: Context): Promise<Response> {
@@ -87,11 +99,20 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
     }
     if (guest) headers.set("x-kerjapedia-guest-id", guest);
     // Browser Authorization and Cookie headers are never forwarded.
-    if (access && !(auth && ["login", "register", "refresh", "google"].includes(action))) headers.set("Authorization", `Bearer ${access}`);
+    if (access && !(auth && ["login", "register", "refresh", "google", "verify-email-otp", "resend-otp"].includes(action))) headers.set("Authorization", `Bearer ${access}`);
     let body: BodyInit | null = null;
     if (auth && ["login", "register"].includes(action)) {
       const input = await smallJson(request);
       body = JSON.stringify(action === "register" ? { name: input.name, email: input.email, password: input.password } : { email: input.email, password: input.password });
+      headers.set("content-type", "application/json");
+    } else if (auth && ["verify-email-otp", "resend-otp"].includes(action)) {
+      const input = await smallJson(request);
+      const allowed = action === "verify-email-otp"
+        ? ["email", "token"]
+        : ["email"];
+      if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => !allowed.includes(key))) return json({ detail: "Invalid verification payload." }, 400);
+      if (typeof input.email !== "string" || !input.email || (action === "verify-email-otp" && (typeof input.token !== "string" || !input.token))) return json({ detail: "Invalid verification payload." }, 400);
+      body = JSON.stringify(action === "verify-email-otp" ? { email: input.email, token: input.token } : { email: input.email });
       headers.set("content-type", "application/json");
     } else if (auth && action === "google") {
       const input = await smallJson(request);
@@ -124,7 +145,21 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
     if (upstream.status >= 300 && upstream.status < 400) return json({ detail: "Unexpected backend redirect." }, 502);
     if (auth) {
       if (!upstream.ok) {
-        const response = json({ detail: upstream.status === 401 ? "Sesi berakhir atau kredensial tidak valid." : "Permintaan autentikasi gagal. Silakan coba lagi." }, upstream.status);
+        // Expose the backend's detail only for specific client errors where it
+        // is safe and user-relevant (e.g. duplicate email, invalid fields).
+        // For actions without an active session, a 401 means "invalid
+        // credentials/code" (not an expired session), so pass it through.
+        let detail: string | null = null;
+        const unauthenticated = ["login", "register", "google", "verify-email-otp", "resend-otp"];
+        const passthrough = [...unauthenticated, "session", "me", "profile"].includes(action)
+          ? [400, 401, 403, 404, 409, 422]
+          : [400, 403, 404, 409, 422];
+        if (passthrough.includes(upstream.status)) {
+          detail = await readDetail(upstream);
+        }
+        const response = detail
+          ? json({ detail }, upstream.status)
+          : json({ detail: upstream.status === 401 ? "Sesi berakhir atau kredensial tidak valid." : "Permintaan autentikasi gagal. Silakan coba lagi." }, upstream.status);
         return action === "refresh" && [400, 401, 403].includes(upstream.status) ? clearCookies(response) : response;
       }
       if (action === "logout") return clearCookies(json({ status: "ok" }));

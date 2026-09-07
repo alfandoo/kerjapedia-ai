@@ -58,6 +58,17 @@ class Settings(BaseSettings):
     session_ttl_minutes: int = 480
     admin_email: str = "admin@example.com"
     admin_password: str = "secret"
+    # Fernet key (32-byte urlsafe base64) for transient signup payloads.
+    # Override SECRET_KEY in production with your own generated key.
+    secret_key: str = "qhWrYVGceJ9PhQQP0sKyOCFD2lFjlMQZzxg2tB1FO8s="
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_sender_email: str = ""
+    smtp_sender_name: str = "KerjaPedia"
+    smtp_use_tls: bool = True
+    email_otp_expiry_minutes: int = 15
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
 
     @property

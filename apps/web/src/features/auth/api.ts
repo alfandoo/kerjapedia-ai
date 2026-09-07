@@ -4,25 +4,49 @@ import { clearStoredSession, getStoredSession, setStoredSession, loadStoredSessi
 
 let refreshInFlight: Promise<UserSession | null> | null = null;
 const csrfHeaders = { "Content-Type": "application/json", "X-KerjaPedia-CSRF": "1" };
-async function authenticate(action: string, input: object): Promise<UserSession> {
+async function authenticate(action: string, input: object): Promise<UserSession | null> {
   // Finish initial cookie probing before a login can replace the session.
   await loadStoredSession();
   const response = await fetch(`${API_URL}/auth/${action}`, {
     method: "POST", credentials: "same-origin", headers: csrfHeaders, body: JSON.stringify(input),
   });
-  if (response.status === 202) throw new Error("Periksa email Anda untuk konfirmasi akun, lalu masuk kembali.");
+  if (response.status === 202) return null; // email confirmation required
   const session = await parseJsonResponse<UserSession>(response);
   setStoredSession(session);
   return session;
 }
-export function login(email: string, password: string): Promise<UserSession> {
-  return authenticate("login", { email, password });
+export async function login(email: string, password: string): Promise<UserSession> {
+  const session = await authenticate("login", { email, password });
+  if (!session) throw new Error("Periksa email Anda untuk kode verifikasi, lalu masuk kembali.");
+  return session;
 }
-export function register(name: string, email: string, password: string): Promise<UserSession> {
-  return authenticate("register", { name, email, password });
+export async function register(
+  name: string,
+  email: string,
+  password: string
+): Promise<{ session: UserSession | null }> {
+  const session = await authenticate("register", { name, email, password });
+  return { session };
 }
-export function googleLogin(idToken: string): Promise<UserSession> {
-  return authenticate("google", { id_token: idToken });
+export async function googleLogin(idToken: string): Promise<UserSession> {
+  const session = await authenticate("google", { id_token: idToken });
+  if (!session) throw new Error("Autentikasi Google gagal.");
+  return session;
+}
+export async function verifyEmailOtp(
+  email: string,
+  token: string
+): Promise<UserSession> {
+  const session = await authenticate("verify-email-otp", { email, token });
+  if (!session) throw new Error("Kode verifikasi salah.");
+  return session;
+}
+export async function resendEmailOtp(email: string): Promise<void> {
+  await loadStoredSession();
+  const response = await fetch(`${API_URL}/auth/resend-otp`, {
+    method: "POST", credentials: "same-origin", headers: csrfHeaders, body: JSON.stringify({ email }),
+  });
+  if (!response.ok) throw new Error("Kode verifikasi belum dapat dikirim ulang.");
 }
 async function performSessionRefresh(): Promise<UserSession | null> {
   const response = await fetch(`${API_URL}/auth/refresh`, {
