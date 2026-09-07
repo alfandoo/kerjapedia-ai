@@ -67,7 +67,7 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
       }}
     >
       <DialogContent
-        className="w-[calc(100vw_-_2rem)] sm:max-w-[440px]"
+        className="w-[calc(100vw_-_2rem)] max-h-[min(660px,calc(100svh_-_40px))] overflow-y-auto sm:max-w-[440px] [scrollbar-width:thin]"
         showCloseButton={!busy}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
@@ -78,19 +78,28 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
           <DialogTitle>{t("profile.title")}</DialogTitle>
           <DialogDescription>{t("profile.description")}</DialogDescription>
         </DialogHeader>
-        <div className="flex items-center gap-3 pb-1 pt-2">
+
+        <div className="flex items-center gap-4 rounded-xl border border-border p-4">
           <span
             aria-hidden="true"
-            className="grid size-14 shrink-0 place-items-center rounded-full bg-accent text-lg font-semibold text-accent-foreground"
+            className="grid size-14 shrink-0 place-items-center rounded-full bg-javanese text-lg font-bold text-white"
           >
             {user.name.slice(0, 2).toUpperCase()}
           </span>
-          <div className="min-w-0">
-            <p className="truncate font-medium leading-tight">{user.name}</p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{user.email}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-semibold leading-tight text-foreground">
+              {user.name}
+            </p>
+            <p className="mt-1 truncate text-xs text-muted-foreground">{user.email}</p>
           </div>
+          {user.roles.length > 0 ? (
+            <span className="shrink-0 rounded-full border border-border bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {user.roles[0]}
+            </span>
+          ) : null}
         </div>
-        <form className="flex flex-col gap-5" onSubmit={save} aria-busy={saving}>
+
+        <form className="flex flex-col gap-5 pt-2" onSubmit={save} aria-busy={saving}>
           <FieldGroup>
             <Field data-invalid={!valid || undefined}>
               <FieldLabel htmlFor="profile-name">{t("profile.name")}</FieldLabel>
@@ -111,7 +120,9 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
                 }}
               />
               {!valid ? (
-                <FieldDescription id="profile-name-error">{t("profile.invalid")}</FieldDescription>
+                <FieldDescription id="profile-name-error" className="text-destructive">
+                  {t("profile.invalid")}
+                </FieldDescription>
               ) : null}
             </Field>
             <Field>
@@ -129,12 +140,18 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
               <FieldDescription id="profile-email-hint">{t("profile.emailHint")}</FieldDescription>
             </Field>
           </FieldGroup>
+
           {error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-[12px] leading-[1.5] text-destructive"
+            >
+              <TriangleAlert className="mt-[1px] size-4 shrink-0" aria-hidden="true" />
+              <span>{error}</span>
             </p>
           ) : null}
-          <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+
+          <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
               {t("profile.cancel")}
             </Button>
@@ -144,17 +161,22 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
             </Button>
           </div>
         </form>
-        <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/5 p-4">
-          <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
-            <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
-            {t("profile.dangerTitle")}
-          </p>
+
+        <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+          <div className="flex items-center gap-2">
+            <TriangleAlert className="size-4 shrink-0 text-destructive" aria-hidden="true" />
+            <p className="text-sm font-semibold text-foreground">{t("profile.dangerTitle")}</p>
+          </div>
           <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
             {t("profile.dangerDescription")}
           </p>
           {deleteError ? (
-            <p role="alert" className="mt-2 text-sm text-destructive">
-              {deleteError}
+            <p
+              role="alert"
+              className="mt-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] leading-[1.5] text-destructive"
+            >
+              <TriangleAlert className="mt-[1px] size-4 shrink-0" aria-hidden="true" />
+              <span>{deleteError}</span>
             </p>
           ) : null}
           {!confirmingDelete ? (
@@ -166,12 +188,12 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
                 setDeleteError(null);
                 setConfirmingDelete(true);
               }}
-              className="mt-3 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="mt-4 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               {t("profile.delete")}
             </Button>
           ) : (
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
