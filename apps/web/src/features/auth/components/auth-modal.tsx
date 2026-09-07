@@ -14,6 +14,7 @@ import { useSettings } from "@/features/settings";
 import type { UserSession } from "@/features/auth/types";
 import type { TranslationKey } from "@/lib/translations";
 import { passwordStrength, passwordAcceptable, isValidEmail, type PasswordPolicyIssue, type PasswordStrength } from "../password-policy";
+import { translateAuthError } from "../error-messages";
 
 type AuthModalProps = {
   open: boolean;
@@ -260,7 +261,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
       setPassword("");
       setPasswordVisible(false);
     } catch (reason) {
-      setError((reason as Error).message || "Autentikasi gagal. Silakan coba kembali.");
+      setError(translateAuthError(translate, (reason as Error).message || translate("auth.errorRegisterFailed")));
     } finally {
       setSubmitting(false);
     }
@@ -271,6 +272,10 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
     if (otpSubmitting) return;
     setOtpError(null);
     const token = (submittedOtp ?? otp).trim();
+    if (!token) {
+      setOtpError(translate("auth.otpRequired"));
+      return;
+    }
     if (token.length < 4) {
       setOtpError(translate("auth.otpInvalid"));
       return;
@@ -286,7 +291,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
       setOtp("");
       setPasswordVisible(false);
     } catch (reason) {
-      setOtpError((reason as Error).message || translate("auth.otpInvalid"));
+      setOtpError(translateAuthError(translate, (reason as Error).message || translate("auth.otpInvalid")));
       setOtp("");
       window.setTimeout(() => otpRef.current?.focus(), 0);
     } finally {
@@ -321,7 +326,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
       setPassword("");
       setPasswordVisible(false);
     } catch (reason) {
-      setError((reason as Error).message || "Autentikasi Google gagal. Silakan coba kembali.");
+      setError(translateAuthError(translate, (reason as Error).message || translate("auth.errorGoogle")));
     } finally {
       setSubmitting(false);
       setGoogleLoading(false);
@@ -415,7 +420,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
       ? passwordStrength(password, { email })
       : null;
   const passwordOk = mode === "signup" ? passwordAcceptable(password, { email }) : true;
-  const otpReady = otp.trim().length >= 8;
+
   const emailValid = isValidEmail(email.trim());
   const emailTouched = email.trim().length > 0 && !emailValid;
 
@@ -423,7 +428,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
   const inputClass =
     "h-11 w-full rounded-xl border border-[#e5e5e5] bg-[#f7f7f8] px-4 text-sm text-tinta outline-none transition placeholder:text-[#676767] focus:border-javanese focus:ring-2 focus:ring-javanese/10";
   const submitClass =
-    "min-h-[54px] w-full rounded-full bg-javanese text-sm font-bold text-white transition hover:bg-forest disabled:cursor-wait disabled:opacity-70";
+    "grid w-full min-h-[54px] grid-flow-col items-center justify-center gap-2 rounded-full bg-javanese text-sm font-bold text-white transition hover:bg-forest disabled:cursor-wait disabled:opacity-70";
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center p-5 max-[760px]:p-3 max-[760px]:pb-[max(12px,env(safe-area-inset-bottom))]">
@@ -592,7 +597,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                 <button
                   className={submitClass}
                   type="submit"
-                  disabled={otpSubmitting || resending || !otpReady}
+                  disabled={otpSubmitting || resending}
                 >
                   {otpSubmitting ? translate("auth.otpVerifyLoading") : translate("auth.otpVerify")}
                 </button>
@@ -734,13 +739,20 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                   type="submit"
                   disabled={submitting || !passwordOk}
                 >
-                  {submitting
-                    ? mode === "signup"
-                      ? translate("auth.creating")
-                      : translate("auth.checking")
-                    : mode === "signup"
-                      ? translate("auth.createAccount")
-                      : translate("auth.login")}
+                  {submitting ? (
+                    <>
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        className="size-4 animate-spin fill-none stroke-current [stroke-width:2.5]"
+                      >
+                        <path d="M12 2a10 10 0 1 0 10 10" strokeLinecap="round" />
+                      </svg>
+                      {mode === "signup" ? translate("auth.creating") : translate("auth.checking")}
+                    </>
+                  ) : mode === "signup"
+                    ? translate("auth.createAccount")
+                    : translate("auth.login")}
                 </button>
               </>
             )}
@@ -758,17 +770,6 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                   <path d="M12 9v4M12 17h.01" />
                 </svg>
                 <span>{error}</span>
-              </p>
-            ) : submitting ? (
-              <p className="flex min-h-[38px] items-center justify-center gap-2 text-[12px] text-muted-foreground">
-                <svg
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  className="size-4 animate-spin fill-none stroke-current [stroke-width:2.5]"
-                >
-                  <path d="M12 2a10 10 0 1 0 10 10" strokeLinecap="round" />
-                </svg>
-                {mode === "signup" ? translate("auth.creatingAccount") : translate("auth.checkingAccount")}
               </p>
             ) : null}
           </form>

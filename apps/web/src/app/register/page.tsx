@@ -7,9 +7,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 import { login, register } from "@/features/auth/api";
+import { translateAuthError } from "@/features/auth/error-messages";
+import { useSettings } from "@/features/settings";
 
 function RegisterPageContent() {
   const router = useRouter();
+  const { t: translate } = useSettings();
   const searchParams = useSearchParams();
   const isSignup = searchParams.get("mode") === "signup";
   const [name, setName] = useState("");
@@ -36,7 +39,9 @@ function RegisterPageContent() {
       }
       router.push("/chat");
     } catch (err) {
-      setStatus((err as Error).message || "Gagal. Coba lagi.");
+      setStatus(
+        translateAuthError(translate, (err as Error).message || "Gagal. Coba lagi.")
+      );
       setLoading(false);
     }
   }
@@ -150,7 +155,22 @@ function RegisterPageContent() {
               Login sebagai admin
             </Link>
           </p>
-          {status ? <p className="mt-3 text-center text-[13px] text-red">{status}</p> : null}
+          {status ? (
+            <p
+              role="alert"
+              className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-left text-[12px] leading-[1.5] text-destructive"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="mt-[1px] size-4 shrink-0 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:1.8]"
+              >
+                <path d="M10.3 4 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 4a2 2 0 0 0-3.4 0Z" />
+                <path d="M12 9v4M12 17h.01" />
+              </svg>
+              <span>{status}</span>
+            </p>
+          ) : null}
         </form>
       </div>
     </div>

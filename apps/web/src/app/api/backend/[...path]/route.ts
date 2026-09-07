@@ -164,6 +164,7 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
       }
       if (action === "logout") return clearCookies(json({ status: "ok" }));
       if (action === "account") return clearCookies(json({ status: "deleted" }));
+      if (action === "resend-otp") return json({ status: "resent" });
       const result = await upstream.json();
       if (["session", "me", "profile"].includes(action)) {
         const user = publicUser(result);

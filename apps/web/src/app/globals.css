@@ -143,6 +143,10 @@
   color: rgba(255, 255, 255, 0.72) !important;
 }
 
+.light aside.bg-sidebar .text-muted-foreground {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
 /* ── Dark theme ── */
 
 .dark {
