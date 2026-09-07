@@ -5,6 +5,7 @@ from supabase_auth.errors import AuthApiError
 
 from app.api.dependencies import CurrentUser, DbSession, _extract_bearer_token
 from app.api.schemas import (
+    GoogleAuthRequest,
     LoginRequest,
     LoginResponse,
     ProfileUpdateRequest,
@@ -15,7 +16,7 @@ from app.api.schemas import (
 from app.api.state import UserRecord
 from app.core.config import settings
 from app.db.session import create_session
-from app.models.business import UserProfile
+from app.models.business import Conversation, Feedback, Message, UserProfile
 from app.services import supabase as supabase_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -209,6 +210,44 @@ def register(payload: RegisterRequest) -> LoginResponse:
         ) from exc
 
 
+@router.post("/google", response_model=LoginResponse)
+def google_login(payload: GoogleAuthRequest) -> LoginResponse:
+    """Exchange a Google ID token (from Google Identity Services) for a Supabase session."""
+    try:
+        supabase = supabase_service.get_supabase_anon()
+        result = supabase.auth.sign_in_with_id_token(
+            {"provider": "google", "token": payload.id_token}
+        )
+        user = result.user
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Autentikasi Google gagal.",
+            )
+        uid = user.id
+        email = user.email or ""
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Akun Google tidak memiliki email.",
+            )
+        name = user.user_metadata.get("name") or email.split("@")[0] or "User"
+        record = _sync_user_profile(uid, email, name)
+        access_token, refresh_token = _session_tokens(result.session)
+        return LoginResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user=to_user_response(record),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Autentikasi Google gagal. Silakan coba lagi.",
+        ) from exc
+
+
 @router.post("/logout")
 def logout(authorization: str | None = Header(default=None)) -> dict[str, str]:
     token = _extract_bearer_token(authorization)
@@ -233,6 +272,52 @@ def logout(authorization: str | None = Header(default=None)) -> dict[str, str]:
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Logout gagal. Silakan coba lagi.") from exc
     return {"status": "ok"}
+
+
+@router.delete("/account")
+def delete_account(user: CurrentUser, session: DbSession) -> dict[str, str]:
+    """Permanently delete the authenticated user's account and personal data."""
+    try:
+        # Remove conversations and their messages first (messages reference conversations).
+        owned = (
+            session.query(Conversation)
+            .filter(Conversation.user_id == user.user_id)
+            .all()
+        )
+        owned_ids = [item.conversation_id for item in owned]
+        if owned_ids:
+            session.query(Message).filter(
+                Message.conversation_id.in_(owned_ids)
+            ).delete(synchronize_session=False)
+            session.query(Conversation).filter(
+                Conversation.conversation_id.in_(owned_ids)
+            ).delete(synchronize_session=False)
+        # Anonymize feedback rows (no FK, keep aggregate value without identity).
+        session.query(Feedback).filter(Feedback.user_id == user.user_id).update(
+            {Feedback.user_id: None}, synchronize_session=False
+        )
+        profile = session.get(UserProfile, user.user_id)
+        if profile is not None:
+            session.delete(profile)
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=503, detail="Akun belum dapat dihapus. Silakan coba lagi."
+        ) from exc
+    try:
+        supabase = supabase_service.get_supabase()
+        supabase.auth.admin.delete_user(user.user_id)
+    except AuthApiError as exc:
+        if exc.status not in (401, 403, 404):
+            raise HTTPException(
+                status_code=503, detail="Akun belum dapat dihapus. Silakan coba lagi."
+            ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail="Akun belum dapat dihapus. Silakan coba lagi."
+        ) from exc
+    return {"status": "deleted"}
 
 
 @router.get("/me", response_model=UserResponse)

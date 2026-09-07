@@ -244,6 +244,15 @@ const id = {
   "profile.saved": "Profil berhasil diperbarui.",
   "profile.error": "Profil belum dapat disimpan. Silakan coba lagi.",
   "profile.invalid": "Masukkan nama sepanjang 1–80 karakter.",
+  "profile.dangerTitle": "Hapus akun",
+  "profile.dangerDescription":
+    "Menghapus akun bersifat permanen. Profil, riwayat percakapan, dan akses Anda akan dihapus dan tidak dapat dikembalikan.",
+  "profile.delete": "Hapus akun",
+  "profile.deleteCancel": "Batalkan",
+  "profile.deleteConfirm": "Ya, hapus akun saya",
+  "profile.deleting": "Menghapus…",
+  "profile.deleted": "Akun berhasil dihapus.",
+  "profile.deleteError": "Akun belum dapat dihapus. Silakan coba lagi.",
   // Not found
   "notFound.error": "Galat 404",
   "notFound.title": "Halaman tidak ditemukan",

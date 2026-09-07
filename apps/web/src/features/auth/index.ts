@@ -1,5 +1,5 @@
 export { AuthModal } from "./components/auth-modal";
-export { fetchWithAuthRetry, login, register, signOut } from "./api";
+export { fetchWithAuthRetry, googleLogin, login, register, signOut, deleteAccount } from "./api";
 export {
   clearStoredSession,
   getStoredSession,

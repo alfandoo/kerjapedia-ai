@@ -49,6 +49,10 @@ class RefreshRequest(ApiModel):
     refresh_token: str = Field(min_length=10, max_length=1000)
 
 
+class GoogleAuthRequest(ApiModel):
+    id_token: str = Field(min_length=20, max_length=10000)
+
+
 class MessageResponse(ApiModel):
     role: Literal["user", "assistant", "system"]
     content: str

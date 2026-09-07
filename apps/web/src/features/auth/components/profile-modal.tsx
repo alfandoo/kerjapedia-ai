@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { useSettings } from "@/features/settings";
-import { updateProfile } from "../api";
+import { deleteAccount, updateProfile } from "../api";
 import type { UserSession } from "../types";
 
 type Props = { user: UserSession["user"]; onClose: () => void; onReturnFocus: () => void };
@@ -23,6 +23,9 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
   const [name, setName] = useState(user.name);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const trimmed = name.trim();
   const valid = trimmed.length > 0 && trimmed.length <= 80;
   const changed = trimmed !== user.name.trim();
@@ -41,16 +44,31 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
       setSaving(false);
     }
   }
+  async function removeAccount() {
+    if (!confirmingDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount();
+      toast.success(t("profile.deleted"));
+      onClose();
+    } catch {
+      setDeleteError(t("profile.deleteError"));
+    } finally {
+      setDeleting(false);
+    }
+  }
+  const busy = saving || deleting;
   return (
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !saving) onClose();
+        if (!open && !busy) onClose();
       }}
     >
       <DialogContent
         className="w-[calc(100vw_-_2rem)] sm:max-w-[440px]"
-        showCloseButton={!saving}
+        showCloseButton={!busy}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           onReturnFocus();
@@ -60,16 +78,19 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
           <DialogTitle>{t("profile.title")}</DialogTitle>
           <DialogDescription>{t("profile.description")}</DialogDescription>
         </DialogHeader>
-        <div className="flex items-center gap-3 py-2">
+        <div className="flex items-center gap-3 pb-1 pt-2">
           <span
             aria-hidden="true"
             className="grid size-14 shrink-0 place-items-center rounded-full bg-accent text-lg font-semibold text-accent-foreground"
           >
             {user.name.slice(0, 2).toUpperCase()}
           </span>
-          <p className="min-w-0 truncate font-medium">{user.name}</p>
+          <div className="min-w-0">
+            <p className="truncate font-medium leading-tight">{user.name}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{user.email}</p>
+          </div>
         </div>
-        <form className="flex flex-col gap-6" onSubmit={save} aria-busy={saving}>
+        <form className="flex flex-col gap-5" onSubmit={save} aria-busy={saving}>
           <FieldGroup>
             <Field data-invalid={!valid || undefined}>
               <FieldLabel htmlFor="profile-name">{t("profile.name")}</FieldLabel>
@@ -97,10 +118,12 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
               <FieldLabel htmlFor="profile-email">{t("profile.email")}</FieldLabel>
               <Input
                 id="profile-email"
-                className="min-h-11"
+                className="min-h-11 cursor-not-allowed bg-muted/40 text-muted-foreground"
                 type="email"
                 value={user.email}
                 readOnly
+                tabIndex={-1}
+                aria-readonly="true"
                 aria-describedby="profile-email-hint"
               />
               <FieldDescription id="profile-email-hint">{t("profile.emailHint")}</FieldDescription>
@@ -112,15 +135,66 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
             </p>
           ) : null}
           <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
-            <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
+            <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
               {t("profile.cancel")}
             </Button>
-            <Button type="submit" disabled={!valid || !changed || saving}>
+            <Button type="submit" disabled={!valid || !changed || busy}>
               {saving ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : null}
               {saving ? t("profile.saving") : t("profile.save")}
             </Button>
           </div>
         </form>
+        <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+          <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
+            <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
+            {t("profile.dangerTitle")}
+          </p>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            {t("profile.dangerDescription")}
+          </p>
+          {deleteError ? (
+            <p role="alert" className="mt-2 text-sm text-destructive">
+              {deleteError}
+            </p>
+          ) : null}
+          {!confirmingDelete ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                setDeleteError(null);
+                setConfirmingDelete(true);
+              }}
+              className="mt-3 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              {t("profile.delete")}
+            </Button>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => {
+                  setDeleteError(null);
+                  setConfirmingDelete(false);
+                }}
+              >
+                {t("profile.deleteCancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={busy}
+                onClick={removeAccount}
+              >
+                {deleting ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : null}
+                {deleting ? t("profile.deleting") : t("profile.deleteConfirm")}
+              </Button>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

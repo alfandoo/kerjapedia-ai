@@ -241,6 +241,15 @@ const en = {
   "profile.saved": "Profile updated.",
   "profile.error": "Your profile could not be saved. Please try again.",
   "profile.invalid": "Enter a name between 1 and 80 characters.",
+  "profile.dangerTitle": "Delete account",
+  "profile.dangerDescription":
+    "Deleting your account is permanent. Your profile, conversation history, and access will be removed and cannot be restored.",
+  "profile.delete": "Delete account",
+  "profile.deleteCancel": "Keep my account",
+  "profile.deleteConfirm": "Yes, delete my account",
+  "profile.deleting": "Deleting…",
+  "profile.deleted": "Account deleted.",
+  "profile.deleteError": "Your account could not be deleted. Please try again.",
   // Not found
   "notFound.error": "Error 404",
   "notFound.title": "Page not found",

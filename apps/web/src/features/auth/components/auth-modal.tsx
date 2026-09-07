@@ -9,7 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 
-import { login, register } from "@/features/auth";
+import { login, register, googleLogin } from "@/features/auth";
 import { useSettings } from "@/features/settings";
 import type { UserSession } from "@/features/auth/types";
 
@@ -28,26 +28,6 @@ function CloseIcon() {
       className="size-[21px] fill-none stroke-current [stroke-linecap:round] [stroke-width:1.8]"
     >
       <path d="m6 6 12 12M18 6 6 18" />
-    </svg>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
-      <path
-        fill="#4285F4"
-        d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.7 4.7 0 0 1-2 3v2.6h3.3c1.9-1.8 2.9-4.4 2.9-7.5Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 22c2.7 0 5-.9 6.7-2.3l-3.3-2.6c-.9.6-2.1 1-3.4 1a5.9 5.9 0 0 1-5.5-4.1H3.1v2.7A10 10 0 0 0 12 22Z"
-      />
-      <path fill="#FBBC05" d="M6.5 14a6 6 0 0 1 0-3.9V7.4H3.1a10 10 0 0 0 0 9.3L6.5 14Z" />
-      <path
-        fill="#EA4335"
-        d="M12 6c1.6 0 3 .5 4.2 1.6l3.1-3A10.4 10.4 0 0 0 3.1 7.4l3.4 2.7A5.9 5.9 0 0 1 12 6Z"
-      />
     </svg>
   );
 }
@@ -90,16 +70,16 @@ function EyeIcon({ hidden }: { hidden: boolean }) {
 }
 
 const providers = [
-  { label: "Google", icon: <GoogleIcon /> },
-  { label: "Apple", icon: <AppleIcon /> },
-  { label: "telepon", icon: <PhoneIcon /> },
+  { key: "apple", label: "Apple", icon: <AppleIcon /> },
+  { key: "phone", label: "telepon", icon: <PhoneIcon /> },
 ];
 
 export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
-  const { t: translate } = useSettings();
+  const { t: translate, resolvedTheme, resolvedLanguage } = useSettings();
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -110,6 +90,8 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [gisReady, setGisReady] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -197,6 +179,98 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
     }
   }
 
+  async function handleGoogleCredential(credential: string) {
+    setError(null);
+    setSubmitting(true);
+    setGoogleLoading(true);
+    try {
+      const session = await googleLogin(credential);
+      onSuccess(session);
+      setStep("email");
+      setEmail("");
+      setName("");
+      setPassword("");
+      setPasswordVisible(false);
+    } catch (reason) {
+      setError((reason as Error).message || "Autentikasi Google gagal. Silakan coba kembali.");
+    } finally {
+      setSubmitting(false);
+      setGoogleLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      // State updates are part of opening the modal; this effect also manages GIS setup.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError("Google sign-in belum dikonfigurasi.");
+      return;
+    }
+    let cancelled = false;
+    const googleClientId: string = clientId;
+    // GIS button text follows the app language; theme follows the app theme.
+    const gisLang = resolvedLanguage === "en" ? "en" : "id";
+    const gisTheme: "outline" | "filled_black" =
+      resolvedTheme === "dark" ? "filled_black" : "outline";
+    const gisSrc = `https://accounts.google.com/gsi/client?hl=${gisLang}`;
+    // Hide the GIS frame until the real button is drawn so its loading shimmer never shows.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setGisReady(false);
+    function renderGoogleButton() {
+      const g = window.google;
+      if (cancelled || !g?.accounts?.id || !googleButtonRef.current) return;
+      g.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: (response: { credential?: string }) => {
+          if (response.credential) void handleGoogleCredential(response.credential);
+          else setError("Autentikasi Google gagal.");
+        },
+      });
+      googleButtonRef.current.innerHTML = "";
+      g.accounts.id.renderButton(googleButtonRef.current, {
+        type: "standard",
+        theme: gisTheme,
+        size: "large",
+        width: 368,
+        text: "continue_with",
+        shape: "pill",
+      });
+      if (!cancelled) setGisReady(true);
+    }
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src^="https://accounts.google.com/gsi/client"]'
+    );
+    if (existing && existing.src !== gisSrc) {
+      // Reload GIS so the button text matches the newly selected language.
+      existing.remove();
+      try {
+        delete (window as unknown as { google?: unknown }).google;
+      } catch {
+        /* ignore */
+      }
+    }
+    if (window.google?.accounts?.id) {
+      renderGoogleButton();
+    } else {
+      const script = document.createElement("script");
+      script.src = gisSrc;
+      script.async = true;
+      script.onload = renderGoogleButton;
+      script.onerror = () => {
+        if (!cancelled) setError("Google sign-in belum dapat dimuat.");
+      };
+      document.head.appendChild(script);
+    }
+    return () => {
+      cancelled = true;
+    };
+    // handleGoogleCredential is stable in practice (only calls setters/onSuccess);
+    // re-run on open/theme/language so the GIS button matches the app.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, resolvedLanguage, resolvedTheme]);
+
   useEffect(() => {
     if (!open) return;
     function handleEscape(event: KeyboardEvent) {
@@ -257,13 +331,54 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
           </header>
 
           <div className="mt-[34px] grid gap-2.5" aria-label="Pilihan masuk lainnya">
-            {providers.map((provider) => (
+            <div className="relative grid min-h-[54px] place-items-center">
+              <div
+                ref={googleButtonRef}
+                className={`flex w-full justify-center ${gisReady && !googleLoading ? "" : "invisible"}`}
+                aria-hidden={!gisReady || googleLoading}
+              />
+              {!gisReady && !googleLoading ? (
+                <div
+                  className="absolute inset-0 grid place-items-center rounded-full border border-border bg-muted"
+                  role="status"
+                  aria-live="polite"
+                  aria-label={translate("auth.checking")}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="size-6 animate-spin fill-none stroke-javanese [stroke-width:2.5]"
+                  >
+                    <path d="M12 2a10 10 0 1 0 10 10" strokeLinecap="round" />
+                  </svg>
+                </div>
+              ) : null}
+              {googleLoading ? (
+                <div
+                  className="absolute inset-0 grid place-items-center"
+                  role="status"
+                  aria-live="polite"
+                  aria-label={translate("auth.checkingAccount")}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="size-6 animate-spin fill-none stroke-javanese [stroke-width:2.5]"
+                  >
+                    <path d="M12 2a10 10 0 1 0 10 10" strokeLinecap="round" />
+                  </svg>
+                </div>
+              ) : null}
+            </div>
+            {providers
+              .filter((provider) => provider.key !== "google")
+              .map((provider) => (
               <button
-                key={provider.label}
+                key={provider.key}
                 type="button"
                 disabled
                 aria-disabled="true"
-                className="grid min-h-[54px] grid-cols-[28px_minmax(0,1fr)_78px] items-center rounded-full border border-[#e5e5e5] bg-[#f7f7f8] px-[14px] text-sm font-semibold text-[#676767] transition hover:border-[#e5e5e5] hover:bg-[#f7f7f8] disabled:cursor-not-allowed max-[760px]:grid-cols-[26px_minmax(0,1fr)_70px] max-[760px]:px-2.5 max-[760px]:text-xs"
+                className="grid min-h-[54px] grid-cols-[28px_minmax(0,1fr)_78px] items-center rounded-full border border-[#e5e5e5] bg-[#f7f7f8] px-[14px] text-sm font-semibold text-[#676767] transition disabled:cursor-not-allowed max-[760px]:grid-cols-[26px_minmax(0,1fr)_70px] max-[760px]:px-2.5 max-[760px]:text-xs"
               >
                 <span className="grid size-[22px] place-items-center text-[#111713]">
                   {provider.icon}

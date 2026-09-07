@@ -12,7 +12,7 @@ const GUEST = production ? "__Host-kp-guest" : "kp-guest";
 const REFRESH = production ? "__Host-kp-refresh" : "kp-refresh";
 const cookieOptions = { httpOnly: true, secure: production, sameSite: "lax" as const, path: "/", maxAge: COOKIE_AGE };
 const roots = new Set(["auth", "admin", "chat", "documents", "feedback", "ingestion", "evaluation"]);
-const authMethods: Record<string, string> = { login: "POST", register: "POST", refresh: "POST", logout: "POST", session: "GET", me: "GET", profile: "PATCH" };
+const authMethods: Record<string, string> = { login: "POST", register: "POST", refresh: "POST", logout: "POST", session: "GET", me: "GET", profile: "PATCH", google: "POST", account: "DELETE" };
 
 type Context = { params: Promise<{ path: string[] }> };
 function json(body: unknown, status = 200) {
@@ -64,7 +64,7 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
   const access = request.cookies.get(ACCESS)?.value;
   const refresh = request.cookies.get(REFRESH)?.value;
   if (auth && action === "refresh" && !refresh) return clearCookies(json({ detail: "Session expired." }, 401));
-  if (auth && ["session", "me", "profile"].includes(action) && !access) return json({ detail: "No active session." }, 401);
+  if (auth && ["session", "me", "profile", "account"].includes(action) && !access) return json({ detail: "No active session." }, 401);
   if (auth && action === "logout" && !access) {
     // A refresh cookie may still be valid: let the client refresh then revoke.
     return refresh ? json({ detail: "Session refresh required." }, 401) : clearCookies(json({ status: "ok" }));
@@ -87,11 +87,16 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
     }
     if (guest) headers.set("x-kerjapedia-guest-id", guest);
     // Browser Authorization and Cookie headers are never forwarded.
-    if (access && !(auth && ["login", "register", "refresh"].includes(action))) headers.set("Authorization", `Bearer ${access}`);
+    if (access && !(auth && ["login", "register", "refresh", "google"].includes(action))) headers.set("Authorization", `Bearer ${access}`);
     let body: BodyInit | null = null;
     if (auth && ["login", "register"].includes(action)) {
       const input = await smallJson(request);
       body = JSON.stringify(action === "register" ? { name: input.name, email: input.email, password: input.password } : { email: input.email, password: input.password });
+      headers.set("content-type", "application/json");
+    } else if (auth && action === "google") {
+      const input = await smallJson(request);
+      if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => key !== "id_token") || typeof input.id_token !== "string" || !input.id_token) return json({ detail: "Invalid Google credential." }, 400);
+      body = JSON.stringify({ id_token: input.id_token });
       headers.set("content-type", "application/json");
     } else if (auth && action === "profile") {
       const input = await smallJson(request);
@@ -123,6 +128,7 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
         return action === "refresh" && [400, 401, 403].includes(upstream.status) ? clearCookies(response) : response;
       }
       if (action === "logout") return clearCookies(json({ status: "ok" }));
+      if (action === "account") return clearCookies(json({ status: "deleted" }));
       const result = await upstream.json();
       if (["session", "me", "profile"].includes(action)) {
         const user = publicUser(result);

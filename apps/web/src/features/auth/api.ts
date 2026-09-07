@@ -21,6 +21,9 @@ export function login(email: string, password: string): Promise<UserSession> {
 export function register(name: string, email: string, password: string): Promise<UserSession> {
   return authenticate("register", { name, email, password });
 }
+export function googleLogin(idToken: string): Promise<UserSession> {
+  return authenticate("google", { id_token: idToken });
+}
 async function performSessionRefresh(): Promise<UserSession | null> {
   const response = await fetch(`${API_URL}/auth/refresh`, {
     method: "POST", credentials: "same-origin", headers: csrfHeaders,
@@ -69,4 +72,11 @@ export async function updateProfile(name: string): Promise<void> {
   const next = await parseJsonResponse<UserSession>(response);
   if (getStoredSession()?.user.user_id !== owner) throw new Error("Session changed");
   setStoredSession(next);
+}
+export async function deleteAccount(): Promise<void> {
+  const owner = getStoredSession()?.user.user_id;
+  if (!owner) throw new Error("No active session");
+  const response = await fetchWithAuthRetry(`${API_URL}/auth/account`, { method: "DELETE" });
+  await parseJsonResponse<{ status: string }>(response);
+  clearStoredSession();
 }
