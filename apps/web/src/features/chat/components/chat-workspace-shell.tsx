@@ -19,7 +19,9 @@ import { toast } from "sonner";
 import {
   Calculator,
   ChevronRight,
+  FileSearch,
   FileText,
+  Gavel,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -480,7 +482,7 @@ export function ChatWorkspaceShell({
                   : "text-sidebar-foreground"
               }`}
             >
-              <FileText className="size-[18px] text-javanese" />
+              <FileSearch className="size-[18px] text-javanese" />
               <span>{translate("sidebar.reviewCv")}</span>
             </Link>
             <Link
@@ -492,7 +494,7 @@ export function ChatWorkspaceShell({
                   : "text-sidebar-foreground"
               }`}
             >
-              <Scale className="size-[18px] text-javanese" />
+              <Gavel className="size-[18px] text-javanese" />
               <span>{translate("sidebar.compliance")}</span>
             </Link>
           </nav>
@@ -800,6 +802,47 @@ export function ChatWorkspaceShell({
         onClick={(event) => openChatSearch(event.currentTarget)}
       >
         <Search className="size-[21px] text-javanese" />
+      </button>
+      <Link
+        href="/kalkulator"
+        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
+        aria-label={translate("sidebar.kalkulator")}
+        title={translate("sidebar.kalkulator")}
+      >
+        <Calculator className="size-[21px] text-javanese" />
+      </Link>
+      <Link
+        href="/review-cv"
+        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
+        aria-label={translate("sidebar.reviewCv")}
+        title={translate("sidebar.reviewCv")}
+      >
+        <FileSearch className="size-[21px] text-javanese" />
+      </Link>
+      <Link
+        href="/compliance"
+        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
+        aria-label={translate("sidebar.compliance")}
+        title={translate("sidebar.compliance")}
+      >
+        <Gavel className="size-[21px] text-javanese" />
+      </Link>
+      <Link
+        href="/legal/disclaimer"
+        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
+        aria-label={translate("sidebar.legal")}
+        title={translate("sidebar.legal")}
+      >
+        <FileText className="size-[21px] text-javanese" />
+      </Link>
+      <button
+        type="button"
+        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
+        aria-label={translate("sidebar.settings")}
+        title={translate("sidebar.settings")}
+        onClick={() => setSettingsOpen(true)}
+      >
+        <Settings className="size-[21px] text-javanese" />
       </button>
       <button
         className="mt-auto grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent"
