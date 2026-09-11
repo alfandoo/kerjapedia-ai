@@ -404,9 +404,12 @@ class GroqAnswerGenerator(AnswerGenerator):
                     "separately by the app."
                 ),
                 (
-                    "Every claims[].text must copy one complete legal-claim sentence from "
-                    "answer verbatim. Together the claims must cover every legal assertion. "
-                    "Each claim must cite only chunks that support the entire sentence."
+                    "Write the answer as short sentences, one verifiable fact per "
+                    "sentence. Every claims[].text must copy one such sentence "
+                    "from answer verbatim, so a compound sentence would sink its "
+                    "whole claim when only one detail is citable. Together the "
+                    "claims must cover every legal assertion. Each claim must "
+                    "cite only chunks that support the entire sentence."
                 ),
                 (
                     "The previous response failed validation. Return a corrected complete "
@@ -423,7 +426,7 @@ class GroqAnswerGenerator(AnswerGenerator):
                 {"role": "user", "content": user_prompt},
             ],
             response_format={"type": "json_object"},
-            temperature=0.1,
+            temperature=0,
             max_tokens=self.max_tokens,
         )
         content = completion.choices[0].message.content
@@ -635,12 +638,10 @@ def _verified_claim_subset(
 ) -> _VerifiedSubset | None:
     if not claims or not claims[0].supported:
         return None
-    normalized_answer = _normalized_contract_text(original_answer)
-    supported = [
-        claim
-        for claim in claims
-        if claim.supported and _normalized_contract_text(claim.text) in normalized_answer
-    ]
+    # The lead claim must be supported: answering from a failed lead while
+    # salvaging tangential tail claims would mislead. Detached (reworded)
+    # claims are fine below — every returned sentence is still verified.
+    supported = [claim for claim in claims if claim.supported]
     if not supported or supported[0] != claims[0]:
         return None
     answer = "\n\n".join(claim.text.strip() for claim in supported)

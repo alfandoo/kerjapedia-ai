@@ -285,6 +285,54 @@ def test_claim_verifier_rejects_unsupported_number_and_material_qualifier() -> N
     assert [claim.supported for claim in claims] == [False, False]
 
 
+def test_claim_verifier_matches_spelled_out_indonesian_numbers() -> None:
+    citation = Citation(
+        citation_id="cit_001",
+        chunk_id="chunk-1",
+        document_id="PERMENAKER-6-2016",
+        document_title="Permenaker 6/2016",
+        short_title="Permenaker 6/2016",
+        legal_status="active",
+        chapter=None,
+        section=None,
+        article="Pasal 5",
+        paragraph=None,
+        page_start=1,
+        page_end=1,
+        quote=(
+            "Pengusaha wajib membayar THR paling lambat tujuh hari "
+            "sebelum hari raya keagamaan."
+        ),
+        source_url="https://peraturan.bpk.go.id/",
+        local_file=None,
+        retrieval_score=0.9,
+        rerank_score=0.9,
+    )
+
+    claims = verify_claims_deterministically(
+        [
+            (
+                "Batas waktu pembayaran THR adalah paling lambat 7 hari "
+                "sebelum hari raya keagamaan.",
+                ["chunk-1"],
+            )
+        ],
+        [citation],
+    )
+
+    assert claims[0].supported is True
+
+
+def test_claim_support_threshold_accepts_true_paraphrase() -> None:
+    from app.services.answering.claim_verifier import _is_supported
+
+    assert _is_supported(["chunk-1"], 0.40, True, True) is True
+    assert _is_supported(["chunk-1"], 0.34, True, True) is False
+    assert _is_supported(["chunk-1"], 0.90, False, True) is False
+    assert _is_supported(["chunk-1"], 0.90, True, False) is False
+    assert _is_supported([], 0.90, True, True) is False
+
+
 def test_claim_coverage_detects_omitted_answer_claims() -> None:
     claims = [
         GroundedClaim(

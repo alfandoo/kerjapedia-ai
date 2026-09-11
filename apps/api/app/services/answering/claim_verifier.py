@@ -40,6 +40,54 @@ _TOKEN_ALIASES = {
     "kerugian": "rugi",
     "penutupan": "tutup",
 }
+# Indonesian legal texts spell numbers out ("tujuh hari") while generated
+# answers use digits ("7 hari"). Normalize words to digits before comparing
+# number sets so factually identical quantities are not flagged unsupported.
+_NUMBER_WORDS = {
+    "nol": "0",
+    "satu": "1",
+    "dua": "2",
+    "tiga": "3",
+    "empat": "4",
+    "lima": "5",
+    "enam": "6",
+    "tujuh": "7",
+    "delapan": "8",
+    "sembilan": "9",
+    "sepuluh": "10",
+    "sebelas": "11",
+    "dua belas": "12",
+    "tiga belas": "13",
+    "empat belas": "14",
+    "lima belas": "15",
+    "enam belas": "16",
+    "tujuh belas": "17",
+    "delapan belas": "18",
+    "sembilan belas": "19",
+    "dua puluh": "20",
+    "tiga puluh": "30",
+    "empat puluh": "40",
+    "lima puluh": "50",
+    "enam puluh": "60",
+    "tujuh puluh": "70",
+    "delapan puluh": "80",
+    "sembilan puluh": "90",
+    "seratus": "100",
+    "seribu": "1000",
+    "setengah": "0.5",
+    "sehari": "1",
+    "semalam": "1",
+    "seminggu": "1",
+    "sebulan": "1",
+    "setahun": "1",
+}
+_NUMBER_WORD_PATTERN = re.compile(
+    "|".join(
+        rf"\b{re.escape(phrase)}\b"
+        for phrase in sorted(_NUMBER_WORDS, key=len, reverse=True)
+    ),
+    re.IGNORECASE,
+)
 _MATERIAL_QUALIFIERS = {
     "berkelanjutan",
     "berturut",
@@ -127,7 +175,12 @@ def _is_supported(
     numbers_supported: bool,
     qualifiers_supported: bool,
 ) -> bool:
-    return bool(chunk_ids and numbers_supported and qualifiers_supported and support_score >= 0.5)
+    # Token overlap only needs to show the claim is about the cited rule
+    # (~1/3 shared substantive words); legal precision is enforced by the
+    # numbers-subset and material-qualifier gates, which stay strict. A higher
+    # overlap bar rejects factually correct claims that paraphrase the source
+    # ("berhak menerima" vs "wajib memberikan").
+    return bool(chunk_ids and numbers_supported and qualifiers_supported and support_score >= 0.35)
 
 
 def claim_coverage_score(answer: str, claims: list[GroundedClaim]) -> float:
@@ -156,4 +209,7 @@ def _content_tokens(value: str) -> set[str]:
 
 
 def _numbers(value: str) -> set[str]:
-    return {number.replace(",", ".") for number in _NUMBER_RE.findall(value)}
+    normalized = _NUMBER_WORD_PATTERN.sub(
+        lambda match: _NUMBER_WORDS[match.group(0).lower()], value
+    )
+    return {number.replace(",", ".") for number in _NUMBER_RE.findall(normalized)}
