@@ -118,7 +118,9 @@ def system_diagnostics(_: AdminUser, response: HeaderResponse) -> dict:
             "embedding_provider": settings.embedding_provider,
             "embedding_model": settings.embedding_model,
             "llm_provider": settings.llm_provider,
-            "groq_model": settings.groq_model if settings.llm_provider == "groq" else None,
+            "openrouter_model": (
+                settings.openrouter_model if settings.llm_provider == "openrouter" else None
+            ),
             "pinecone_index": settings.pinecone_index_name,
             "pinecone_namespace": settings.pinecone_namespace,
         },

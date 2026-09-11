@@ -183,12 +183,28 @@ def rewrite_query(
         timing_query = f"{expanded} statutory payment deadline no later than due date"
         if timing_query not in rewritten:
             rewritten.append(timing_query)
+    rewritten = rewrite_termination(query, expanded, rewritten)
     return rewritten
 
 
-# Named laws laypeople cite instead of numbers. Applied only when no
-# explicit regulation was written; explicit codes always win. Deliberately
-# narrow: bare "ketenagakerjaan" is too generic to hard-filter on.
+def rewrite_termination(query: str, expanded: str, rewritten: list[str]) -> list[str]:
+    """Add retrieval expansions for contract-end and compensation rules."""
+    if any(term in expanded for term in _TERMINATION_TERMS):
+        termination_expansion = (
+            "berakhirnya PKWT uang kompensasi Pasal 15 16 17 PP 35 Tahun 2021 "
+            "pemutusan hubungan kerja pesangon Pasal 40 43 UU 13 Tahun 2003"
+        )
+        if termination_expansion not in rewritten:
+            rewritten.append(termination_expansion)
+    return rewritten
+
+
+_TERMINATION_TERMS = frozenset(
+    "berakhir selesai habis tamat selesai berakhir putus diputus"
+    " selesai kontrak habis kontrak tamat kontrak berakhir kontrak".split()
+)
+
+# Document-level regulation aliases for laypeople citing by common name.
 _REGULATION_ALIASES: tuple[tuple[str, str, int, int], ...] = (
     (r"\bcipta\s+kerja\b", "UU", 6, 2023),
     (r"\buu\s+ketenagakerjaan\b", "UU", 13, 2003),
@@ -231,6 +247,15 @@ def extract_filters(query: str, topics: list[str]) -> dict[str, object]:
 
     if re.search(r"\b(dicabut|revoked)\b", query):
         filters["legal_status"] = "revoked"
+
+    # Conservative producers for the new index dimensions. Segment kind
+    # fires only on an explicit "penjelasan" ask; freshness only on
+    # currency language ("masih berlaku"/"terkini"/"terbaru"). No defaults:
+    # an unasked dimension must never narrow results.
+    if re.search(r"\bpenjelasan\b", query):
+        filters["segment_kinds"] = ["explanation"]
+    if re.search(r"\bmasih berlaku\b|\bterkini\b|\bterbaru\b|\byang berlaku\b", query):
+        filters["freshness_states"] = ["fresh"]
 
     if topics:
         filters["inferred_topics"] = topics
@@ -298,11 +323,7 @@ def understand_query(
     filters = inherit_regulation_from_context(
         filters, original_topics, context_topics, context_document_ids
     )
-    if (
-        "year" in filters
-        and "regulation_type" not in filters
-        and "article" not in filters
-    ):
+    if "year" in filters and "regulation_type" not in filters and "article" not in filters:
         # A lone year ("berlaku sejak 2019") describes effective timing, not
         # the enactment year — filtering on it over-narrows. Leave it to
         # text matching instead of a hard filter.

@@ -61,6 +61,53 @@ class PineconeRetrievalStore:
         self.relationship_index = relationship_index or build_relationship_index([])
         self._client = None
         self._index = None
+        self._filter_support_cache: dict[str, frozenset[str]] = {}
+
+    def _supported_filter_fields(self) -> frozenset[str]:
+        """Metadata keys present in this namespace (probed once, cached).
+
+        A filter clause on an absent field matches nothing, so unsupported
+        dimensions are dropped with a warning instead of emptying results.
+        Probe failures fail open: assume legacy and warn.
+        """
+        namespace = self.config.namespace
+        cached = self._filter_support_cache.get(namespace)
+        if cached is not None:
+            return cached
+        try:
+            response = self._pinecone_index().query(
+                vector=[0.0] * self.config.dimension,
+                top_k=1,
+                namespace=namespace,
+                include_metadata=True,
+                include_values=False,
+            )
+            matches = list(getattr(response, "matches", []) or [])
+            if not matches:
+                supported: frozenset[str] = frozenset()
+            else:
+                supported = frozenset(_match_metadata(matches[0]).keys())
+        except Exception:
+            supported = frozenset()
+        self._filter_support_cache[namespace] = supported
+        return supported
+
+    def _drop_unsupported_filter_fields(
+        self, pinecone_filter: dict[str, Any] | None
+    ) -> tuple[dict[str, Any] | None, list[str]]:
+        """Drop new-dimension clauses the namespace cannot satisfy."""
+        if not pinecone_filter:
+            return pinecone_filter, []
+        referenced = {field for field in _NEW_FILTER_FIELDS if field in pinecone_filter}
+        if not referenced:
+            return pinecone_filter, []
+        supported = self._supported_filter_fields()
+        dropped = sorted(field for field in referenced if field not in supported)
+        if not dropped:
+            return pinecone_filter, []
+        kept = {key: value for key, value in pinecone_filter.items() if key not in dropped}
+        warnings = [f"filter_unsupported_by_index:{field}" for field in dropped]
+        return (kept or None), warnings
 
     def ensure_index(self) -> None:
         client = self._pinecone_client()
@@ -230,6 +277,9 @@ class PineconeRetrievalStore:
                 include_historical=_requests_historical_sources(understanding.normalized_query),
             ),
         }
+        query_options["filter"], filter_warnings = self._drop_unsupported_filter_fields(
+            query_options["filter"]
+        )
         sparse_query_fallback_used = False
         use_sparse = True
         matches: list[Any] = []
@@ -331,6 +381,7 @@ class PineconeRetrievalStore:
         ranked = diversify_ranked(ranked)
         selected = expand_context(ranked[:top_k], candidates)[:top_k]
         warnings = build_warnings(selected, self.relationship_index)
+        warnings.extend(filter_warnings)
         if getattr(self.embedding_provider, "sparse_fallback_used", False):
             warnings.append("native_sparse_embedding_unavailable")
         if sparse_query_fallback_used:
@@ -506,7 +557,25 @@ def _pinecone_filter(
         )
         if not include_historical:
             pinecone_filter["is_current"] = {"$eq": True}
+    # New index dimensions. Semantics mirror rag.indexing.filters.build_filter
+    # (the canonical spec); these keys only ever exist when the query
+    # explicitly asked for them — never as defaults.
+    if segment_kinds := filters.get("segment_kinds"):
+        pinecone_filter["segment_kind"] = {"$in": list(segment_kinds)}
+    if freshness_states := filters.get("freshness_states"):
+        pinecone_filter["freshness_state"] = {"$in": list(freshness_states)}
+    if effective_on := filters.get("effective_on"):
+        pinecone_filter["effective_date"] = {"$lte": effective_on}
+    if topics := filters.get("topics"):
+        pinecone_filter["topics_chunk"] = {"$in": list(topics)}
     return pinecone_filter or None
+
+
+# Metadata fields backing the new filter dimensions. Old namespaces
+# (schema 1) lack them: filtering on a missing field returns 0 results,
+# so the store probes once per namespace and drops unsupported dimensions
+# with a warning instead of silently emptying the answer.
+_NEW_FILTER_FIELDS = ("segment_kind", "freshness_state", "effective_date", "topics_chunk")
 
 
 def _index_rejects_sparse_values(exc: Exception) -> bool:
