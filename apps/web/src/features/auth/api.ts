@@ -20,6 +20,15 @@ export async function login(email: string, password: string): Promise<UserSessio
   if (!session) throw new Error("Periksa email Anda untuk kode verifikasi, lalu masuk kembali.");
   return session;
 }
+export async function getLoginMethods(email: string): Promise<{
+  email_exists: boolean;
+  has_password: boolean;
+  providers: string[];
+}> {
+  const url = `${API_URL}/auth/login-methods?email=${encodeURIComponent(email.trim())}`;
+  const response = await fetch(url, { credentials: "same-origin" });
+  return await parseJsonResponse<{ email_exists: boolean; has_password: boolean; providers: string[] }>(response);
+}
 export async function register(
   name: string,
   email: string,

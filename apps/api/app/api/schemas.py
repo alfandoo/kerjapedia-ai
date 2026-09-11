@@ -183,6 +183,12 @@ class UserResponse(ApiModel):
     roles: list[str]
 
 
+class LoginMethodsResponse(ApiModel):
+    email_exists: bool
+    has_password: bool
+    providers: list[str]
+
+
 class LoginResponse(ApiModel):
     access_token: str
     refresh_token: str = ""

@@ -12,7 +12,7 @@ const GUEST = production ? "__Host-kp-guest" : "kp-guest";
 const REFRESH = production ? "__Host-kp-refresh" : "kp-refresh";
 const cookieOptions = { httpOnly: true, secure: production, sameSite: "lax" as const, path: "/", maxAge: COOKIE_AGE };
 const roots = new Set(["auth", "admin", "chat", "documents", "feedback", "ingestion", "evaluation"]);
-const authMethods: Record<string, string> = { login: "POST", register: "POST", refresh: "POST", logout: "POST", session: "GET", me: "GET", profile: "PATCH", google: "POST", account: "DELETE", "verify-email-otp": "POST", "resend-otp": "POST" };
+const authMethods: Record<string, string> = { login: "POST", register: "POST", refresh: "POST", logout: "POST", session: "GET", me: "GET", profile: "PATCH", google: "POST", account: "DELETE", "verify-email-otp": "POST", "resend-otp": "POST", "login-methods": "GET" };
 
 type Context = { params: Promise<{ path: string[] }> };
 function json(body: unknown, status = 200) {
@@ -165,6 +165,7 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
       if (action === "logout") return clearCookies(json({ status: "ok" }));
       if (action === "account") return clearCookies(json({ status: "deleted" }));
       if (action === "resend-otp") return json({ status: "resent" });
+      if (action === "login-methods") return json(await upstream.json());
       const result = await upstream.json();
       if (["session", "me", "profile"].includes(action)) {
         const user = publicUser(result);

@@ -173,6 +173,10 @@ const en = {
   "auth.otpInvalidSession": "This registration session is invalid. Please sign up again.",
   "auth.errorSessionCreate": "Your account was created, but a session could not be started. Please sign in again.",
   "auth.errorNoPending": "No registration found for this email.",
+  "auth.googleOnlyTitle": "Sign in with Google",
+  "auth.googleOnlyDescription":
+    "This email is linked to a Google account. Sign in with Google to continue.",
+  "auth.loginWithGoogle": "Sign in with Google",
   "auth.otpTitle":
     "We sent a verification code to {email}. Enter the code to complete your registration.",
   "auth.otpHint":

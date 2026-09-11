@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 import jwt as pyjwt
 from cryptography.fernet import Fernet, InvalidToken
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
 from supabase_auth.errors import AuthApiError
 
 from app.api.dependencies import CurrentUser, DbSession, _extract_bearer_token
@@ -15,6 +15,7 @@ from app.api.schemas import (
     EmailOtpVerifyRequest,
     EmailResendRequest,
     GoogleAuthRequest,
+    LoginMethodsResponse,
     LoginRequest,
     LoginResponse,
     ProfileUpdateRequest,
@@ -67,6 +68,33 @@ def _google_email_verified(id_token: str) -> bool:
         return bool(payload.get("email_verified", False))
     except Exception:
         return False
+
+
+def _lookup_login_methods(email: str) -> tuple[bool, bool, list[str]]:
+    """Determine whether an email belongs to a known user and whether it has a
+    password, by scanning Supabase admin users (bounded pagination)."""
+    email = email.lower()
+    try:
+        supabase = supabase_service.get_supabase()
+        # Bounded scan; list_users pages forward by per_page. A generous cap
+        # keeps this safe in MVP while covering reasonable user counts.
+        page = 0
+        per_page = 200
+        for _ in range(50):  # up to 10k users
+            users = supabase.auth.admin.list_users(page=page, per_page=per_page) or []
+            for user in users:
+                if (user.email or "").lower() == email:
+                    providers = list(user.app_metadata.get("providers") or [])
+                    has_password = "email" in providers or "password" in providers
+                    return True, has_password, providers
+            if len(users) < per_page:
+                break
+            page += 1
+        return False, False, []
+    except Exception:
+        # On any lookup failure, fall back to "unknown" so login can proceed
+        # normally instead of blocking the user.
+        return False, False, []
 
 
 def _generate_otp() -> str:
@@ -276,6 +304,18 @@ def register(payload: RegisterRequest) -> LoginResponse:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Registrasi gagal. Silakan coba lagi.",
         ) from exc
+
+
+@router.get("/login-methods", response_model=LoginMethodsResponse)
+def login_methods(email: str = Query(min_length=3, max_length=160)) -> LoginMethodsResponse:
+    """Report which sign-in methods exist for an email, so the UI can either
+    offer Google or keep the password form instead of a confusing error."""
+    exists, has_password, providers = _lookup_login_methods(email.lower())
+    return LoginMethodsResponse(
+        email_exists=exists,
+        has_password=has_password,
+        providers=providers,
+    )
 
 
 @router.post("/google", response_model=LoginResponse)

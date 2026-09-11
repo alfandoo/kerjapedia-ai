@@ -9,7 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 
-import { login, register, googleLogin, verifyEmailOtp, resendEmailOtp } from "@/features/auth";
+import { login, register, googleLogin, verifyEmailOtp, resendEmailOtp, getLoginMethods } from "@/features/auth";
 import { useSettings } from "@/features/settings";
 import type { UserSession } from "@/features/auth/types";
 import type { TranslationKey } from "@/lib/translations";
@@ -157,6 +157,11 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [gisReady, setGisReady] = useState(false);
+  const [loginMethods, setLoginMethods] = useState<{
+    email_exists: boolean;
+    has_password: boolean;
+    providers: string[];
+  } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -181,6 +186,26 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [open, step]);
+
+  useEffect(() => {
+    if (!(open && step === "email" && mode === "login")) return;
+    const candidate = email.trim().toLowerCase();
+    if (!isValidEmail(candidate)) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      getLoginMethods(candidate)
+        .then((methods) => {
+          if (!cancelled) setLoginMethods(methods);
+        })
+        .catch(() => {
+          if (!cancelled) setLoginMethods(null);
+        });
+    }, 450);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, step, mode, email]);
 
   function resetAndClose() {
     if (submitting) return;
@@ -665,9 +690,18 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                     {translate("auth.emailInvalid")}
                   </p>
                 ) : null}
-                <button className={submitClass} type="submit" disabled={!emailValid}>
-                  {translate("auth.continue")}
-                </button>
+                {loginMethods?.email_exists &&
+                !loginMethods.has_password &&
+                loginMethods.providers.includes("google") ? (
+                  <div className="rounded-xl border border-border bg-muted/40 px-3.5 py-3 text-[12px] leading-relaxed text-muted-foreground">
+                    <p className="font-medium text-foreground">{translate("auth.googleOnlyTitle")}</p>
+                    <p className="mt-1">{translate("auth.googleOnlyDescription")}</p>
+                  </div>
+                ) : (
+                  <button className={submitClass} type="submit" disabled={!emailValid}>
+                    {translate("auth.continue")}
+                  </button>
+                )}
               </>
             ) : (
               <>

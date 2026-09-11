@@ -173,6 +173,10 @@ const id = {
   "auth.otpInvalidSession": "Sesi pendaftaran tidak valid. Silakan daftar ulang.",
   "auth.errorSessionCreate": "Akun berhasil dibuat, namun sesi belum dapat dibuat. Silakan masuk kembali.",
   "auth.errorNoPending": "Belum ada pendaftaran untuk email ini.",
+  "auth.googleOnlyTitle": "Masuk dengan Google",
+  "auth.googleOnlyDescription":
+    "Email ini terhubung dengan akun Google. Masuk menggunakan Google untuk melanjutkan.",
+  "auth.loginWithGoogle": "Masuk dengan Google",
   "auth.otpTitle":
     "Kode verifikasi telah dikirim ke {email}. Masukkan kode untuk menyelesaikan pendaftaran.",
   "auth.otpHint":
