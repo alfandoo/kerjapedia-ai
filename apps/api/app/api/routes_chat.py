@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import timedelta
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -28,13 +28,15 @@ from app.api.state import UserRecord, now_utc
 from app.api.utils import storage_root
 from app.core.config import settings
 from app.db.session import create_session
-from app.models.business import Conversation, Message
+from app.models.business import Conversation, DailyUsage, Message
 from app.services.answering.guardrails import (
+    apply_output_guardrail,
     build_guardrail_refusal,
     evaluate_input_guardrail,
 )
 from app.services.answering.memory_hardening import MemoryContext, build_memory_context
 from app.services.answering.prompts import PROMPT_VERSION_ID
+from app.services.idempotency import IdempotencyStore, valid_idempotency_key
 from app.services.providers import (
     answer_generator_from_settings,
     pinecone_store_from_settings,
@@ -54,6 +56,32 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 logger = logging.getLogger("kerjapedia.rag")
 _STREAM_TOKEN_RE = re.compile(r"\S[^\n]*\s*")
 _PENDING_TURN_TTL = timedelta(minutes=5)
+_HEARTBEAT_SECONDS = 15.0
+
+idempotency_store = IdempotencyStore(redis_url=settings.redis_url)
+
+
+def _idempotency_request_fingerprint(payload: AskRequest) -> dict:
+    return {
+        "question": payload.question,
+        "conversation_id": payload.conversation_id,
+        "top_k": payload.top_k,
+    }
+
+
+def _resolve_idempotency_key(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    key = valid_idempotency_key(raw.strip())
+    if key is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "invalid_idempotency_key",
+                "message": "Idempotency-Key must be 8-64 chars of letters, digits, _ or -.",
+            },
+        )
+    return key
 
 
 @dataclass(frozen=True)
@@ -81,6 +109,14 @@ def _anonymous_user(guest_id: str | None = None) -> UserRecord:
         name="Tamu",
         roles=["guest"],
     )
+
+
+def _sanitize_title(question: str) -> str:
+    """Conversation titles are user input rendered in UI: collapse
+    whitespace (including newlines) and strip other controls."""
+    collapsed = re.sub(r"\s+", " ", question)
+    cleaned = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", collapsed).strip()
+    return cleaned[:80] or "Percakapan"
 
 
 def _get_or_create_conversation(
@@ -117,7 +153,7 @@ def _get_or_create_conversation(
         return conversation
 
     conversation_id = f"conv_{uuid4().hex}"
-    title = payload.question[:80]
+    title = _sanitize_title(payload.question)
     user_id = user.user_id if user.roles != ["guest"] else None
     guest_id = user.user_id.removeprefix("guest:") if user.user_id.startswith("guest:") else None
     conversation = Conversation(
@@ -374,6 +410,55 @@ def _mark_turn_failed(
         logger.exception("chat_turn_failure_state_not_persisted message_id=%s", user_message_id)
 
 
+def _usage_key(conversation: Conversation) -> str:
+    if conversation.user_id:
+        return conversation.user_id
+    if conversation.guest_id:
+        return f"guest:{conversation.guest_id}"
+    return "unknown"
+
+
+def _record_usage(conversation: Conversation, answer) -> None:
+    """Persist per-identity token metering in an isolated session.
+
+    Isolation guarantees a metering failure can never poison the chat
+    turn's own transaction (a poisoned transaction fails everything
+    after it, including the answer insert).
+    """
+    try:
+        from datetime import date
+
+        usage = answer.debug.get(
+            "token_usage", {"prompt_tokens": 0, "completion_tokens": 0}
+        )
+        user_key = _usage_key(conversation)
+        today = date.today()
+        with create_session() as metering_session:
+            row = metering_session.get(
+                DailyUsage, {"user_key": user_key, "usage_date": today}
+            )
+            if row is None:
+                row = DailyUsage(
+                    user_key=user_key,
+                    usage_date=today,
+                    requests=0,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                )
+                metering_session.add(row)
+            row.requests = int(row.requests or 0) + 1
+            row.prompt_tokens = int(row.prompt_tokens or 0) + int(
+                usage.get("prompt_tokens", 0) or 0
+            )
+            row.completion_tokens = int(row.completion_tokens or 0) + int(
+                usage.get("completion_tokens", 0) or 0
+            )
+            row.updated_at = now_utc()
+            metering_session.commit()
+    except Exception:
+        logger.exception("usage_metering_not_persisted")
+
+
 def _store_answer(
     conversation: Conversation,
     user_message_id: str,
@@ -434,6 +519,7 @@ def _store_answer(
         },
     )
     session.add(asst_msg)
+    _record_usage(conversation, answer)
     conversation.updated_at = now
     session.commit()
 
@@ -473,6 +559,24 @@ def _stream_event(event: str, **payload) -> bytes:
         default=str,
     )
     return f"{serialized}\n".encode()
+
+
+async def _pings_while(task: asyncio.Task):
+    """Yield keepalive pings until the awaited stage finishes.
+
+    Proxies and load balancers drop idle SSE streams; a ping every
+    heartbeat interval keeps the connection (and the UI spinner) alive.
+    Unknown events are ignored by the web client.
+    """
+    try:
+        while not task.done():
+            done, _ = await asyncio.wait({task}, timeout=_HEARTBEAT_SECONDS)
+            if task in done:
+                break
+            yield _stream_event("ping")
+    finally:
+        if not task.done():
+            task.cancel()
 
 
 def _server_rag_trace(guardrail, memory, retrieval, answer) -> dict:
@@ -546,13 +650,37 @@ def _log_rag_completion(answer, latency_ms: int) -> None:
 @router.post("/ask", response_model=AskResponse)
 def ask_question(
     payload: AskRequest,
+    response: Response,
     session: DbSession,
     user: OptionalUser,
     guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> AskResponse:
     started_at = time.perf_counter()
     trace_id = f"rag_{uuid4().hex}"
     active_user = user or _anonymous_user(guest_id)
+    idempotency_key = _resolve_idempotency_key(idempotency_key)
+    fingerprint = _idempotency_request_fingerprint(payload)
+    if idempotency_key is not None:
+        replayed = idempotency_store.recall(active_user.user_id, idempotency_key)
+        if replayed is not None and replayed.get("request") == fingerprint:
+            response.headers["X-Idempotent-Replayed"] = "true"
+            stored = replayed["response"]
+            return AskResponse(
+                conversation_id=stored["conversation_id"],
+                answer=stored["answer"],
+                latency_ms=stored["latency_ms"],
+                retrieval_score=stored.get("retrieval_score"),
+                token_usage=stored.get("token_usage", {"prompt_tokens": 0, "completion_tokens": 0}),
+            )
+        if replayed is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "idempotency_key_reuse",
+                    "message": "Idempotency-Key was already used with a different request.",
+                },
+            )
     conversation = _get_or_create_conversation(payload, active_user, session)
     pending_turn = _begin_turn(conversation, payload, session)
 
@@ -589,6 +717,9 @@ def ask_question(
                 time.perf_counter() - generation_started,
             )
         best_score = retrieval.results[0].final_score if retrieval and retrieval.results else None
+        answer, output_warnings = apply_output_guardrail(answer)
+        if output_warnings:
+            answer = replace(answer, warnings=[*answer.warnings, *output_warnings])
         rag_trace = _server_rag_trace(guardrail, memory, retrieval, answer)
         answer.debug.update(rag_trace)
         answer = replace(answer, trace_id=trace_id)
@@ -621,7 +752,7 @@ def ask_question(
     record_outcome(answer.answer_status)
     observe_rag_completion(answer, retrieval)
     _log_rag_completion(answer, latency_ms)
-    return AskResponse(
+    completed = AskResponse(
         conversation_id=conversation.conversation_id,
         answer=_public_answer_payload(answer),
         latency_ms=latency_ms,
@@ -631,6 +762,23 @@ def ask_question(
             {"prompt_tokens": 0, "completion_tokens": 0},
         ),
     )
+    transient = completed.answer.get("answer_status") == "temporarily_unavailable"
+    if idempotency_key is not None and not transient:
+        idempotency_store.remember(
+            active_user.user_id,
+            idempotency_key,
+            {
+                "request": fingerprint,
+                "response": {
+                    "conversation_id": completed.conversation_id,
+                    "answer": completed.answer,
+                    "latency_ms": completed.latency_ms,
+                    "retrieval_score": completed.retrieval_score,
+                    "token_usage": completed.token_usage,
+                },
+            },
+        )
+    return completed
 
 
 @router.post("/ask/stream")
@@ -640,8 +788,40 @@ def ask_question_stream(
     session: DbSession,
     user: OptionalUser,
     guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> StreamingResponse:
     active_user = user or _anonymous_user(guest_id)
+    idempotency_key = _resolve_idempotency_key(idempotency_key)
+    fingerprint = _idempotency_request_fingerprint(payload)
+    replayed = (
+        idempotency_store.recall(active_user.user_id, idempotency_key)
+        if idempotency_key is not None
+        else None
+    )
+    if replayed is not None and replayed.get("request") != fingerprint:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "idempotency_key_reuse",
+                "message": "Idempotency-Key was already used with a different request.",
+            },
+        )
+    if replayed is not None:
+        stored = replayed["response"]
+
+        async def replay_stream():
+            yield _stream_event("start", conversation_id=stored["conversation_id"], status="OK")
+            yield _stream_event("done", response=stored)
+
+        return StreamingResponse(
+            replay_stream(),
+            media_type="application/x-ndjson",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "X-Idempotent-Replayed": "true",
+            },
+        )
     conversation = _get_or_create_conversation(payload, active_user, session)
     pending_turn = _begin_turn(conversation, payload, session)
     trace_id = f"rag_{uuid4().hex}"
@@ -672,11 +852,16 @@ def ask_question_stream(
                 yield _stream_event("thinking", status="Menelusuri regulasi resmi")
                 retrieval_started = time.perf_counter()
                 with trace_stage("retrieval", settings.vector_store):
-                    retrieval = await asyncio.to_thread(
-                        _retrieve_with_isolated_session,
-                        memory,
-                        payload.top_k,
+                    retrieval_task = asyncio.ensure_future(
+                        asyncio.to_thread(
+                            _retrieve_with_isolated_session,
+                            memory,
+                            payload.top_k,
+                        )
                     )
+                    async for ping in _pings_while(retrieval_task):
+                        yield ping
+                    retrieval = retrieval_task.result()
                 observe_stage(
                     "retrieval",
                     settings.vector_store,
@@ -686,11 +871,16 @@ def ask_question_stream(
                 generator = answer_generator_from_settings(settings)
                 generation_started = time.perf_counter()
                 with trace_stage("generation_and_verification", settings.llm_provider):
-                    answer = await asyncio.to_thread(
-                        generator.generate,
-                        payload.question,
-                        retrieval,
+                    generation_task = asyncio.ensure_future(
+                        asyncio.to_thread(
+                            generator.generate,
+                            payload.question,
+                            retrieval,
+                        )
                     )
+                    async for ping in _pings_while(generation_task):
+                        yield ping
+                    answer = generation_task.result()
                 observe_stage(
                     "generation_and_verification",
                     settings.llm_provider,
@@ -702,6 +892,9 @@ def ask_question_stream(
             rag_trace = _server_rag_trace(guardrail, memory, retrieval, answer)
             answer.debug.update(rag_trace)
             answer = replace(answer, trace_id=trace_id)
+            guarded, output_warnings = apply_output_guardrail(answer)
+            if output_warnings:
+                answer = replace(guarded, warnings=[*guarded.warnings, *output_warnings])
             _store_answer(
                 conversation,
                 pending_turn.user_message_id,
@@ -745,25 +938,108 @@ def ask_question_stream(
         record_outcome(answer.answer_status)
         observe_rag_completion(answer, retrieval)
         _log_rag_completion(answer, latency_ms)
-        yield _stream_event(
-            "done",
-            response={
-                "conversation_id": conversation.conversation_id,
-                "answer": _public_answer_payload(answer),
-                "latency_ms": latency_ms,
-                "retrieval_score": best_score,
-                "token_usage": answer.debug.get(
-                    "token_usage",
-                    {"prompt_tokens": 0, "completion_tokens": 0},
-                ),
-            },
-        )
+        final_response = {
+            "conversation_id": conversation.conversation_id,
+            "answer": _public_answer_payload(answer),
+            "latency_ms": latency_ms,
+            "retrieval_score": best_score,
+            "token_usage": answer.debug.get(
+                "token_usage",
+                {"prompt_tokens": 0, "completion_tokens": 0},
+            ),
+        }
+        if idempotency_key is not None and answer.answer_status != "temporarily_unavailable":
+            idempotency_store.remember(
+                active_user.user_id,
+                idempotency_key,
+                {"request": fingerprint, "response": final_response},
+            )
+        yield _stream_event("done", response=final_response)
 
     return StreamingResponse(
         event_stream(),
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+def _owned_conversations(
+    active_user: UserRecord, session: Session
+) -> list[Conversation]:
+    if active_user.roles == ["guest"]:
+        guest_id = active_user.user_id.removeprefix("guest:")
+        return (
+            session.query(Conversation)
+            .filter(Conversation.guest_id == guest_id)
+            .order_by(Conversation.updated_at.desc())
+            .all()
+        )
+    return (
+        session.query(Conversation)
+        .filter(Conversation.user_id == active_user.user_id)
+        .order_by(Conversation.updated_at.desc())
+        .all()
+    )
+
+
+@router.get("/export")
+def export_my_data(
+    session: DbSession,
+    user: OptionalUser,
+    guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
+) -> dict:
+    """Export the caller's own conversations and messages (data portability)."""
+    active_user = user or _anonymous_user(guest_id)
+    exported = []
+    for conversation in _owned_conversations(active_user, session):
+        messages = (
+            session.query(Message)
+            .filter(Message.conversation_id == conversation.conversation_id)
+            .order_by(Message.sequence_no, Message.message_id)
+            .all()
+        )
+        exported.append(
+            {
+                "conversation_id": conversation.conversation_id,
+                "title": conversation.title,
+                "created_at": conversation.created_at,
+                "updated_at": conversation.updated_at,
+                "messages": [
+                    {
+                        "role": item.role,
+                        "content": item.content,
+                        "created_at": item.created_at,
+                    }
+                    for item in messages
+                ],
+            }
+        )
+    return {"user_id": active_user.user_id, "conversations": exported}
+
+
+def purge_expired_conversations(session: Session, retention_days: int) -> dict[str, int]:
+    """Delete conversations (and messages) untouched for retention_days."""
+    from datetime import timedelta
+
+    cutoff = now_utc() - timedelta(days=max(1, retention_days))
+    stale_ids = [
+        row.conversation_id
+        for row in session.query(Conversation.conversation_id)
+        .filter(Conversation.updated_at < cutoff)
+        .all()
+    ]
+    messages_deleted = 0
+    if stale_ids:
+        messages_deleted = (
+            session.query(Message)
+            .filter(Message.conversation_id.in_(stale_ids))
+            .delete(synchronize_session=False)
+        )
+        session.query(Conversation).filter(
+            Conversation.conversation_id.in_(stale_ids)
+        ).delete(synchronize_session=False)
+        session.commit()
+    return {"conversations": len(stale_ids), "messages": int(messages_deleted or 0)}
 
 
 @router.get("/conversations", response_model=list[ConversationSummary])

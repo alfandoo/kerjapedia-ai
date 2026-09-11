@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     groq_max_retries: int = 2
     groq_max_tokens: int = 1200
     rate_limit_per_minute: int = 60
+    trust_proxy_headers: bool = False
+    chat_retention_days: int = 90
     session_ttl_minutes: int = 480
     admin_email: str = "admin@example.com"
     admin_password: str = "secret"

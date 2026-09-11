@@ -33,6 +33,7 @@ type StreamHandlers = {
 type ChatStreamEvent =
   | { event: "start"; conversation_id: string; status: string }
   | { event: "thinking"; status: string }
+  | { event: "ping" }
   | { event: "delta"; content: string }
   | { event: "done"; response: AskResponse }
   | { event: "error"; detail: string };

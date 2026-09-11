@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -17,12 +18,16 @@ from app.api.routes_evaluation import router as evaluation_router
 from app.api.routes_feedback import router as feedback_router
 from app.api.routes_ingestion import router as ingestion_router
 from app.api.routes_system import router as system_router
-from app.api.state import state
 from app.core.config import settings
+from app.services.rate_limit import RateLimiter, client_identity, client_ip
 from app.services.storage import ensure_bucket
 from app.services.supabase import get_supabase
 
 logger = logging.getLogger("kerjapedia.api")
+
+rate_limiter = RateLimiter(
+    settings.rate_limit_per_minute, redis_url=settings.redis_url
+)
 
 
 @asynccontextmanager
@@ -114,27 +119,44 @@ app.add_middleware(
 
 
 @app.middleware("http")
+async def request_timeout(request: Request, call_next):
+    """Bound worker occupancy; streaming answers heartbeat instead."""
+    if request.url.path == "/chat/ask/stream":
+        return await call_next(request)
+    try:
+        return await asyncio.wait_for(call_next(request), timeout=150)
+    except TimeoutError:
+        return JSONResponse(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            content={
+                "detail": {
+                    "code": "request_timeout",
+                    "message": "The request took too long to complete.",
+                }
+            },
+            headers={"X-Error-Code": "request_timeout"},
+        )
+
+
+@app.middleware("http")
 async def rate_limit_and_log(request: Request, call_next):
     started_at = time.perf_counter()
     request_id = request.headers.get("X-Request-ID") or uuid4().hex
-    client_host = request.client.host if request.client else "unknown"
-    window_seconds = 60
-    limit = settings.rate_limit_per_minute
-    now = time.time()
+    headers = {key.lower(): value for key, value in request.headers.items()}
+    peer_ip = request.client.host if request.client else "unknown"
+    ip = client_ip(headers, peer_ip, settings.trust_proxy_headers)
+    identity = client_identity(headers, peer_ip, settings.trust_proxy_headers)
+    decision = rate_limiter.check(identity, ip)
 
-    with state.lock:
-        count, window_started_at = state.request_counts.get(client_host, (0, now))
-        if now - window_started_at >= window_seconds:
-            count = 0
-            window_started_at = now
-        count += 1
-        state.request_counts[client_host] = (count, window_started_at)
-
-    if count > limit:
+    if not decision.allowed:
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={"detail": "Rate limit exceeded."},
-            headers={"X-Request-ID": request_id, "Retry-After": "60"},
+            headers={
+                "X-Request-ID": request_id,
+                "Retry-After": str(decision.retry_after_seconds),
+                "X-Error-Code": "rate_limited",
+            },
         )
 
     try:
@@ -145,7 +167,7 @@ async def rate_limit_and_log(request: Request, call_next):
             request_id,
             request.url.path,
             request.method,
-            client_host,
+            identity,
         )
         raise
 
@@ -163,7 +185,7 @@ async def rate_limit_and_log(request: Request, call_next):
         request.method,
         response.status_code,
         latency_ms,
-        client_host,
+        identity,
     )
     return response
 

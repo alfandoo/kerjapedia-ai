@@ -32,6 +32,7 @@ from app.api.utils import project_root as get_project_root
 from app.core.config import settings
 from app.models.business import (
     Conversation,
+    DailyUsage,
     DocumentAdmin,
     EvaluationDataset,
     EvaluationRun,
@@ -164,6 +165,47 @@ def _admin_ingestion_status(version: DocumentVersion | None) -> str:
     return version.ingestion_status
 
 
+def _usage_summary(session) -> dict:
+    """Token/request metering per identity: today totals plus top consumers."""
+    from datetime import date, timedelta
+
+    today = date.today()
+    week_ago = today - timedelta(days=7)
+    today_rows = session.query(DailyUsage).filter(DailyUsage.usage_date == today).all()
+    top_rows = (
+        session.query(
+            DailyUsage.user_key,
+            sa_func.sum(DailyUsage.requests).label("requests"),
+            sa_func.sum(DailyUsage.prompt_tokens).label("prompt_tokens"),
+            sa_func.sum(DailyUsage.completion_tokens).label("completion_tokens"),
+        )
+        .filter(DailyUsage.usage_date >= week_ago)
+        .group_by(DailyUsage.user_key)
+        .order_by(
+            sa_func.sum(DailyUsage.prompt_tokens + DailyUsage.completion_tokens).desc()
+        )
+        .limit(10)
+        .all()
+    )
+    return {
+        "today": {
+            "requests": sum(row.requests or 0 for row in today_rows),
+            "prompt_tokens": sum(row.prompt_tokens or 0 for row in today_rows),
+            "completion_tokens": sum(row.completion_tokens or 0 for row in today_rows),
+            "identities": len(today_rows),
+        },
+        "top_7d": [
+            {
+                "user_key": row.user_key,
+                "requests": int(row.requests or 0),
+                "prompt_tokens": int(row.prompt_tokens or 0),
+                "completion_tokens": int(row.completion_tokens or 0),
+            }
+            for row in top_rows
+        ],
+    }
+
+
 @router.get("/stats")
 def admin_stats(session: DbSession, _: AdminUser) -> dict:
     cache_key = "stats"
@@ -204,6 +246,7 @@ def admin_stats(session: DbSession, _: AdminUser) -> dict:
         "users": user_count,
         "conversations": conversation_count,
         "messages": message_count,
+        "usage": _usage_summary(session),
         "feedback": {
             "total": feedback_count,
             "helpful": feedback_helpful,
@@ -224,6 +267,26 @@ def admin_stats(session: DbSession, _: AdminUser) -> dict:
     }
     _stats_cache[cache_key] = (time.time(), result)
     return result
+
+
+@router.post("/chat/purge")
+def purge_old_chats(
+    session: DbSession,
+    _: AdminUser,
+    days: int = Query(default=-1, ge=-1, le=3650),
+) -> dict:
+    """Delete conversations untouched for `days` (default: retention setting)."""
+    from app.api.routes_chat import purge_expired_conversations
+
+    retention = settings.chat_retention_days if days < 0 else days
+    deleted = purge_expired_conversations(session, retention)
+    log_audit(
+        actor="admin",
+        action="chat_purge",
+        target_type="conversations",
+        details={"retention_days": retention, **deleted},
+    )
+    return {"retention_days": retention, **deleted}
 
 
 @router.get("/documents")

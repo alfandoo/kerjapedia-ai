@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -191,3 +193,16 @@ class AuditLog(Base):
     target_id: Mapped[str | None] = mapped_column(String(160))
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class DailyUsage(Base):
+    """Per-identity token/request metering for cost and anomaly review."""
+
+    __tablename__ = "daily_usage"
+
+    user_key: Mapped[str] = mapped_column(String(160), primary_key=True)
+    usage_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    requests: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    prompt_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
