@@ -374,6 +374,8 @@ class GroqAnswerGenerator(AnswerGenerator):
                 "pembuka generik. Pertanyaan sederhana dijawab dalam 2-5 kalimat; pertanyaan "
                 "kompleks memakai 2-4 paragraf atau maksimal 4 bullet. Sintesis dengan bahasa "
                 "sendiri dan jangan salin chunk mentah atau judul BAB/Bagian tanpa penjelasan. "
+                "Namun untuk istilah operasional (pihak, kewajiban, angka, jangka waktu, syarat) "
+                "pakai kata yang sama seperti potongan sumber agar sitasi dapat diverifikasi. "
                 "Tanpa heading, tabel, blok kode, atau daftar sumber."
             )
         else:
@@ -381,7 +383,9 @@ class GroqAnswerGenerator(AnswerGenerator):
                 "Write the answer in clear English. Start directly with the answer and avoid "
                 "generic introductions. Use 2-5 sentences for a simple question; use 2-4 "
                 "paragraphs or at most 4 bullets for a complex one. Synthesize in your own "
-                "words and do not copy raw chunks or unexplained section headings. No headings, "
+                "words and do not copy raw chunks or unexplained section headings. "
+                "But keep the source chunks' operative wording for parties, obligations, "
+                "amounts, time periods, and conditions so citations stay verifiable. No headings, "
                 "tables, code blocks, or source lists."
             )
         user_prompt = "\n\n".join(

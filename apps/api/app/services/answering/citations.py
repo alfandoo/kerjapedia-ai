@@ -40,7 +40,7 @@ def build_citations(ranked: list[RankedChunk]) -> list[Citation]:
                 paragraph=document.paragraph,
                 page_start=document.page_start,
                 page_end=document.page_end,
-                quote=compact_text(document.text),
+                quote=compact_text(document.text, limit=800),
                 source_url=document.source_url,
                 local_file=metadata.get("local_file"),
                 retrieval_score=item.final_score,
