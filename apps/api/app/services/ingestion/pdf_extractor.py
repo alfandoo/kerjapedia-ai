@@ -149,10 +149,30 @@ def assess_text_quality(text: str, min_text_chars: int = 40) -> tuple[float, lis
     )
     if "insufficient_text" in flags:
         score = min(score, 0.6)
+    if _has_missing_word_spaces(text):
+        # Word-per-line extraction (no inter-word spaces): tokenizers, the
+        # legal parser, and lexical scoring all break on this, yet the
+        # character ratios above still score it ~1.0. Force OCR instead.
+        flags.append("missing_word_spaces")
+        score = min(score, 0.6)
     return round(max(0.0, min(score, 1.0)), 4), flags
 
 
-def run_ocr(source: Path, target: Path, *, jobs: int = 2) -> Path:
+def _has_missing_word_spaces(text: str) -> bool:
+    """Detect extraction where line breaks replaced word spaces.
+
+    Healthy legal pages wrap into long lines; broken extraction yields one
+    short fragment per line (measured 0.85 fragment ratio on the broken
+    Permenaker 6/2016 scan vs 0.27-0.45 on clean PDFs).
+    """
+    lines = [line for line in text.splitlines() if line.strip()]
+    if len(lines) < 10:
+        return False
+    fragments = sum(1 for line in lines if len(line.split()) <= 2)
+    return fragments / len(lines) > 0.6
+
+
+def run_ocr(source: Path, target: Path, *, jobs: int = 2, force: bool = False) -> Path:
     try:
         import ocrmypdf
     except ImportError as exc:
@@ -160,7 +180,9 @@ def run_ocr(source: Path, target: Path, *, jobs: int = 2) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     kwargs: dict = {
         "language": ["ind", "eng"],
-        "skip_text": True,
+        # Spaceless pages already carry (broken) text: skip_text would keep it.
+        "skip_text": not force,
+        "force_ocr": force,
         "deskew": True,
         "rotate_pages": True,
         "optimize": 1,

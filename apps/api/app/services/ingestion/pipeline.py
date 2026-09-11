@@ -120,6 +120,9 @@ def ingest_document(
     ocr_artifact_path: str | None = None
     initially_ocr_pages = [page.page_number for page in pages if page.requires_ocr]
     if initially_ocr_pages:
+        force_ocr = any(
+            "missing_word_spaces" in page.quality_flags for page in pages if page.requires_ocr
+        )
         try:
             ocr_path = (
                 artifact_store.document_dir(
@@ -130,7 +133,7 @@ def ingest_document(
                 / "interim"
                 / "ocr.pdf"
             )
-            ocr_output = run_ocr(pdf_path, ocr_path, jobs=config.ocr_jobs)
+            ocr_output = run_ocr(pdf_path, ocr_path, jobs=config.ocr_jobs, force=force_ocr)
             ocr_artifact_path = ocr_output.as_posix()
             pages = extract_pages(ocr_output)
             warnings.append("ocr_applied=ind+eng")

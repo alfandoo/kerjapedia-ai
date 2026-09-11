@@ -143,6 +143,28 @@ def test_text_quality_rejects_long_but_corrupted_ocr_text() -> None:
     assert "replacement_glyphs" in flags
 
 
+def test_text_quality_flags_word_per_line_extraction_for_ocr() -> None:
+    broken = "\n".join(
+        ["Indonesia", "Tahun", "2003", "tentang", "Ketenagakerjaan"] * 6
+    )
+    score, flags = assess_text_quality(broken)
+
+    assert score < 0.65
+    assert "missing_word_spaces" in flags
+
+
+def test_text_quality_keeps_wrapped_paragraphs_above_ocr_threshold() -> None:
+    healthy = (
+        "Pengusaha wajib membayarkan Tunjangan Hari Raya Keagamaan kepada "
+        "pekerja paling lambat tujuh hari sebelum hari raya keagamaan. "
+        "Ketentuan ini berlaku untuk semua perusahaan di Indonesia."
+    )
+    score, flags = assess_text_quality(healthy)
+
+    assert score >= 0.65
+    assert "missing_word_spaces" not in flags
+
+
 def test_text_quality_keeps_short_pages_below_ocr_threshold() -> None:
     score, flags = assess_text_quality("Pasal 1")
 
