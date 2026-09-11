@@ -91,7 +91,7 @@ def test_inferred_topic_is_a_soft_signal_not_a_hard_filter() -> None:
     assert "topics" not in query.filters
 
 
-def test_contextual_retrieval_never_creates_hard_filters_from_memory() -> None:
+def test_contextual_retrieval_inherits_document_scope_not_articles() -> None:
     query = understand_query(
         "dendanya bayar ke siapa?",
         retrieval_query=(
@@ -106,10 +106,63 @@ def test_contextual_retrieval_never_creates_hard_filters_from_memory() -> None:
     assert query.detected_topics == ["thr"]
     assert query.context_document_ids == ["PERMENAKER-6-2016"]
     assert query.context_articles == ["Pasal 5"]
+    # The article is often the answer itself: never inherited from memory.
     assert "article" not in query.filters
+    # The discussed document scope carries over to the follow-up.
+    assert query.filters["regulation_type"] == "Permenaker"
+    assert query.filters["number"] == 6
+    assert query.filters["year"] == 2016
+
+
+def test_context_inheritance_stops_on_topic_switch_or_ambiguity() -> None:
+    switched = understand_query(
+        "bagaimana dengan PHK?",
+        context_topics=("thr",),
+        context_document_ids=("PERMENAKER-6-2016",),
+    )
+    assert "regulation_type" not in switched.filters
+
+    ambiguous = understand_query(
+        "berapa besarnya?",
+        context_topics=("thr",),
+        context_document_ids=("PERMENAKER-6-2016", "PP-35-2021"),
+    )
+    assert "regulation_type" not in ambiguous.filters
+
+
+def test_bare_year_is_not_a_hard_filter() -> None:
+    query = understand_query("aturan yang berlaku sejak 2019?")
+
     assert "year" not in query.filters
-    assert "number" not in query.filters
-    assert "regulation_type" not in query.filters
+    assert any("2019" in rewritten for rewritten in query.rewritten_queries)
+
+
+def test_bare_berapa_detects_calculation_intent() -> None:
+    query = understand_query("berapa kompensasi karyawan kontrak?")
+
+    assert "calculation" in query.detected_intents
+    assert "pkwt" in query.detected_topics
+    assert any("uang kompensasi" in rewritten for rewritten in query.rewritten_queries)
+    assert any("PP 35 Tahun 2021" in rewritten for rewritten in query.rewritten_queries)
+
+
+def test_named_laws_resolve_to_filters() -> None:
+    cipta = understand_query("apa itu cipta kerja?")
+
+    assert cipta.filters["regulation_type"] == "UU"
+    assert cipta.filters["number"] == 6
+    assert cipta.filters["year"] == 2023
+
+    explicit = understand_query("apa isi PP 35 Tahun 2021 tentang cipta kerja?")
+    assert explicit.filters["regulation_type"] == "PP"
+    assert explicit.filters["number"] == 35
+
+
+def test_common_typos_normalize_before_understanding() -> None:
+    query = understand_query("berapa kompenasasi karywan kontrak?")
+
+    assert "pkwt" in query.detected_topics
+    assert any("uang kompensasi" in rewritten for rewritten in query.rewritten_queries)
 
 
 def test_original_question_keeps_its_own_hard_filters_with_context() -> None:
