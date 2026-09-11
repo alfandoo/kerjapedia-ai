@@ -324,6 +324,15 @@ class GroqAnswerGenerator(AnswerGenerator):
         generation_attempts: int,
     ) -> AnswerResponse:
         lang = _detect_language(query)
+        logger.warning(
+            "groq_generation_unavailable failure_category=%s provider_failure_type=%s "
+            "attempts=%s issues=%s query=%.120s",
+            failure_category,
+            provider_failure_type,
+            generation_attempts,
+            "; ".join(validation_issues or [])[:500],
+            query,
+        )
         return AnswerResponse(
             query=query,
             answer=(TEMPORARILY_UNAVAILABLE_ID if lang == "id" else TEMPORARILY_UNAVAILABLE_EN),

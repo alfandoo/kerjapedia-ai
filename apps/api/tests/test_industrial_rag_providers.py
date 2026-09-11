@@ -215,6 +215,56 @@ def test_pinecone_search_returns_ranked_retrieval_response() -> None:
     assert response.results[0].semantic_score == 0.91
 
 
+def test_pinecone_search_fuses_candidates_across_rewritten_queries() -> None:
+    calls: list[dict] = []
+
+    def match(chunk_id: str, text: str, article: str):
+        return SimpleNamespace(
+            id=chunk_id,
+            score=0.9,
+            metadata={
+                "chunk_id": chunk_id,
+                "document_id": "PP-35-2021",
+                "text": text,
+                "article": article,
+                "page_start": 12,
+                "page_end": 12,
+                "token_count": 8,
+                "topics": ["pkwt"],
+                "legal_status": "active",
+                "source_url": "https://peraturan.bpk.go.id/",
+                "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
+                "short_title": "PP 35/2021",
+            },
+        )
+
+    class FusingIndex:
+        def query(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                return SimpleNamespace(
+                    matches=[match("chunk-focus", "Pasal 15 uang kompensasi PKWT.", "Pasal 15")]
+                )
+            return SimpleNamespace(
+                matches=[match("chunk-generic", "Pasal 8 jangka waktu PKWT.", "Pasal 8")]
+            )
+
+    store = PineconeRetrievalStore(
+        PineconeConfig(api_key="test-key"),
+        StaticEmbeddingProvider(),
+    )
+    store._index = FusingIndex()
+
+    # Three rewrites (original, abbreviation expansion, compensation expansion).
+    response = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=5)
+
+    assert len(calls) == 3
+    assert {item.document.chunk_id for item in response.results} == {
+        "chunk-focus",
+        "chunk-generic",
+    }
+
+
 def test_legacy_pinecone_index_retries_dense_only_in_development() -> None:
     calls: list[dict] = []
 
@@ -257,9 +307,11 @@ def test_legacy_pinecone_index_retries_dense_only_in_development() -> None:
 
     response = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
 
-    assert len(calls) == 2
+    # Three rewritten queries: one sparse attempt fails over to dense-only,
+    # then each rewrite is retried without sparse values.
+    assert len(calls) == 4
     assert "sparse_vector" in calls[0]
-    assert "sparse_vector" not in calls[1]
+    assert all("sparse_vector" not in call for call in calls[1:])
     assert "pinecone_index_requires_dotproduct" in response.warnings
     assert response.results[0].document.chunk_id == "chunk-1"
 

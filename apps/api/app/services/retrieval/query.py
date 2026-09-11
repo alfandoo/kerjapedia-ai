@@ -10,6 +10,8 @@ TOPIC_KEYWORDS = {
         "pkwt",
         "kontrak",
         "perjanjian kerja waktu tertentu",
+        "kompensasi",
+        "uang kompensasi",
         "fixed-term contract",
         "fixed term contract",
         "fixed-term worker",
@@ -144,6 +146,18 @@ def rewrite_query(query: str) -> list[str]:
         expanded = re.sub(rf"\b{re.escape(short)}\b", long_form, expanded)
     if expanded != query:
         rewritten.append(expanded)
+
+    # Legal compensation is written as "uang kompensasi" in PP 35/2021, while
+    # users usually write just "kompensasi". Expand the synonym so dense
+    # retrieval and lexical scoring can reach the operative chunks (Pasal 15-17).
+    if "kompensasi" in expanded and "uang kompensasi" not in expanded:
+        compensation_query = expanded.replace("kompensasi", "uang kompensasi")
+        if "perjanjian kerja waktu tertentu" in compensation_query and not re.search(
+            r"\b(uu|pp|permenaker|perpres)\b", compensation_query
+        ):
+            compensation_query = f"{compensation_query} PP 35 Tahun 2021"
+        if compensation_query not in rewritten:
+            rewritten.append(compensation_query)
 
     timing_terms = {"kapan", "batas waktu", "tenggat"}
     if any(term in query for term in timing_terms):

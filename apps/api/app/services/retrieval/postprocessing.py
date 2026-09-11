@@ -91,7 +91,7 @@ def apply_query_focus_adjustments(
     focus_terms = {
         term
         for term in query_terms
-        if 1 < sum(term in terms for terms in text_terms) <= max_frequency
+        if 1 <= sum(term in terms for terms in text_terms) <= max_frequency
     }
     if not focus_terms:
         return ranked

@@ -208,17 +208,14 @@ class PineconeRetrievalStore:
                 should_refuse=True,
                 refusal_reason="out_of_scope_query",
             )
-        hybrid = embed_hybrid(
-            self.embedding_provider,
-            [" ".join(understanding.rewritten_queries)],
-        )
+        # Query Pinecone once per rewritten query and fuse the candidates.
+        # A single joined embedding dilutes distinctive rewrites (e.g. the
+        # "uang kompensasi" expansion never surfaces Pasal 15 when averaged
+        # with the generic phrasing), so each rewrite retrieves on its own and
+        # the union is rescored downstream by lexical, fusion, and rerankers.
+        rewrites = list(understanding.rewritten_queries[:3]) or [understanding.normalized_query]
+        hybrid = embed_hybrid(self.embedding_provider, rewrites)
         alpha = _hybrid_alpha(understanding.normalized_query)
-        query_vector = [value * alpha for value in hybrid.dense[0]]
-        sparse = hybrid.sparse[0]
-        sparse_vector = {
-            "indices": list(sparse),
-            "values": [value * (1 - alpha) for value in sparse.values()],
-        }
         # Dense and sparse vectors are evaluated together by Pinecone. Keep the
         # pre-rerank candidate pool fixed so latency and evaluation stay comparable.
         semantic_limit = 100
@@ -234,25 +231,43 @@ class PineconeRetrievalStore:
             ),
         }
         sparse_query_fallback_used = False
-        try:
-            response = self._pinecone_index().query(
-                vector=query_vector,
-                sparse_vector=sparse_vector,
-                **query_options,
-            )
-        except Exception as exc:
-            if self.fail_closed or not _index_rejects_sparse_values(exc):
-                raise
-            sparse_query_fallback_used = True
-            response = self._pinecone_index().query(
-                vector=hybrid.dense[0],
-                **query_options,
-            )
-        matches = list(getattr(response, "matches", []) or [])
+        use_sparse = True
+        matches: list[Any] = []
+        for position in range(len(rewrites)):
+            dense_vector = hybrid.dense[position]
+            if use_sparse:
+                sparse = hybrid.sparse[position]
+                try:
+                    response = self._pinecone_index().query(
+                        vector=[value * alpha for value in dense_vector],
+                        sparse_vector={
+                            "indices": list(sparse),
+                            "values": [value * (1 - alpha) for value in sparse.values()],
+                        },
+                        **query_options,
+                    )
+                except Exception as exc:
+                    if self.fail_closed or not _index_rejects_sparse_values(exc):
+                        raise
+                    use_sparse = False
+                    sparse_query_fallback_used = True
+                    response = self._pinecone_index().query(
+                        vector=dense_vector,
+                        **query_options,
+                    )
+            else:
+                response = self._pinecone_index().query(
+                    vector=dense_vector,
+                    **query_options,
+                )
+            matches.extend(list(getattr(response, "matches", []) or []))
         candidates = [_document_from_match(match) for match in matches]
-        semantic_scores = {
-            _match_id(match): float(getattr(match, "score", 0.0) or 0.0) for match in matches
-        }
+        semantic_scores: dict[str, float] = {}
+        for match in matches:
+            score = float(getattr(match, "score", 0.0) or 0.0)
+            match_id = _match_id(match)
+            if score > semantic_scores.get(match_id, 0.0):
+                semantic_scores[match_id] = score
 
         lexical_scores = {
             document.chunk_id: max(
