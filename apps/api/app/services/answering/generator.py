@@ -5,7 +5,7 @@ import re
 from app.services.answering.citations import build_citations, build_related_documents, compact_text
 from app.services.answering.claim_verifier import verify_claims_deterministically
 from app.services.answering.prompts import default_prompt_template
-from app.services.answering.schemas import AnswerResponse
+from app.services.answering.schemas import AnswerResponse, HistoryTurn
 from app.services.retrieval.schemas import RetrievalResponse
 
 DISCLAIMER_ID = (
@@ -213,7 +213,17 @@ class AnswerGenerator:
         self.max_citations = max_citations
         self.prompt_template = default_prompt_template()
 
-    def generate(self, query: str, retrieval: RetrievalResponse) -> AnswerResponse:
+    def generate(
+        self,
+        query: str,
+        retrieval: RetrievalResponse,
+        *,
+        history: tuple[HistoryTurn, ...] | list[HistoryTurn] | None = None,
+    ) -> AnswerResponse:
+        # The extractive composer answers from retrieved quotes only; history
+        # is accepted for interface parity (follow-ups already resolve through
+        # the memory-aware retrieval query) and recorded in debug.
+        history_turns = tuple(history or [])
         needs_clarification = self._needs_clarification(query, retrieval)
         if retrieval.refusal_reason == "out_of_scope_query" and not needs_clarification:
             return self._refusal_response(
@@ -266,6 +276,7 @@ class AnswerGenerator:
             debug={
                 "prompt_version_id": self.prompt_template.prompt_version_id,
                 "query_understanding": retrieval.query.normalized_query,
+                "history_turns": len(history_turns),
             },
             claims=claims,
         )

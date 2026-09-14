@@ -21,6 +21,7 @@ from app.models.ingestion import Document, DocumentVersion, IngestionBuild, Inge
 from app.services.ingestion.builds import (
     IngestionBuildConfig,
     build_config_from_settings,
+    document_metadata_hash,
     make_build_identity,
     validate_candidate_runtime,
 )
@@ -119,8 +120,8 @@ def _run_ingestion_background(
                 build.quality_report = result.quality_report
                 build.artifact_manifest = result.artifact_manifest
             version_row = session.get(DocumentVersion, version_id)
-            if version_row is not None and not version_row.is_current:
-                version_row.ingestion_status = result.status
+            if version_row is not None:
+                _advance_version_ingestion_status(version_row, result.status)
             session.commit()
         try:
             from app.api.routes_admin import _docs_cache, _stats_cache
@@ -141,13 +142,45 @@ def _run_ingestion_background(
                 job = session.get(IngestionJob, job_id)
                 if job:
                     job.status = "failed"
-                    job.warnings = [f"ingestion_failed:{type(exc).__name__}"]
+                    failed_ids = list(getattr(exc, "failed_item_ids", ()))
+                    job.warnings = [
+                        f"ingestion_failed:{type(exc).__name__}",
+                        *(
+                            [
+                                f"failed_items:{len(failed_ids)}:"
+                                + ",".join(failed_ids[:20])
+                            ]
+                            if failed_ids
+                            else []
+                        ),
+                    ]
                 build = session.get(IngestionBuild, build_id)
                 if build:
                     build.status = "failed"
+                    current_quality = dict(build.quality_report or {})
+                    current_statistics = dict(
+                        current_quality.get("ingestion_statistics") or {}
+                    )
+                    if failed_ids:
+                        current_statistics["failed_embeddings"] = len(failed_ids)
+                    if hasattr(exc, "duration_seconds"):
+                        current_statistics["embedding_duration_seconds"] = float(
+                            exc.duration_seconds
+                        )
+                    build.quality_report = {
+                        **current_quality,
+                        "status": "failed",
+                        "ingestion_statistics": current_statistics,
+                        "failure": {
+                            "stage": "embedding" if failed_ids else "ingestion",
+                            "error": type(exc).__name__,
+                            "failed_item_count": len(failed_ids),
+                            "failed_item_ids": failed_ids[:100],
+                        },
+                    }
                 version_row = session.get(DocumentVersion, version_id)
-                if version_row is not None and not version_row.is_current:
-                    version_row.ingestion_status = "failed"
+                if version_row is not None:
+                    _advance_version_ingestion_status(version_row, "failed")
                 session.commit()
         except Exception:
             logger.exception("Failed to update job %s status", job_id)
@@ -202,7 +235,12 @@ def create_ingestion_job(
             validate_candidate_runtime(build_config)
         except RuntimeError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-    identity = make_build_identity(document.document_id, document.sha256, build_config)
+    identity = make_build_identity(
+        document.document_id,
+        document.sha256,
+        build_config,
+        document_metadata_hash(document),
+    )
 
     session.merge(
         Document(
@@ -217,8 +255,30 @@ def create_ingestion_job(
         )
     )
     document_version = document_version_from_checksum(document.sha256)
-    job_version_id = f"{document.document_id}-v{document_version}"
-    version_row = session.get(DocumentVersion, job_version_id)
+    calculated_version_id = f"{document.document_id}-v{document_version}"
+    version_row = (
+        session.query(DocumentVersion)
+        .filter(DocumentVersion.sha256 == document.sha256)
+        .one_or_none()
+    )
+    if version_row is not None and version_row.document_id != document.document_id:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Source PDF is already registered to another document; ingestion "
+                "was not queued."
+            ),
+        )
+    if version_row is None:
+        collision = session.get(DocumentVersion, calculated_version_id)
+        if collision is not None and collision.sha256 != document.sha256:
+            raise HTTPException(
+                status_code=409,
+                detail="Document version identity collision; ingestion was not queued.",
+            )
+        job_version_id = calculated_version_id
+    else:
+        job_version_id = version_row.version_id
     if version_row is None:
         version_row = DocumentVersion(
             version_id=job_version_id,
@@ -253,6 +313,7 @@ def create_ingestion_job(
             version_id=job_version_id,
             document_id=document.document_id,
             source_sha256=document.sha256,
+            metadata_hash=identity.metadata_hash,
             pipeline_version=build_config.pipeline_version,
             config_hash=identity.config_hash,
             pipeline_config=build_config.payload(),
@@ -269,9 +330,37 @@ def create_ingestion_job(
             review_notes="",
         )
         session.add(build)
+    elif (
+        build.version_id != job_version_id
+        or build.source_sha256 != document.sha256
+        or build.config_hash != identity.config_hash
+        or build.metadata_hash != identity.metadata_hash
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Existing ingestion build has conflicting provenance.",
+        )
 
     job_id = f"ing_{identity.build_id.removeprefix('ingb_')}"
     job = session.get(IngestionJob, job_id)
+    if build.status in {"completed", "review_required"}:
+        if job is None:
+            job = IngestionJob(
+                job_id=job_id,
+                document_id=payload.document_id,
+                version_id=job_version_id,
+                build_id=identity.build_id,
+                status=build.status,
+                warnings=[],
+                artifact_paths={},
+            )
+            session.add(job)
+        else:
+            job.status = build.status
+            job.version_id = job_version_id
+            job.build_id = identity.build_id
+        session.commit()
+        return _job_payload(job, build)
     if job is None:
         job = IngestionJob(
             job_id=job_id,
@@ -283,34 +372,22 @@ def create_ingestion_job(
             artifact_paths={},
         )
         session.add(job)
-        stale_jobs = (
-            session.query(IngestionJob)
-            .filter(
-                IngestionJob.document_id == payload.document_id,
-                IngestionJob.version_id == job_version_id,
-                IngestionJob.job_id != job_id,
-                IngestionJob.status.in_(["completed", "review_required", "failed"]),
-            )
-            .all()
-        )
-        for stale in stale_jobs:
-            session.delete(stale)
     elif job.status in {"queued", "running"}:
         return _job_payload(job, build)
-    elif job.status == "completed" and not payload.force:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Document sudah selesai diingest dan tidak perlu diulang. "
-                "Ganti file/sumber terlebih dahulu, atau gunakan force untuk mengulang."
-            ),
-        )
+    elif (
+        job.status in {"completed", "review_required"}
+        and build.status in {"completed", "review_required"}
+    ):
+        return _job_payload(job, build)
     else:
         job.build_id = identity.build_id
         job.status = "queued"
         job.warnings = []
         job.artifact_paths = {}
     build.status = "queued"
+    build.completed_at = None
+    build.quality_report = {}
+    build.artifact_manifest = {}
     session.commit()
 
     try:
@@ -344,6 +421,17 @@ def create_ingestion_job(
         ) from exc
 
     return _job_payload(job, build)
+
+
+def _advance_version_ingestion_status(
+    version: DocumentVersion,
+    candidate_status: str,
+) -> None:
+    """Never let a failed or review-only build replace a completed candidate."""
+    if version.is_current:
+        return
+    if candidate_status == "completed" or version.ingestion_status != "completed":
+        version.ingestion_status = candidate_status
 
 
 @router.get("")

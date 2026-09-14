@@ -5,7 +5,7 @@ from threading import Lock
 
 from app.core.config import Settings
 from app.services.answering.generator import AnswerGenerator
-from app.services.answering.groq_generator import GroqAnswerGenerator
+from app.services.answering.openrouter_generator import OpenRouterAnswerGenerator
 from app.services.ingestion.embeddings import EmbeddingProvider, build_embedding_provider
 from app.services.retrieval.pinecone_store import PineconeConfig, PineconeRetrievalStore
 from app.services.retrieval.relationships import RelationshipIndex
@@ -34,6 +34,7 @@ def embedding_provider_from_settings(
         settings.embedding_dimension,
         settings.embedding_model_revision,
         settings.ingestion_embedding_batch_size,
+        settings.ingestion_embedding_timeout_seconds,
         bool(settings.openai_api_key),
         resolved_require_native,
     )
@@ -49,6 +50,7 @@ def embedding_provider_from_settings(
             require_native_sparse=resolved_require_native,
             model_revision=settings.embedding_model_revision,
             batch_size=settings.ingestion_embedding_batch_size,
+            timeout_seconds=settings.ingestion_embedding_timeout_seconds,
         )
         _embedding_cache[key] = provider
         return provider
@@ -83,6 +85,8 @@ def pinecone_store_from_settings(
         settings.embedding_dimension,
         settings.reranker_provider,
         settings.reranker_model,
+        settings.retrieval_diversity_lambda,
+        settings.retrieval_hybrid_alpha,
         allow_unpublished if allow_unpublished is not None else settings.rag_allow_unpublished,
         tuple(
             sorted(
@@ -111,6 +115,8 @@ def pinecone_store_from_settings(
         reranker_provider=settings.reranker_provider,
         reranker_model=settings.reranker_model,
         fail_closed=settings.rag_fail_closed,
+        diversity_lambda=settings.retrieval_diversity_lambda,
+        hybrid_alpha=settings.retrieval_hybrid_alpha,
         allow_unpublished=(
             allow_unpublished if allow_unpublished is not None else settings.rag_allow_unpublished
         ),
@@ -132,10 +138,10 @@ def answer_generator_from_settings(
     llm_provider = provider_name or settings.llm_provider
     key = (
         llm_provider,
-        settings.groq_model,
-        settings.groq_timeout_seconds,
-        settings.groq_max_retries,
-        settings.groq_max_tokens,
+        settings.openrouter_model,
+        settings.openrouter_timeout_seconds,
+        settings.openrouter_max_retries,
+        settings.openrouter_max_tokens,
         settings.claim_verifier_provider,
         settings.claim_verifier_model,
         settings.rag_fail_closed,
@@ -144,15 +150,15 @@ def answer_generator_from_settings(
         cached = _answer_cache.get(key)
         if cached is not None:
             return cached
-    if llm_provider == "groq":
-        if not settings.groq_api_key:
-            raise RuntimeError("GROQ_API_KEY is required for LLM_PROVIDER=groq.")
-        generator = GroqAnswerGenerator(
-            api_key=settings.groq_api_key,
-            model_name=settings.groq_model,
-            timeout_seconds=settings.groq_timeout_seconds,
-            max_retries=settings.groq_max_retries,
-            max_tokens=settings.groq_max_tokens,
+    if llm_provider == "openrouter":
+        if not settings.openrouter_api_key:
+            raise RuntimeError("OPENROUTER_API_KEY is required for LLM_PROVIDER=openrouter.")
+        generator = OpenRouterAnswerGenerator(
+            api_key=settings.openrouter_api_key,
+            model_name=settings.openrouter_model,
+            timeout_seconds=settings.openrouter_timeout_seconds,
+            max_retries=settings.openrouter_max_retries,
+            max_tokens=settings.openrouter_max_tokens,
             verifier_provider=settings.claim_verifier_provider,
             verifier_model=settings.claim_verifier_model,
             fail_closed=settings.rag_fail_closed,

@@ -2,6 +2,8 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from app.services.ingestion.embeddings import HashEmbeddingProvider
 from app.services.retrieval.engine import RetrievalEngine
 from app.services.retrieval.pinecone_store import _hybrid_alpha
@@ -10,6 +12,7 @@ from app.services.retrieval.postprocessing import (
     drop_heading_only_chunks,
     expand_context,
     is_heading_only,
+    mmr_select,
 )
 from app.services.retrieval.query import is_employment_query, understand_query
 from app.services.retrieval.relationships import (
@@ -18,7 +21,13 @@ from app.services.retrieval.relationships import (
     relationship_index_for_manifest,
     relationship_snapshot_hash,
 )
+from app.services.retrieval.reranker import (
+    DEFAULT_RERANK_WEIGHTS,
+    RerankWeights,
+    rerank_score,
+)
 from app.services.retrieval.schemas import RankedChunk, RetrievalDocument
+from app.services.retrieval.scoring import normalize_scores
 from app.services.retrieval.store import load_artifact_documents
 
 
@@ -556,3 +565,87 @@ def test_artifact_loader_selects_the_release_build_not_latest_directory(
     assert documents[0].build_id == "build-approved"
     assert documents[0].text == "artefak approved"
     assert documents[0].retrieval_text.startswith("PP 35/2021")
+
+
+def test_normalize_scores_scales_to_unit_interval() -> None:
+    assert normalize_scores({}) == {}
+    assert normalize_scores({"only": 0.91}) == {"only": 1.0}
+    assert normalize_scores({"a": 0.7, "b": 0.7}) == {"a": 1.0, "b": 1.0}
+    assert normalize_scores({"low": 0.2, "mid": 0.5, "high": 0.8}) == pytest.approx(
+        {"low": 0.0, "mid": 0.5, "high": 1.0}
+    )
+
+
+def test_rerank_weights_default_matches_explicit_configuration() -> None:
+    document = make_document(
+        "chunk-1",
+        "Pekerja PKWT berhak memperoleh kompensasi.",
+        ["pkwt"],
+        article="Pasal 15",
+    )
+    understanding = understand_query("Apakah pekerja PKWT memperoleh kompensasi?")
+
+    default_score, _ = rerank_score(understanding, document, 0.5, 0.6, 0.02)
+    explicit_score, _ = rerank_score(
+        understanding, document, 0.5, 0.6, 0.02, weights=RerankWeights()
+    )
+    boosted_score, _ = rerank_score(
+        understanding,
+        document,
+        0.5,
+        0.6,
+        0.02,
+        weights=RerankWeights(topic_boost=0.9),
+    )
+
+    assert default_score == explicit_score
+    assert DEFAULT_RERANK_WEIGHTS == RerankWeights()
+    assert boosted_score > default_score
+
+
+def test_mmr_select_enforces_article_and_document_caps() -> None:
+    same_article = [
+        ranked_chunk(
+            make_document(
+                f"a-{index}",
+                f"Pekerja PKWT menerima kompensasi bagian {index} sesuai ketentuan yang berlaku.",
+                ["pkwt"],
+                article="Pasal 15",
+            ),
+            0.9 - index * 0.05,
+        )
+        for index in range(3)
+    ]
+    other_article = ranked_chunk(
+        make_document(
+            "b-1",
+            "Pekerja yang terkena PHK memperoleh pesangon dan penggantian hak.",
+            ["phk"],
+            article="Pasal 40",
+        ),
+        0.6,
+    )
+
+    selected = mmr_select([*same_article, other_article], lambda_param=1.0)
+
+    assert [item.document.chunk_id for item in selected] == ["a-0", "a-1", "b-1"]
+
+    capped = mmr_select([*same_article, other_article], lambda_param=1.0, max_per_document=2)
+
+    assert [item.document.chunk_id for item in capped] == ["a-0", "a-1"]
+
+
+def test_expand_context_respects_max_expansions() -> None:
+    candidates = [
+        make_document(
+            f"sibling-{index}",
+            f"Pekerja PKWT menerima kompensasi ketentuan lanjutan bagian {index} yang berlaku.",
+            ["pkwt"],
+            article="Pasal 15",
+        )
+        for index in range(5)
+    ]
+    ranked = [ranked_chunk(candidates[2], 0.9)]
+
+    assert len(expand_context(ranked, candidates, max_expansions=1)) == 2
+    assert len(expand_context(ranked, candidates)) == 3

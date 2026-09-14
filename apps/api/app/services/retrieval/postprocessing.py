@@ -182,9 +182,85 @@ def diversify_ranked(
     return result
 
 
+def _jaccard(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    return len(left.intersection(right)) / len(left.union(right))
+
+
+def mmr_select(
+    ranked: list[RankedChunk],
+    *,
+    lambda_param: float = 0.7,
+    top_k: int | None = None,
+    max_per_document: int = 3,
+    max_per_article: int = 2,
+) -> list[RankedChunk]:
+    """Maximal Marginal Relevance selection over an already-scored ranking.
+
+    Greedily trades relevance (min-max normalized final score) against
+    novelty (Jaccard distance on retrieval text tokens), so a second ayat
+    of the same Pasal survives when it is relevant instead of being cut
+    by a rigid one-per-article cap. Hard caps stay on as a backstop.
+
+    Runs over a bounded head pool of the score-sorted input: positions past
+    the pool never reach serving (top_k <= 10) or top-10 metrics, while a
+    full-list greedy pass is quadratic. Per-candidate similarity to the
+    selected set is tracked incrementally, keeping the pass linear in
+    limit x pool instead of limit x pool x selected.
+    """
+    if not ranked:
+        return []
+    limit = top_k if top_k is not None else len(ranked)
+    pool = list(ranked[: min(max(limit * 2, 100), 300)])
+    scores = [item.final_score for item in pool]
+    lo, hi = min(scores), max(scores)
+    span = hi - lo if hi > lo else 1.0
+    relevance = [(item.final_score - lo) / span for item in pool]
+    term_sets = [set(tokenize(item.document.retrieval_text or item.document.text)) for item in pool]
+
+    def article_key(index: int) -> tuple[str, str]:
+        document = pool[index].document
+        return (
+            document.document_id,
+            document.article or f"__unstructured__:{document.chunk_id}",
+        )
+
+    counts: dict[str, int] = defaultdict(int)
+    article_counts: dict[tuple[str, str], int] = defaultdict(int)
+    max_sim = [0.0] * len(pool)
+    remaining = set(range(len(pool)))
+    selected: list[RankedChunk] = []
+    while remaining and len(selected) < limit:
+        best_index: int | None = None
+        best_value = float("-inf")
+        for index in sorted(remaining):
+            if counts[pool[index].document.document_id] >= max_per_document:
+                continue
+            if article_counts[article_key(index)] >= max_per_article:
+                continue
+            value = lambda_param * relevance[index] + (1 - lambda_param) * (1.0 - max_sim[index])
+            if value > best_value:
+                best_value = value
+                best_index = index
+        if best_index is None:
+            break
+        selected.append(pool[best_index])
+        remaining.remove(best_index)
+        counts[pool[best_index].document.document_id] += 1
+        article_counts[article_key(best_index)] += 1
+        for index in remaining:
+            similarity = _jaccard(term_sets[index], term_sets[best_index])
+            if similarity > max_sim[index]:
+                max_sim[index] = similarity
+    return selected
+
+
 def expand_context(
     ranked: list[RankedChunk],
     candidates: list[RetrievalDocument],
+    *,
+    max_expansions: int = 4,
 ) -> list[RankedChunk]:
     if not ranked:
         return []
@@ -201,7 +277,10 @@ def expand_context(
         )
     selected_ids = {item.document.chunk_id for item in ranked}
     expanded = list(ranked)
+    added = 0
     for item in ranked[:3]:
+        if added >= max_expansions:
+            break
         siblings = by_document[item.document.document_id]
         index = next(
             (
@@ -214,6 +293,8 @@ def expand_context(
         if index is None:
             continue
         for sibling in siblings[max(0, index - 1) : index + 2]:
+            if added >= max_expansions:
+                break
             if sibling.chunk_id in selected_ids:
                 continue
             if is_heading_only(sibling):
@@ -221,10 +302,10 @@ def expand_context(
             same_article = (
                 item.document.article is not None and item.document.article == sibling.article
             )
-            adjacent_page = abs(item.document.page_start - sibling.page_start) <= 1
-            if not same_article and not adjacent_page:
+            if not same_article:
                 continue
             selected_ids.add(sibling.chunk_id)
+            added += 1
             expanded.append(
                 RankedChunk(
                     document=sibling,

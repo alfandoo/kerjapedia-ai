@@ -5,7 +5,11 @@ import json
 from pathlib import Path
 
 from app.services.evaluation.dataset import load_evaluation_dataset
-from app.services.evaluation.runner import EXPERIMENT_MODES, run_experiments
+from app.services.evaluation.runner import (
+    EXPERIMENT_MODES,
+    evaluate_retrieval_modes,
+    run_experiments,
+)
 from app.services.retrieval.store import load_artifact_documents
 
 
@@ -16,11 +20,19 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--modes", nargs="+", choices=EXPERIMENT_MODES, default=EXPERIMENT_MODES)
+    parser.add_argument(
+        "--retrieval-only",
+        action="store_true",
+        help="Score retrieval ranking per mode without answer generation (fast).",
+    )
     args = parser.parse_args()
 
     _, questions = load_evaluation_dataset(args.dataset)
     documents = load_artifact_documents(args.storage_root)
-    report = run_experiments(questions, documents, args.modes, args.top_k)
+    if args.retrieval_only:
+        report = evaluate_retrieval_modes(questions, documents, args.modes, args.top_k)
+    else:
+        report = run_experiments(questions, documents, args.modes, args.top_k)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote evaluation report to {args.output}")

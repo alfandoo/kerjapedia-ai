@@ -5,19 +5,18 @@ from app.core.config import Settings
 
 def build_ragas_faithfulness(settings: Settings):
     try:
-        from groq import Groq
+        from openai import OpenAI
         from ragas.llms import llm_factory
         from ragas.metrics.collections import Faithfulness
     except ImportError as exc:
-        raise RuntimeError("Ragas and Groq are required for secondary evaluation.") from exc
-    client = Groq(
-        api_key=settings.groq_api_key,
-        timeout=settings.groq_timeout_seconds,
-        max_retries=settings.groq_max_retries,
+        raise RuntimeError("Ragas and OpenRouter are required for secondary evaluation.") from exc
+    client = OpenAI(
+        api_key=settings.openrouter_api_key,
+        base_url="https://openrouter.ai/api/v1",
     )
     evaluator = llm_factory(
         settings.claim_verifier_model,
-        provider="groq",
+        provider="openai",
         client=client,
     )
     return Faithfulness(llm=evaluator)

@@ -88,7 +88,7 @@ def build_quality_report(
         "no_duplicate_retrieval_text": not duplicate_hashes,
         "chunk_count_matches_embeddings": len(chunks) == len(embedded_chunks),
         "max_chunk_tokens": all(
-            0 < chunk.token_count <= max_chunk_tokens * 3
+            0 < chunk.token_count <= max_chunk_tokens
             for chunk in chunks
         ),
         "detected_articles_present": bool(detected_articles),

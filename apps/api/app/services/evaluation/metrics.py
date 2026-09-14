@@ -45,9 +45,12 @@ def ndcg_at_k(expected_ids: Iterable[str], retrieved_ids: list[str], k: int = 10
     expected = set(expected_ids)
     if not expected:
         return 0.0
+    # A document occupies one rank position no matter how many of its chunks
+    # were retrieved; without this, repeated chunks push DCG above ideal.
+    ranked = list(dict.fromkeys(retrieved_ids))[:k]
     dcg = sum(
         1.0 / math.log2(index + 2)
-        for index, document_id in enumerate(retrieved_ids[:k])
+        for index, document_id in enumerate(ranked)
         if document_id in expected
     )
     ideal_hits = min(len(expected), k)

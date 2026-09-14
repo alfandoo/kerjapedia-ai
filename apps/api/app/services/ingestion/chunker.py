@@ -81,10 +81,10 @@ def build_chunks(
             if not text_part or HEADING_ONLY_RE.fullmatch(text_part.strip()):
                 continue
             retrieval_text = build_retrieval_text(document, segment, text_part)
-            short_build = build_id[-12:] if build_id else None
+            build_key = build_id.removeprefix("ingb_") if build_id else None
             chunk_id = (
-                f"{document.document_id}-v{version}-b{short_build}-chunk-{counter:05d}"
-                if short_build
+                f"{document.document_id}-v{version}-b{build_key}-chunk-{counter:05d}"
+                if build_key
                 else f"{document.document_id}-v{version}-chunk-{counter:05d}"
             )
             checksum = hashlib.sha256(f"{chunk_id}\n{retrieval_text}".encode()).hexdigest()

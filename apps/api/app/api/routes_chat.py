@@ -34,7 +34,11 @@ from app.services.answering.guardrails import (
     build_guardrail_refusal,
     evaluate_input_guardrail,
 )
-from app.services.answering.memory_hardening import MemoryContext, build_memory_context
+from app.services.answering.memory_hardening import (
+    MemoryContext,
+    build_history_turns,
+    build_memory_context,
+)
 from app.services.answering.prompts import PROMPT_VERSION_ID
 from app.services.idempotency import IdempotencyStore, valid_idempotency_key
 from app.services.providers import (
@@ -256,7 +260,7 @@ def _retrieve(memory: MemoryContext, top_k: int, session: Session):
         expected_models = {
             "embedding": settings.embedding_model,
             "reranker": settings.reranker_model,
-            "generator": settings.groq_model,
+            "generator": settings.openrouter_model,
             "verifier": settings.claim_verifier_model,
             "prompt": PROMPT_VERSION_ID,
         }
@@ -295,6 +299,7 @@ def _retrieve(memory: MemoryContext, top_k: int, session: Session):
         min_final_score=governance.min_final_score,
         top_k=top_k,
         relationship_index=governance.relationship_index,
+        diversity_lambda=settings.retrieval_diversity_lambda,
     ).search(
         memory.original_question,
         top_k=top_k,
@@ -598,7 +603,7 @@ def _server_rag_trace(guardrail, memory, retrieval, answer) -> dict:
         "pipeline": {
             "vector_store": settings.vector_store,
             "embedding_model": settings.embedding_model,
-            "generator_model": settings.groq_model,
+            "generator_model": settings.openrouter_model,
             "verifier_model": settings.claim_verifier_model,
             "reranker_model": settings.reranker_model,
             "prompt_version": answer.prompt_version_id,
@@ -710,6 +715,7 @@ def ask_question(
                 answer = answer_generator_from_settings(settings).generate(
                     payload.question,
                     retrieval,
+                    history=build_history_turns(pending_turn.previous_messages),
                 )
             observe_stage(
                 "generation_and_verification",
@@ -869,6 +875,7 @@ def ask_question_stream(
                 )
                 yield _stream_event("thinking", status="Menyusun jawaban berdasarkan sumber")
                 generator = answer_generator_from_settings(settings)
+                history = build_history_turns(pending_turn.previous_messages)
                 generation_started = time.perf_counter()
                 with trace_stage("generation_and_verification", settings.llm_provider):
                     generation_task = asyncio.ensure_future(
@@ -876,6 +883,7 @@ def ask_question_stream(
                             generator.generate,
                             payload.question,
                             retrieval,
+                            history=history,
                         )
                     )
                     async for ping in _pings_while(generation_task):

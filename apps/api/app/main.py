@@ -73,7 +73,7 @@ async def lifespan(_app: FastAPI):
             if governance.active_models != {
                 "embedding": settings.embedding_model,
                 "reranker": settings.reranker_model,
-                "generator": settings.groq_model,
+                "generator": settings.openrouter_model,
                 "verifier": settings.claim_verifier_model,
                 "prompt": PROMPT_VERSION_ID,
             }:

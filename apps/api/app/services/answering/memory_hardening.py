@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.services.answering.generator import _detect_language
+from app.services.answering.schemas import HistoryTurn
 from app.services.retrieval.query import is_employment_query, understand_query
 
 _EXPLICIT_FOLLOW_UP_PATTERN = re.compile(
@@ -285,3 +286,39 @@ def build_memory_context(
         source_message_ids=source_message_ids,
         redaction_count=question_redactions + context_redactions,
     )
+
+
+def build_history_turns(
+    messages: list[dict[str, Any]],
+    max_turns: int = 2,
+) -> tuple[HistoryTurn, ...]:
+    """Collect the most recent answered turns for the LLM prompt.
+
+    Only turns with a completed, cited answer and a passing input guardrail
+    are eligible — the same bar as retrieval memory — so refusals and failed
+    turns never become model context. PII is redacted before returning.
+    """
+    turns: list[HistoryTurn] = []
+    pending_question: str | None = None
+    for message in messages:
+        role = message.get("role")
+        if role == "user":
+            candidate = str(message.get("content") or "").strip()
+            pending_question = candidate or None
+            continue
+        if role != "assistant" or pending_question is None:
+            continue
+        question, pending_question = pending_question, None
+        if not _answer_citations(message):
+            continue
+        if not _guardrail_allowed(message):
+            continue
+        answer = str(message.get("content") or "").strip()
+        if not answer:
+            continue
+        redacted_question, question_redactions = redact_retrieval_text(question)
+        redacted_answer, answer_redactions = redact_retrieval_text(answer)
+        if question_redactions or answer_redactions:
+            continue
+        turns.append(HistoryTurn(question=redacted_question, answer=redacted_answer))
+    return tuple(turns[-max(1, max_turns) :])

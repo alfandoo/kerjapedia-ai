@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import math
 import re
 from dataclasses import dataclass, replace
 from typing import Any
@@ -10,24 +12,34 @@ from app.services.retrieval.postprocessing import (
     apply_query_focus_adjustments,
     apply_relationship_adjustments,
     build_warnings,
-    diversify_ranked,
     drop_heading_only_chunks,
     expand_context,
+    mmr_select,
 )
 from app.services.retrieval.query import is_employment_query, understand_query
 from app.services.retrieval.relationships import (
     RelationshipIndex,
     build_relationship_index,
 )
-from app.services.retrieval.reranker import rerank_score
+from app.services.retrieval.reranker import (
+    DEFAULT_RERANK_WEIGHTS,
+    RerankWeights,
+    rerank_score,
+)
 from app.services.retrieval.schemas import (
     RankedChunk,
     RetrievalDocument,
     RetrievalResponse,
 )
-from app.services.retrieval.scoring import lexical_score, reciprocal_rank_fusion
+from app.services.retrieval.scoring import (
+    lexical_score,
+    normalize_scores,
+    reciprocal_rank_fusion,
+)
+from app.services.telemetry import record_provider_error
 
 PINECONE_METADATA_TEXT_LIMIT = 12_000
+PINECONE_MAX_UPSERT_BATCH_SIZE = 100
 
 
 @dataclass(frozen=True)
@@ -51,6 +63,9 @@ class PineconeRetrievalStore:
         fail_closed: bool = False,
         allow_unpublished: bool = True,
         relationship_index: RelationshipIndex | None = None,
+        rerank_weights: RerankWeights | None = None,
+        diversity_lambda: float = 0.7,
+        hybrid_alpha: float | None = None,
     ) -> None:
         self.config = config
         self.embedding_provider = embedding_provider
@@ -59,6 +74,9 @@ class PineconeRetrievalStore:
         self.fail_closed = fail_closed
         self.allow_unpublished = allow_unpublished
         self.relationship_index = relationship_index or build_relationship_index([])
+        self.rerank_weights = rerank_weights or DEFAULT_RERANK_WEIGHTS
+        self.diversity_lambda = diversity_lambda
+        self.hybrid_alpha = hybrid_alpha
         self._client = None
         self._index = None
         self._filter_support_cache: dict[str, frozenset[str]] = {}
@@ -181,6 +199,29 @@ class PineconeRetrievalStore:
         is_current: bool = True,
         replace_document: bool = True,
     ) -> int:
+        if not 1 <= batch_size <= PINECONE_MAX_UPSERT_BATCH_SIZE:
+            raise ValueError(
+                f"Pinecone batch_size must be between 1 and "
+                f"{PINECONE_MAX_UPSERT_BATCH_SIZE}"
+            )
+        if not embedded_chunks:
+            raise ValueError("Pinecone upsert requires at least one embedded chunk")
+        chunk_ids = [item.chunk.chunk_id for item in embedded_chunks]
+        if len(chunk_ids) != len(set(chunk_ids)):
+            raise ValueError("Pinecone upsert contains duplicate chunk IDs")
+        for item in embedded_chunks:
+            if len(item.embedding) != self.config.dimension:
+                raise ValueError(
+                    f"Embedding {item.chunk.chunk_id} has {len(item.embedding)} "
+                    f"dimensions; expected {self.config.dimension}"
+                )
+            if (
+                any(not math.isfinite(float(value)) for value in item.embedding)
+                or not any(float(value) != 0.0 for value in item.embedding)
+            ):
+                raise ValueError(
+                    f"Embedding {item.chunk.chunk_id} contains an invalid dense vector"
+                )
         self.ensure_index()
         index = self._pinecone_index()
         if replace_document:
@@ -195,8 +236,11 @@ class PineconeRetrievalStore:
                 **(
                     {
                         "sparse_values": {
-                            "indices": list(item.sparse_embedding),
-                            "values": list(item.sparse_embedding.values()),
+                            "indices": sorted(item.sparse_embedding),
+                            "values": [
+                                item.sparse_embedding[index]
+                                for index in sorted(item.sparse_embedding)
+                            ],
                         }
                     }
                     if item.sparse_embedding
@@ -218,8 +262,54 @@ class PineconeRetrievalStore:
         for start in range(0, len(vectors), batch_size):
             batch = vectors[start : start + batch_size]
             response = index.upsert(vectors=batch, namespace=self.config.namespace)
-            upserted += int(getattr(response, "upserted_count", len(batch)) or len(batch))
+            count = getattr(response, "upserted_count", None)
+            if count is None and isinstance(response, dict):
+                count = response.get("upserted_count")
+            if count is None or int(count) != len(batch):
+                raise RuntimeError(
+                    "Pinecone did not acknowledge every vector in the upsert batch"
+                )
+            upserted += int(count)
         return upserted
+
+    def fetch_vector_metadata(self, vector_ids: list[str]) -> dict[str, dict]:
+        """Read metadata for exact IDs to verify an ingestion release write."""
+        if not vector_ids:
+            return {}
+        if len(vector_ids) > PINECONE_MAX_UPSERT_BATCH_SIZE:
+            raise ValueError(
+                f"Pinecone fetch accepts at most {PINECONE_MAX_UPSERT_BATCH_SIZE} IDs"
+            )
+        response = self._pinecone_index().fetch(
+            ids=vector_ids,
+            namespace=self.config.namespace,
+        )
+        vectors = getattr(response, "vectors", None)
+        if vectors is None and isinstance(response, dict):
+            vectors = response.get("vectors", {})
+        result: dict[str, dict] = {}
+        for vector_id, vector in dict(vectors or {}).items():
+            metadata = getattr(vector, "metadata", None)
+            if metadata is None and isinstance(vector, dict):
+                metadata = vector.get("metadata", {})
+            result[str(vector_id)] = dict(metadata or {})
+        return result
+
+    def namespace_vector_count(self) -> int:
+        """Return the exact Pinecone count reported for this release namespace."""
+        response = self._pinecone_index().describe_index_stats()
+        namespaces = getattr(response, "namespaces", None)
+        if namespaces is None and isinstance(response, dict):
+            namespaces = response.get("namespaces", {})
+        namespace = dict(namespaces or {}).get(self.config.namespace)
+        if namespace is None:
+            return 0
+        count = getattr(namespace, "vector_count", None)
+        if count is None and isinstance(namespace, dict):
+            count = namespace.get("vector_count")
+        if count is None:
+            raise RuntimeError("Pinecone namespace statistics omitted vector_count")
+        return int(count)
 
     def clear_namespace(self) -> None:
         """Clear only the immutable release namespace owned by this store."""
@@ -262,7 +352,12 @@ class PineconeRetrievalStore:
         # the union is rescored downstream by lexical, fusion, and rerankers.
         rewrites = list(understanding.rewritten_queries[:3]) or [understanding.normalized_query]
         hybrid = embed_hybrid(self.embedding_provider, rewrites)
-        alpha = _hybrid_alpha(understanding.normalized_query)
+        if self.hybrid_alpha is not None:
+            alpha = self.hybrid_alpha
+            alpha_override = True
+        else:
+            alpha = _hybrid_alpha(understanding.normalized_query)
+            alpha_override = False
         # Dense and sparse vectors are evaluated together by Pinecone. Keep the
         # pre-rerank candidate pool fixed so latency and evaluation stay comparable.
         semantic_limit = 100
@@ -346,6 +441,7 @@ class PineconeRetrievalStore:
         ]
         fusion_scores = reciprocal_rank_fusion([lexical_ranking, semantic_ranking])
         by_id = {document.chunk_id: document for document in candidates}
+        normalized_semantic = normalize_scores(semantic_scores)
 
         ranked: list[RankedChunk] = []
         for chunk_id in set(fusion_scores).union(semantic_scores):
@@ -355,14 +451,17 @@ class PineconeRetrievalStore:
                 understanding,
                 document,
                 lexical_scores.get(chunk_id, 0.0),
-                semantic_scores.get(chunk_id, 0.0),
+                normalized_semantic.get(chunk_id, 0.0),
                 fusion_score,
+                weights=self.rerank_weights,
             )
+            if alpha_override:
+                reasons = [*reasons, f"hybrid_alpha:{alpha:.2f}"]
             ranked.append(
                 RankedChunk(
                     document=document,
                     lexical_score=round(lexical_scores.get(chunk_id, 0.0), 6),
-                    semantic_score=round(semantic_scores.get(chunk_id, 0.0), 6),
+                    semantic_score=round(normalized_semantic.get(chunk_id, 0.0), 6),
                     fusion_score=round(fusion_score, 6),
                     rerank_score=round(rerank, 6),
                     final_score=round(rerank, 6),
@@ -371,17 +470,24 @@ class PineconeRetrievalStore:
             )
 
         ranked.sort(key=lambda item: item.final_score, reverse=True)
-        ranked = self._model_rerank(understanding.retrieval_query, ranked[:50])
+        ranked, cross_encoder_ok = self._model_rerank(understanding.retrieval_query, ranked[:50])
         ranked = apply_relationship_adjustments(ranked, self.relationship_index)
         ranked = apply_query_focus_adjustments(
             ranked,
             understanding.normalized_retrieval_query,
         )
         ranked = drop_heading_only_chunks(ranked)
-        ranked = diversify_ranked(ranked)
+        ranked = mmr_select(
+            ranked,
+            lambda_param=self.diversity_lambda,
+            max_per_document=3,
+            max_per_article=2,
+        )
         selected = expand_context(ranked[:top_k], candidates)[:top_k]
         warnings = build_warnings(selected, self.relationship_index)
         warnings.extend(filter_warnings)
+        if not cross_encoder_ok:
+            warnings.append("cross_encoder_rerank_unavailable")
         if getattr(self.embedding_provider, "sparse_fallback_used", False):
             warnings.append("native_sparse_embedding_unavailable")
         if sparse_query_fallback_used:
@@ -399,9 +505,15 @@ class PineconeRetrievalStore:
         self,
         query: str,
         ranked: list[RankedChunk],
-    ) -> list[RankedChunk]:
+    ) -> tuple[list[RankedChunk], bool]:
+        """Cross-encoder rerank. Returns (ranked, cross_encoder_ok).
+
+        A failing cross-encoder fails open to heuristic order but is
+        recorded in telemetry, so reranker drift shows up in monitoring
+        instead of degrading answers silently.
+        """
         if self.reranker_provider != "pinecone" or not ranked:
-            return ranked
+            return ranked, True
         try:
             response = self._pinecone_client().inference.rerank(
                 model=self.reranker_model,
@@ -448,11 +560,12 @@ class PineconeRetrievalStore:
                 )
             if not reranked:
                 raise RuntimeError("Pinecone reranker returned no usable result.")
-            return sorted(reranked, key=lambda item: item.final_score, reverse=True)
+            return sorted(reranked, key=lambda item: item.final_score, reverse=True), True
         except Exception as exc:
             if self.fail_closed:
                 raise RuntimeError("Required RAG reranker is unavailable.") from exc
-            return ranked
+            record_provider_error("reranker", self.reranker_model)
+            return ranked, False
 
     def _pinecone_client(self):
         if self._client is None:
@@ -485,6 +598,7 @@ def _metadata_from_embedded_chunk(
     is_current: bool,
 ) -> dict[str, Any]:
     chunk = embedded_chunk.chunk
+    retrieval_text = chunk.retrieval_text or chunk.text
     metadata = {
         "chunk_id": chunk.chunk_id,
         "document_id": document.document_id,
@@ -507,11 +621,15 @@ def _metadata_from_embedded_chunk(
         "is_current": is_current,
         "source_name": document.source_name,
         "source_url": document.source_url,
+        "file_hash": document.sha256,
         "local_file": document.local_file,
         "file_name": document.file_name,
         "embedding_model": embedded_chunk.embedding_model,
         "embedding_revision": embedded_chunk.embedding_revision,
+        "vector_dimension": len(embedded_chunk.embedding),
         "build_id": chunk.build_id,
+        "content_hash": hashlib.sha256(retrieval_text.encode("utf-8")).hexdigest(),
+        "artifact_checksum": chunk.artifact_checksum,
         "chapter": chunk.chapter,
         "section": chunk.section,
         "article": chunk.article,
@@ -520,7 +638,7 @@ def _metadata_from_embedded_chunk(
         "page_end": chunk.page_end,
         "token_count": chunk.token_count,
         "text": chunk.text[:PINECONE_METADATA_TEXT_LIMIT],
-        "retrieval_text": (chunk.retrieval_text or chunk.text)[:PINECONE_METADATA_TEXT_LIMIT],
+        "retrieval_text": retrieval_text[:PINECONE_METADATA_TEXT_LIMIT],
         "parent_text": (chunk.parent_text or "")[:PINECONE_METADATA_TEXT_LIMIT],
         "char_start": chunk.char_start,
         "char_end": chunk.char_end,

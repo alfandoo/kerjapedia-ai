@@ -45,3 +45,18 @@ def reciprocal_rank_fusion(rankings: list[list[str]], k: int = 60) -> dict[str, 
         for rank, chunk_id in enumerate(ranking, start=1):
             scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (k + rank)
     return scores
+
+
+def normalize_scores(scores: dict[str, float]) -> dict[str, float]:
+    """Min-max normalize a per-query score map to [0, 1].
+
+    Raw Pinecone scores live on different scales per rewritten query, so
+    carrying them raw into the reranker gives the semantic term a
+    query-dependent weight. Uniform input maps to 1.0.
+    """
+    if not scores:
+        return {}
+    lo, hi = min(scores.values()), max(scores.values())
+    if hi <= lo:
+        return {key: 1.0 for key in scores}
+    return {key: (value - lo) / (hi - lo) for key, value in scores.items()}

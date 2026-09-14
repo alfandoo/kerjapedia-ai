@@ -20,6 +20,7 @@ from app.services.evaluation.schemas import (
     QuestionEvaluation,
 )
 from app.services.retrieval.engine import RetrievalEngine
+from app.services.retrieval.reranker import DEFAULT_RERANK_WEIGHTS, RerankWeights
 from app.services.retrieval.schemas import RankedChunk, RetrievalDocument, RetrievalResponse
 
 EXPERIMENT_MODES: tuple[ExperimentMode, ...] = ("baseline", "dense", "hybrid", "rerank")
@@ -78,7 +79,7 @@ def run_experiment(
             refusal_reason=("no_retrieved_chunk_passed_minimum_score" if actual_refuse else None),
         )
         answer = generator.generate(question.question, mode_retrieval)
-        retrieved_document_ids = [item.document.document_id for item in selected]
+        retrieved_document_ids = _unique_document_ids(selected)
         answerable = not question.should_refuse
         results.append(
             QuestionEvaluation(
@@ -158,9 +159,226 @@ def run_experiment(
     )
 
 
+DEFAULT_WEIGHT_SWEEP: tuple[tuple[str, RerankWeights], ...] = (
+    ("baseline", DEFAULT_RERANK_WEIGHTS),
+    (
+        "semantic_heavy",
+        RerankWeights(fusion=0.35, lexical=0.15, semantic=0.35, overlap=0.15),
+    ),
+    (
+        "lexical_heavy",
+        RerankWeights(fusion=0.35, lexical=0.35, semantic=0.15, overlap=0.15),
+    ),
+    (
+        "fusion_heavy",
+        RerankWeights(fusion=0.60, lexical=0.15, semantic=0.15, overlap=0.10),
+    ),
+    (
+        "overlap_heavy",
+        RerankWeights(fusion=0.35, lexical=0.20, semantic=0.20, overlap=0.25),
+    ),
+)
+
+
+def sweep_rerank_weights(
+    questions: list[EvaluationQuestion],
+    documents: list[RetrievalDocument],
+    weight_options: list[tuple[str, RerankWeights]]
+    | tuple[tuple[str, RerankWeights], ...]
+    | None = None,
+    top_k: int = 5,
+) -> list[dict]:
+    """Compare rerank weight configs on retrieval quality (no answer generation).
+
+    Each option is evaluated with mean recall@k and mean reciprocal rank over
+    answerable questions, mirroring the retrieval slice used in run_experiment.
+    Returns rows sorted by recall then reciprocal rank, so the winning config
+    can be recorded as the calibrated `RerankWeights` for production.
+    """
+    options = list(weight_options) if weight_options is not None else list(DEFAULT_WEIGHT_SWEEP)
+    rows: list[dict] = []
+    for name, weights in options:
+        engine = RetrievalEngine(
+            documents=documents,
+            top_k=max(top_k, len(documents)),
+            rerank_weights=weights,
+        )
+        recalls: list[float] = []
+        ranks: list[float] = []
+        for question in questions:
+            if question.should_refuse:
+                continue
+            retrieval = engine.search(question.question, top_k=max(top_k, len(documents)))
+            retrieved_ids = [
+                item.document.document_id for item in retrieval.results[: max(top_k, 10)]
+            ]
+            recalls.append(recall_at_k(question.expected_document_ids, retrieved_ids, top_k))
+            ranks.append(reciprocal_rank(question.expected_document_ids, retrieved_ids))
+        rows.append(
+            {
+                "name": name,
+                "weights": asdict(weights),
+                "evaluated": len(recalls),
+                "mean_recall_at_k": (sum(recalls) / len(recalls)) if recalls else 0.0,
+                "mean_reciprocal_rank": (sum(ranks) / len(ranks)) if ranks else 0.0,
+            }
+        )
+    rows.sort(key=lambda row: (row["mean_recall_at_k"], row["mean_reciprocal_rank"]), reverse=True)
+    return rows
+
+
 def _rank(results: list[RankedChunk], mode: ExperimentMode) -> list[RankedChunk]:
     score_name = _MODE_SCORE[mode]
     return sorted(results, key=lambda item: getattr(item, score_name), reverse=True)
+
+
+def _unique_document_ids(selected: list[RankedChunk]) -> list[str]:
+    """Rank positions for metrics count a document once: several chunks of
+    the same regulation must not inflate NDCG the way raw chunk lists do."""
+    return list(dict.fromkeys(item.document.document_id for item in selected))
+
+
+def evaluate_retrieval_modes(
+    questions: list[EvaluationQuestion],
+    documents: list[RetrievalDocument],
+    modes: list[ExperimentMode] | tuple[ExperimentMode, ...] = EXPERIMENT_MODES,
+    top_k: int = 5,
+) -> dict:
+    """Score retrieval quality per mode without answer generation.
+
+    Fast enough for full-dataset sweeps: one engine search per question, then
+    each mode re-ranks the same result list by its own score column.
+    """
+    engine = RetrievalEngine(documents=documents, top_k=max(top_k, len(documents)))
+    searches = [
+        engine.search(question.question, top_k=max(top_k, len(documents))) for question in questions
+    ]
+    experiments = []
+    for mode in modes:
+        recalls_5: list[float] = []
+        recalls_10: list[float] = []
+        ranks: list[float] = []
+        ndcgs: list[float] = []
+        refusal_ok = 0
+        evaluated = 0
+        score_pairs: list[tuple[float, bool]] = []
+        for question, retrieval in zip(questions, searches, strict=True):
+            ranked = _rank(retrieval.results, mode)
+            selected = ranked[: max(top_k, 10)]
+            score_name = _MODE_SCORE[mode]
+            best_score = getattr(selected[0], score_name) if selected else 0.0
+            score_pairs.append((float(best_score), question.should_refuse))
+            actual_refuse = not selected or best_score < _REFUSAL_THRESHOLDS[mode]
+            refusal_ok += actual_refuse == question.should_refuse
+            if question.should_refuse:
+                continue
+            evaluated += 1
+            retrieved_ids = _unique_document_ids(selected)
+            recalls_5.append(recall_at_k(question.expected_document_ids, retrieved_ids, 5))
+            recalls_10.append(recall_at_k(question.expected_document_ids, retrieved_ids, 10))
+            ranks.append(reciprocal_rank(question.expected_document_ids, retrieved_ids))
+            ndcgs.append(ndcg_at_k(question.expected_document_ids, retrieved_ids, 10))
+        experiments.append(
+            {
+                "mode": mode,
+                "evaluated": evaluated,
+                "question_count": len(questions),
+                "recall_at_5": _mean(recalls_5),
+                "recall_at_10": _mean(recalls_10),
+                "mean_reciprocal_rank": _mean(ranks),
+                "ndcg_at_10": _mean(ndcgs),
+                "refusal_accuracy": (refusal_ok / len(questions)) if questions else 0.0,
+                "recommended_refusal_threshold": _calibrate_threshold_from_scores(score_pairs),
+            }
+        )
+    return {
+        "question_count": len(questions),
+        "top_k": top_k,
+        "experiments": experiments,
+    }
+
+
+def _mean(values: list[float]) -> float:
+    return (sum(values) / len(values)) if values else 0.0
+
+
+def _calibrate_threshold_from_scores(pairs: list[tuple[float, bool]]) -> float:
+    """Pick the refusal threshold with best accuracy on (best_score, should_refuse)
+    pairs, preferring the higher threshold on ties — same rule as
+    _calibrate_refusal_threshold but without QuestionEvaluation wrappers."""
+    best_threshold = 0.08
+    best_accuracy = -1.0
+    for threshold in sorted({0.0, *[score for score, _ in pairs], 1.0}):
+        correct = sum((score < threshold) == expected for score, expected in pairs)
+        accuracy = correct / max(1, len(pairs))
+        if accuracy > best_accuracy or (accuracy == best_accuracy and threshold > best_threshold):
+            best_accuracy = accuracy
+            best_threshold = threshold
+    return round(best_threshold, 6)
+
+
+def tuning_subset(
+    questions: list[EvaluationQuestion],
+    per_category: int = 6,
+    split: str = "development",
+) -> list[EvaluationQuestion]:
+    """Deterministic stratified sample for tuning sweeps.
+
+    Takes the first `per_category` questions of each category from one split
+    so sweeps run in minutes instead of hours; winners are confirmed on the
+    full development split and finally on held-out test.
+    """
+    by_category: dict[str, list[EvaluationQuestion]] = {}
+    for question in questions:
+        if question.split != split:
+            continue
+        by_category.setdefault(question.category, []).append(question)
+    subset: list[EvaluationQuestion] = []
+    for category in sorted(by_category):
+        subset.extend(by_category[category][: max(1, per_category)])
+    return subset
+
+
+DEFAULT_LAMBDA_SWEEP: tuple[float, ...] = (0.5, 0.7, 0.9)
+
+
+def sweep_diversity_lambda(
+    questions: list[EvaluationQuestion],
+    documents: list[RetrievalDocument],
+    lambda_options: list[float] | tuple[float, ...] | None = None,
+    top_k: int = 10,
+) -> list[dict]:
+    """Compare MMR diversity strengths on retrieval quality (no generation).
+
+    Rows sorted by recall then reciprocal rank, mirroring sweep_rerank_weights.
+    """
+    options = list(lambda_options) if lambda_options is not None else list(DEFAULT_LAMBDA_SWEEP)
+    rows: list[dict] = []
+    for lambda_param in options:
+        engine = RetrievalEngine(
+            documents=documents,
+            top_k=max(top_k, len(documents)),
+            diversity_lambda=lambda_param,
+        )
+        recalls: list[float] = []
+        ranks: list[float] = []
+        for question in questions:
+            if question.should_refuse:
+                continue
+            retrieval = engine.search(question.question, top_k=max(top_k, len(documents)))
+            retrieved_ids = _unique_document_ids(retrieval.results[: max(top_k, 10)])
+            recalls.append(recall_at_k(question.expected_document_ids, retrieved_ids, top_k))
+            ranks.append(reciprocal_rank(question.expected_document_ids, retrieved_ids))
+        rows.append(
+            {
+                "diversity_lambda": lambda_param,
+                "evaluated": len(recalls),
+                "mean_recall_at_k": _mean(recalls),
+                "mean_reciprocal_rank": _mean(ranks),
+            }
+        )
+    rows.sort(key=lambda row: (row["mean_recall_at_k"], row["mean_reciprocal_rank"]), reverse=True)
+    return rows
 
 
 def _aggregate(
@@ -341,7 +559,7 @@ def _evaluate_provider_questions(
             ),
         )
         answer = generator.generate(question.question, evaluated_retrieval)
-        retrieved_document_ids = [item.document.document_id for item in selected]
+        retrieved_document_ids = _unique_document_ids(selected)
         answerable = not question.should_refuse
         results.append(
             QuestionEvaluation(

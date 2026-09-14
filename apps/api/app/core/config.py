@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     embedding_dimension: int = 1024
     embedding_model_revision: str = "5617a9f61b028005a4858fdac845db406aefb181"
     ingestion_embedding_batch_size: int = 16
+    ingestion_embedding_timeout_seconds: float = 120.0
+    ingestion_embedding_max_retries: int = 3
+    ingestion_embedding_retry_initial_seconds: float = 1.0
+    pinecone_upsert_batch_size: int = 100
+    pinecone_write_timeout_seconds: float = 60.0
+    pinecone_write_max_retries: int = 3
     ingestion_target_tokens: int = 350
     ingestion_max_tokens: int = 550
     ingestion_overlap_tokens: int = 60
@@ -43,17 +49,26 @@ class Settings(BaseSettings):
     claim_verifier_model: str = "openai/gpt-oss-120b"
     rag_fail_closed: bool = False
     rag_allow_unpublished: bool = True
+    # Retrieval tuning knobs. Defaults are the calibration winners measured on
+    # the golden tuning subset (2026-09): MMR lambda is insensitive at top-10
+    # (0.5/0.7/0.9 identical), and hybrid alpha is a no-op against the
+    # dotproduct Pinecone index (sparse queries fall back to dense-only).
+    retrieval_diversity_lambda: float = 0.7
+    retrieval_hybrid_alpha: float | None = None
     redis_url: str = "redis://127.0.0.1:6379/0"
     celery_enabled: bool = False
     telemetry_enabled: bool = True
     otel_exporter_otlp_endpoint: str = ""
     rag_trace_retention_days: int = 30
     ragas_enabled: bool = False
-    groq_api_key: str | None = None
-    groq_model: str = "openai/gpt-oss-120b"
-    groq_timeout_seconds: float = 60.0
-    groq_max_retries: int = 2
-    groq_max_tokens: int = 1200
+    openrouter_api_key: str | None = None
+    openrouter_model: str = "openrouter/free"
+    openrouter_timeout_seconds: float = 60.0
+    openrouter_max_retries: int = 2
+    # Measured 2026-09: with ~2.5k-token grounded prompts, gpt-oss-120b exhausts
+    # 1200 completion tokens (finish_reason=length, empty content) before
+    # finishing the answer+claims JSON. 3000 completes reliably.
+    openrouter_max_tokens: int = 3000
     rate_limit_per_minute: int = 60
     trust_proxy_headers: bool = False
     chat_retention_days: int = 90
@@ -81,6 +96,22 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
+        if not 1 <= self.ingestion_embedding_batch_size <= 64:
+            raise ValueError("INGESTION_EMBEDDING_BATCH_SIZE must be between 1 and 64.")
+        if self.ingestion_embedding_timeout_seconds <= 0:
+            raise ValueError("INGESTION_EMBEDDING_TIMEOUT_SECONDS must be positive.")
+        if self.ingestion_embedding_max_retries < 0:
+            raise ValueError("INGESTION_EMBEDDING_MAX_RETRIES must not be negative.")
+        if self.ingestion_embedding_retry_initial_seconds < 0:
+            raise ValueError(
+                "INGESTION_EMBEDDING_RETRY_INITIAL_SECONDS must not be negative."
+            )
+        if not 1 <= self.pinecone_upsert_batch_size <= 100:
+            raise ValueError("PINECONE_UPSERT_BATCH_SIZE must be between 1 and 100.")
+        if self.pinecone_write_timeout_seconds <= 0:
+            raise ValueError("PINECONE_WRITE_TIMEOUT_SECONDS must be positive.")
+        if self.pinecone_write_max_retries < 0:
+            raise ValueError("PINECONE_WRITE_MAX_RETRIES must not be negative.")
         if self.app_env.lower() != "production":
             return self
         if self.admin_password == "secret" or len(self.admin_password) < 12:
@@ -97,8 +128,8 @@ class Settings(BaseSettings):
             raise ValueError(
                 "PINECONE_API_KEY is required for the Pinecone vector store."
             )
-        if self.llm_provider == "groq" and not self.groq_api_key:
-            raise ValueError("GROQ_API_KEY is required for the Groq LLM provider.")
+        if self.llm_provider == "openrouter" and not self.openrouter_api_key:
+            raise ValueError("OPENROUTER_API_KEY is required for the OpenRouter LLM provider.")
         if self.vector_store != "pinecone":
             raise ValueError("VECTOR_STORE must be pinecone in production.")
         if self.pinecone_index_name != "kerjapedia-regulations-v2":
@@ -118,8 +149,8 @@ class Settings(BaseSettings):
             )
         if self.embedding_model_revision in {"", "main", "unversioned"}:
             raise ValueError("Production requires a pinned EMBEDDING_MODEL_REVISION.")
-        if self.llm_provider != "groq":
-            raise ValueError("LLM_PROVIDER=groq is required in production.")
+        if self.llm_provider != "openrouter":
+            raise ValueError("LLM_PROVIDER=openrouter is required in production.")
         if (
             self.reranker_provider != "pinecone"
             or self.reranker_model != "bge-reranker-v2-m3"
@@ -127,8 +158,8 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Production requires Pinecone bge-reranker-v2-m3 reranking."
             )
-        if self.claim_verifier_provider != "groq":
-            raise ValueError("CLAIM_VERIFIER_PROVIDER=groq is required in production.")
+        if self.claim_verifier_provider != "openrouter":
+            raise ValueError("CLAIM_VERIFIER_PROVIDER=openrouter is required in production.")
         if not self.claim_verifier_model:
             raise ValueError("CLAIM_VERIFIER_MODEL is required in production.")
         if not self.rag_fail_closed:

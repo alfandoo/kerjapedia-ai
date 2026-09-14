@@ -51,6 +51,15 @@ class RelatedDocument:
 
 
 @dataclass(frozen=True)
+class HistoryTurn:
+    """One prior answered turn, redacted at build time, passed to the LLM
+    so follow-up questions resolve against visible conversation context."""
+
+    question: str
+    answer: str
+
+
+@dataclass(frozen=True)
 class AnswerResponse:
     query: str
     answer: str

@@ -68,3 +68,4 @@ class RetrievalResponse:
     refusal_reason: str | None
     index_release_id: str | None = None
     index_namespace: str | None = None
+    active_release_id: str | None = None

@@ -12,10 +12,11 @@ from fastapi.testclient import TestClient
 from app.api.state import state
 from app.core.config import settings
 from app.main import app
-from app.services.answering.groq_generator import (
-    GroqAnswerGenerator,
+from app.services.answering.openrouter_generator import (
+    OpenRouterAnswerGenerator,
     _clean_answer_text,
 )
+from app.services.answering.schemas import HistoryTurn
 from app.services.ingestion.embeddings import BGEM3EmbeddingProvider
 from app.services.ingestion.schemas import Chunk, DocumentMetadata, EmbeddedChunk
 from app.services.retrieval.pinecone_store import (
@@ -23,7 +24,7 @@ from app.services.retrieval.pinecone_store import (
     PineconeRetrievalStore,
     _pinecone_filter,
 )
-from app.services.retrieval.schemas import RetrievalResponse
+from app.services.retrieval.schemas import RankedChunk, RetrievalDocument, RetrievalResponse
 
 
 class StaticEmbeddingProvider:
@@ -212,7 +213,9 @@ def test_pinecone_search_returns_ranked_retrieval_response() -> None:
     assert isinstance(response, RetrievalResponse)
     assert not response.should_refuse
     assert response.results[0].document.chunk_id == "chunk-1"
-    assert response.results[0].semantic_score == 0.91
+    # Single-candidate semantic scores min-max normalize to 1.0 so the
+    # reranker sees a query-independent scale.
+    assert response.results[0].semantic_score == 1.0
 
 
 def test_pinecone_search_fuses_candidates_across_rewritten_queries() -> None:
@@ -422,7 +425,7 @@ def test_pinecone_filter_applies_explicit_regulation_number_as_hard_filter() -> 
     assert result["year"] == {"$eq": 2016}
 
 
-class FakeGroqClient:
+class FakeOpenRouterClient:
     def __init__(self, payload: dict | str | Exception | list[dict | str | Exception]) -> None:
         self.payloads = payload if isinstance(payload, list) else [payload]
         self.calls = 0
@@ -499,9 +502,9 @@ def test_clean_answer_text_removes_chunk_ids_without_breaking_prose() -> None:
     assert cleaned == "Hak pekerja diatur dalam Pasal 15. Lihat ketentuan terkait."
 
 
-def test_groq_generator_accepts_structured_json() -> None:
-    generator = GroqAnswerGenerator(api_key="test-key")
-    generator._client = FakeGroqClient(
+def test_openrouter_generator_accepts_structured_json() -> None:
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator._client = FakeOpenRouterClient(
         {
             "answer": "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15.",
             "cited_chunk_ids": ["chunk-1"],
@@ -528,9 +531,9 @@ def test_groq_generator_accepts_structured_json() -> None:
     assert "Pekerja PKWT" in answer.answer
 
 
-def test_groq_generator_removes_internal_chunk_ids_from_answer() -> None:
-    generator = GroqAnswerGenerator(api_key="test-key")
-    generator._client = FakeGroqClient(
+def test_openrouter_generator_removes_internal_chunk_ids_from_answer() -> None:
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator._client = FakeOpenRouterClient(
         {
             "answer": (
                 "Pekerja PKWT memperoleh kompensasi [[chunk-1]]. "
@@ -558,7 +561,7 @@ def test_groq_generator_removes_internal_chunk_ids_from_answer() -> None:
     assert "Pasal 15." in answer.answer
 
 
-def test_groq_generator_returns_only_model_selected_citations() -> None:
+def test_openrouter_generator_returns_only_model_selected_citations() -> None:
     retrieval = retrieval_response()
     first = retrieval.results[0]
     second = replace(
@@ -570,8 +573,8 @@ def test_groq_generator_returns_only_model_selected_citations() -> None:
         ),
     )
     retrieval = replace(retrieval, results=[first, second])
-    generator = GroqAnswerGenerator(api_key="test-key")
-    generator._client = FakeGroqClient(
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator._client = FakeOpenRouterClient(
         {
             "answer": "Pembayaran diatur dalam Pasal 16.",
             "cited_chunk_ids": ["chunk-2"],
@@ -590,9 +593,9 @@ def test_groq_generator_returns_only_model_selected_citations() -> None:
     assert answer.related_documents
 
 
-def test_groq_generator_derives_top_level_citations_from_valid_claims() -> None:
-    generator = GroqAnswerGenerator(api_key="test-key")
-    generator._client = FakeGroqClient(
+def test_openrouter_generator_derives_top_level_citations_from_valid_claims() -> None:
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator._client = FakeOpenRouterClient(
         {
             "answer": "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15.",
             "claims": [
@@ -613,8 +616,8 @@ def test_groq_generator_derives_top_level_citations_from_valid_claims() -> None:
     assert answer.citations[0].chunk_id == "chunk-1"
 
 
-def test_groq_generator_repairs_one_invalid_response() -> None:
-    client = FakeGroqClient(
+def test_openrouter_generator_repairs_one_invalid_response() -> None:
+    client = FakeOpenRouterClient(
         [
             {
                 "answer": "Jawaban dengan citation salah.",
@@ -638,7 +641,7 @@ def test_groq_generator_repairs_one_invalid_response() -> None:
             },
         ]
     )
-    generator = GroqAnswerGenerator(api_key="test-key")
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
     generator._client = client
 
     answer = generator.generate(
@@ -655,9 +658,9 @@ def test_groq_generator_repairs_one_invalid_response() -> None:
     )
 
 
-def test_groq_generator_retries_structured_output_bad_request_once() -> None:
+def test_openrouter_generator_retries_structured_output_bad_request_once() -> None:
     bad_request_error = type("BadRequestError", (Exception,), {})
-    client = FakeGroqClient(
+    client = FakeOpenRouterClient(
         [
             bad_request_error("structured output rejected"),
             {
@@ -672,7 +675,7 @@ def test_groq_generator_retries_structured_output_bad_request_once() -> None:
             },
         ]
     )
-    generator = GroqAnswerGenerator(api_key="test-key")
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
     generator._client = client
 
     answer = generator.generate(
@@ -685,10 +688,10 @@ def test_groq_generator_retries_structured_output_bad_request_once() -> None:
     assert client.calls == 2
 
 
-def test_groq_generator_keeps_verified_primary_claim_when_repair_fails() -> None:
+def test_openrouter_generator_keeps_verified_primary_claim_when_repair_fails() -> None:
     bad_request_error = type("BadRequestError", (Exception,), {})
     main_claim = "Pekerja PKWT berhak memperoleh uang kompensasi berdasarkan Pasal 15."
-    client = FakeGroqClient(
+    client = FakeOpenRouterClient(
         [
             {
                 "answer": (f"{main_claim} Denda kompensasi dibayarkan kepada pemerintah daerah."),
@@ -707,7 +710,7 @@ def test_groq_generator_keeps_verified_primary_claim_when_repair_fails() -> None
             bad_request_error("repair request rejected"),
         ]
     )
-    generator = GroqAnswerGenerator(api_key="test-key")
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
     generator._client = client
 
     answer = generator.generate(
@@ -724,9 +727,9 @@ def test_groq_generator_keeps_verified_primary_claim_when_repair_fails() -> None
     assert client.calls == 2
 
 
-def test_groq_generator_fails_closed_without_exposing_raw_chunks() -> None:
-    client = FakeGroqClient(["not-json", "still-not-json"])
-    generator = GroqAnswerGenerator(api_key="test-key", fail_closed=True)
+def test_openrouter_generator_fails_closed_without_exposing_raw_chunks() -> None:
+    client = FakeOpenRouterClient(["not-json", "still-not-json"])
+    generator = OpenRouterAnswerGenerator(api_key="test-key", fail_closed=True)
     generator._client = client
 
     answer = generator.generate(
@@ -750,9 +753,9 @@ def test_groq_generator_fails_closed_without_exposing_raw_chunks() -> None:
         ("Are fixed-term workers entitled to compensation?", "verified answer"),
     ],
 )
-def test_groq_provider_failure_is_localized(query: str, expected: str) -> None:
-    generator = GroqAnswerGenerator(api_key="test-key")
-    generator._client = FakeGroqClient(RuntimeError("provider unavailable"))
+def test_openrouter_provider_failure_is_localized(query: str, expected: str) -> None:
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator._client = FakeOpenRouterClient(RuntimeError("provider unavailable"))
 
     answer = generator.generate(query, retrieval_response())
 
@@ -786,3 +789,205 @@ def test_chat_ask_can_use_configured_pinecone_path(
     payload = response.json()
     assert payload["answer"]["citations"][0]["chunk_id"] == "chunk-1"
     assert asdict(retrieval_response())["results"][0]["document"]["chunk_id"] == "chunk-1"
+
+
+def _ranked_pkwt_chunk() -> RankedChunk:
+    document = RetrievalDocument(
+        chunk_id="chunk-1",
+        document_id="PP-35-2021",
+        text="Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
+        chapter="BAB II",
+        section="PKWT",
+        article="Pasal 15",
+        paragraph="Ayat (1)",
+        page_start=12,
+        page_end=12,
+        token_count=8,
+        topics=["pkwt"],
+        legal_status="active",
+        source_url="https://peraturan.bpk.go.id/",
+        embedding_model="test-embedding",
+        embedding=[1.0] + [0.0] * 1023,
+        metadata={"title": "PP 35/2021", "short_title": "PP 35/2021"},
+    )
+    return RankedChunk(
+        document=document,
+        lexical_score=0.5,
+        semantic_score=0.6,
+        fusion_score=0.02,
+        rerank_score=0.4,
+        final_score=0.4,
+        match_reasons=[],
+    )
+
+
+def test_pinecone_model_rerank_failure_falls_back_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    store = PineconeRetrievalStore(
+        PineconeConfig(api_key="test-key"),
+        StaticEmbeddingProvider(),
+        reranker_provider="pinecone",
+    )
+    monkeypatch.setattr(
+        store,
+        "_pinecone_client",
+        lambda: (_ for _ in ()).throw(RuntimeError("reranker down")),
+    )
+    ranked = [_ranked_pkwt_chunk()]
+
+    result, cross_encoder_ok = store._model_rerank("kompensasi PKWT", ranked)
+
+    assert cross_encoder_ok is False
+    assert result == ranked
+
+
+def test_pinecone_model_rerank_failure_fail_closed_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = PineconeRetrievalStore(
+        PineconeConfig(api_key="test-key"),
+        StaticEmbeddingProvider(),
+        reranker_provider="pinecone",
+        fail_closed=True,
+    )
+    monkeypatch.setattr(
+        store,
+        "_pinecone_client",
+        lambda: (_ for _ in ()).throw(RuntimeError("reranker down")),
+    )
+
+    with pytest.raises(RuntimeError, match="reranker is unavailable"):
+        store._model_rerank("kompensasi PKWT", [_ranked_pkwt_chunk()])
+
+
+def test_pinecone_search_warns_when_cross_encoder_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeIndex:
+        def query(self, **kwargs):
+            return SimpleNamespace(
+                matches=[
+                    SimpleNamespace(
+                        id="chunk-1",
+                        score=0.91,
+                        metadata={
+                            "chunk_id": "chunk-1",
+                            "document_id": "PP-35-2021",
+                            "text": "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
+                            "article": "Pasal 15",
+                            "paragraph": "Ayat (1)",
+                            "page_start": 12,
+                            "page_end": 12,
+                            "token_count": 8,
+                            "topics": ["pkwt"],
+                            "legal_status": "active",
+                            "source_url": "https://peraturan.bpk.go.id/",
+                            "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
+                            "short_title": "PP 35/2021",
+                            "regulation_type": "PP",
+                            "year": 2021,
+                        },
+                    )
+                ]
+            )
+
+    store = PineconeRetrievalStore(
+        PineconeConfig(api_key="test-key"),
+        StaticEmbeddingProvider(),
+        reranker_provider="pinecone",
+    )
+    store._index = FakeIndex()
+    monkeypatch.setattr(
+        store,
+        "_pinecone_client",
+        lambda: (_ for _ in ()).throw(RuntimeError("reranker down")),
+    )
+
+    response = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
+
+    assert not response.should_refuse
+    assert "cross_encoder_rerank_unavailable" in response.warnings
+    assert response.results[0].document.chunk_id == "chunk-1"
+
+
+def _three_chunk_retrieval() -> RetrievalResponse:
+    texts = [
+        ("chunk-1", "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.", "Pasal 15"),
+        (
+            "chunk-2",
+            "Ketentuan perhitungan kompensasi diatur lebih lanjut oleh menteri.",
+            "Pasal 16",
+        ),
+        (
+            "chunk-3",
+            "Waktu kerja lembur diatur dalam peraturan perusahaan tersendiri.",
+            "Pasal 77",
+        ),
+    ]
+    store = PineconeRetrievalStore(
+        PineconeConfig(api_key="test-key"),
+        StaticEmbeddingProvider(),
+    )
+    store._index = SimpleNamespace(
+        query=lambda **_: SimpleNamespace(
+            matches=[
+                SimpleNamespace(
+                    id=chunk_id,
+                    score=0.90 - index * 0.01,
+                    metadata={
+                        "chunk_id": chunk_id,
+                        "document_id": "PP-35-2021",
+                        "text": text,
+                        "article": article,
+                        "page_start": 12,
+                        "page_end": 12,
+                        "token_count": 8,
+                        "topics": ["pkwt"],
+                        "legal_status": "active",
+                        "source_url": "https://peraturan.bpk.go.id/",
+                        "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
+                        "short_title": "PP 35/2021",
+                    },
+                )
+                for index, (chunk_id, text, article) in enumerate(texts)
+            ]
+        )
+    )
+    return store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=3)
+
+
+def test_openrouter_prompt_contains_only_citable_chunks_and_history() -> None:
+    generator = OpenRouterAnswerGenerator(api_key="test-key", max_citations=2)
+    generator._client = FakeOpenRouterClient(
+        {
+            "answer": "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15.",
+            "cited_chunk_ids": ["chunk-1"],
+            "claims": [
+                {
+                    "text": "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15.",
+                    "cited_chunk_ids": ["chunk-1"],
+                }
+            ],
+        }
+    )
+    retrieval = _three_chunk_retrieval()
+    assert len(retrieval.results) == 3
+
+    answer = generator.generate(
+        "Kalau kontraknya dua tahun, berapa kompensasi yang wajib dibayar?",
+        retrieval,
+        history=(
+            HistoryTurn(
+                question="Apakah pekerja PKWT mendapat kompensasi?",
+                answer="Ya, pekerja PKWT berhak memperoleh kompensasi.",
+            ),
+        ),
+    )
+
+    assert answer.refusal_reason is None
+    user_content = generator._client.requests[0]["messages"][1]["content"]
+    assert "[1]" in user_content and "[2]" in user_content
+    assert "[3]" not in user_content
+    assert "Waktu kerja lembur" not in user_content
+    assert "Riwayat percakapan" in user_content
+    assert "Apakah pekerja PKWT mendapat kompensasi?" in user_content
+    assert answer.debug["history_turns"] == 1

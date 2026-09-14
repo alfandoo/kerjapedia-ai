@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--llm-provider",
-        choices=["local", "groq"],
+        choices=["local", "openrouter"],
         default=None,
         help="Answer generation backend. Defaults to LLM_PROVIDER.",
     )

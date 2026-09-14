@@ -891,7 +891,7 @@ def create_rag_release(
         build_status="pending",
         embedding_model=settings.embedding_model,
         reranker_model=settings.reranker_model,
-        generator_model=settings.groq_model,
+        generator_model=settings.openrouter_model,
         verifier_model=settings.claim_verifier_model,
         prompt_version_id=PROMPT_VERSION_ID,
         relationship_snapshot_hash=relationship_hash,
@@ -1254,6 +1254,7 @@ def retrieval_playground(
                 documents=load_artifact_documents(storage_root()),
                 top_k=payload.top_k,
                 relationship_index=relationship_index_for_manifest(dataset_metadata_path()),
+                diversity_lambda=settings.retrieval_diversity_lambda,
             )
             response = engine.search(payload.question, top_k=payload.top_k)
     except RuntimeError as exc:

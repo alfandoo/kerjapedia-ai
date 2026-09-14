@@ -22,6 +22,7 @@ from app.services.answering.schemas import (
     AnswerResponse,
     Citation,
     GroundedClaim,
+    HistoryTurn,
     RelatedDocument,
 )
 from app.services.retrieval.schemas import RankedChunk, RetrievalResponse
@@ -58,14 +59,14 @@ class AnswerValidationError(ValueError):
         self.verified_subset = verified_subset
 
 
-class GroqAnswerGenerator(AnswerGenerator):
+class OpenRouterAnswerGenerator(AnswerGenerator):
     def __init__(
         self,
         api_key: str,
         model_name: str = "openai/gpt-oss-120b",
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
-        max_tokens: int = 1200,
+        max_tokens: int = 3000,
         max_citations: int = 4,
         verifier_provider: str = "deterministic",
         verifier_model: str | None = None,
@@ -82,7 +83,13 @@ class GroqAnswerGenerator(AnswerGenerator):
         self.verifier_model = verifier_model or model_name
         self.fail_closed = fail_closed
 
-    def generate(self, query: str, retrieval: RetrievalResponse) -> AnswerResponse:
+    def generate(
+        self,
+        query: str,
+        retrieval: RetrievalResponse,
+        *,
+        history: tuple[HistoryTurn, ...] | list[HistoryTurn] | None = None,
+    ) -> AnswerResponse:
         if self._needs_clarification(query, retrieval):
             return self._clarification_response(query, retrieval)
 
@@ -112,11 +119,13 @@ class GroqAnswerGenerator(AnswerGenerator):
         for attempt in range(2):
             generation_attempts = attempt + 1
             try:
-                payload = self._call_groq(
+                payload = self._call_openrouter(
                     query,
                     retrieval,
                     retrieved_chunk_ids,
+                    selected,
                     validation_issues=validation_issues,
+                    history=history,
                 )
                 _merge_token_usage(token_usage, payload.get("_token_usage", {}))
                 (
@@ -151,12 +160,13 @@ class GroqAnswerGenerator(AnswerGenerator):
                     retrieved_chunk_ids=retrieved_chunk_ids,
                     warnings=retrieval.warnings,
                     debug={
-                        "llm_provider": "groq",
+                        "llm_provider": "openrouter",
                         "llm_model": self.model_name,
                         "verifier_model": self.verifier_model,
                         "prompt_version_id": self.prompt_template.prompt_version_id,
                         "token_usage": token_usage,
                         "generation_attempts": attempt + 1,
+                        "history_turns": len(tuple(history or [])),
                     },
                     claims=claims,
                 )
@@ -172,7 +182,7 @@ class GroqAnswerGenerator(AnswerGenerator):
                 failure_category = "provider_failure"
                 provider_failure_type = type(exc).__name__
                 logger.warning(
-                    "groq_generation_provider_failure type=%s attempt=%s",
+                    "openrouter_generation_provider_failure type=%s attempt=%s",
                     provider_failure_type,
                     generation_attempts,
                 )
@@ -204,7 +214,7 @@ class GroqAnswerGenerator(AnswerGenerator):
                     dict.fromkeys([*retrieval.warnings, "answer_repaired_by_claim_pruning"])
                 ),
                 debug={
-                    "llm_provider": "groq",
+                    "llm_provider": "openrouter",
                     "llm_model": self.model_name,
                     "verifier_model": self.verifier_model,
                     "failure_category": failure_category,
@@ -325,7 +335,7 @@ class GroqAnswerGenerator(AnswerGenerator):
     ) -> AnswerResponse:
         lang = _detect_language(query)
         logger.warning(
-            "groq_generation_unavailable failure_category=%s provider_failure_type=%s "
+            "openrouter_generation_unavailable failure_category=%s provider_failure_type=%s "
             "attempts=%s issues=%s query=%.120s",
             failure_category,
             provider_failure_type,
@@ -346,7 +356,7 @@ class GroqAnswerGenerator(AnswerGenerator):
             retrieved_chunk_ids=retrieved_chunk_ids,
             warnings=list(dict.fromkeys([*retrieval.warnings, "answer_generation_unavailable"])),
             debug={
-                "llm_provider": "groq",
+                "llm_provider": "openrouter",
                 "llm_model": self.model_name,
                 "verifier_model": self.verifier_model,
                 "failure_category": failure_category,
@@ -360,12 +370,14 @@ class GroqAnswerGenerator(AnswerGenerator):
             answer_status="temporarily_unavailable",
         )
 
-    def _call_groq(
+    def _call_openrouter(
         self,
         query: str,
         retrieval: RetrievalResponse,
         retrieved_chunk_ids: list[str],
+        selected: list[RankedChunk],
         validation_issues: list[str] | None = None,
+        history: tuple[HistoryTurn, ...] | list[HistoryTurn] | None = None,
     ) -> dict[str, Any]:
         lang = _detect_language(query)
         if lang == "id":
@@ -390,7 +402,7 @@ class GroqAnswerGenerator(AnswerGenerator):
             )
         user_prompt = "\n\n".join(
             [
-                render_user_prompt(query, retrieval),
+                render_user_prompt(query, retrieval, selected=selected, history=history),
                 "Return valid JSON only in this format:",
                 (
                     '{"answer":"...","cited_chunk_ids":["..."],'
@@ -419,7 +431,7 @@ class GroqAnswerGenerator(AnswerGenerator):
                 ),
             ]
         )
-        completion = self._groq_client().chat.completions.create(
+        completion = self._openrouter_client().chat.completions.create(
             model=self.model_name,
             messages=[
                 {"role": "system", "content": self.prompt_template.system_prompt},
@@ -435,7 +447,7 @@ class GroqAnswerGenerator(AnswerGenerator):
         except (json.JSONDecodeError, TypeError) as exc:
             raise AnswerValidationError("response is not valid JSON") from exc
         if not isinstance(payload, dict):
-            raise AnswerValidationError("Groq response JSON is not an object")
+            raise AnswerValidationError("OpenRouter response JSON is not an object")
         usage = getattr(completion, "usage", None)
         payload["_token_usage"] = {
             "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
@@ -449,7 +461,7 @@ class GroqAnswerGenerator(AnswerGenerator):
         citations: list[Citation],
     ) -> tuple[list[GroundedClaim], dict[str, int]]:
         deterministic = verify_claims_deterministically(claims, citations)
-        if self.verifier_provider != "groq":
+        if self.verifier_provider != "openrouter":
             return deterministic, {}
         return self._call_claim_verifier(deterministic, citations)
 
@@ -459,7 +471,7 @@ class GroqAnswerGenerator(AnswerGenerator):
         citations: list[Citation],
     ) -> tuple[list[GroundedClaim], dict[str, int]]:
         evidence = {citation.chunk_id: citation.quote for citation in citations}
-        completion = self._groq_client().chat.completions.create(
+        completion = self._openrouter_client().chat.completions.create(
             model=self.verifier_model,
             messages=[
                 {
@@ -523,14 +535,15 @@ class GroqAnswerGenerator(AnswerGenerator):
             "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
         }
 
-    def _groq_client(self):
+    def _openrouter_client(self):
         if self._client is None:
             try:
-                from groq import Groq
+                from openai import OpenAI
             except ImportError as exc:
-                raise RuntimeError("groq is required for LLM_PROVIDER=groq.") from exc
-            self._client = Groq(
+                raise RuntimeError("openai is required for LLM_PROVIDER=openrouter.") from exc
+            self._client = OpenAI(
                 api_key=self.api_key,
+                base_url="https://openrouter.ai/api/v1",
                 timeout=self.timeout_seconds,
                 max_retries=self.max_retries,
             )

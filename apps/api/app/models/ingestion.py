@@ -47,6 +47,10 @@ class DocumentVersion(Base):
     __tablename__ = "document_versions"
     __table_args__ = (
         UniqueConstraint("document_id", "version", name="uq_document_version_number"),
+        UniqueConstraint(
+            "sha256",
+            name="uq_document_versions_source_sha256",
+        ),
         CheckConstraint(
             "source_verification_status IN ('pending', 'verified', 'rejected')",
             name="ck_document_version_source_verification",
@@ -119,6 +123,7 @@ class IngestionBuild(Base):
         UniqueConstraint(
             "version_id",
             "config_hash",
+            "metadata_hash",
             "embedding_model",
             "embedding_revision",
             name="uq_ingestion_build_fingerprint",
@@ -143,6 +148,7 @@ class IngestionBuild(Base):
         ForeignKey("documents.document_id"), nullable=False
     )
     source_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    metadata_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     pipeline_version: Mapped[str] = mapped_column(String(80), nullable=False)
     config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     pipeline_config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
@@ -175,7 +181,19 @@ class IngestionBuild(Base):
 
 class DocumentChunk(Base):
     __tablename__ = "chunks"
-    __table_args__ = (Index("ix_chunks_build_id", "build_id"),)
+    __table_args__ = (
+        CheckConstraint(
+            "page_start > 0 AND page_end >= page_start",
+            name="ck_chunks_page_range",
+        ),
+        UniqueConstraint(
+            "build_id",
+            "chunk_index",
+            name="uq_chunks_build_chunk_index",
+        ),
+        Index("ix_chunks_build_id", "build_id"),
+        Index("ix_chunks_content_hash", "content_hash"),
+    )
 
     chunk_id: Mapped[str] = mapped_column(String(160), primary_key=True)
     document_id: Mapped[str] = mapped_column(
@@ -201,7 +219,22 @@ class DocumentChunk(Base):
         String(40), nullable=False, default="substantive"
     )
     artifact_checksum: Mapped[str | None] = mapped_column(String(64))
+    parent_chunk_id: Mapped[str | None] = mapped_column(
+        ForeignKey("chunks.chunk_id", ondelete="RESTRICT")
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    legal_node_id: Mapped[str | None] = mapped_column(String(200))
+    section_path: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    metadata_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    provenance: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
 
 
 class ChunkEmbedding(Base):

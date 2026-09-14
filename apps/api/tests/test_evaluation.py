@@ -14,13 +14,19 @@ from app.services.evaluation.metrics import (
     reciprocal_rank,
 )
 from app.services.evaluation.runner import (
+    DEFAULT_WEIGHT_SWEEP,
     EXPERIMENT_MODES,
+    _calibrate_threshold_from_scores,
     run_experiment,
     run_experiments,
     run_provider_evaluation,
+    sweep_diversity_lambda,
+    sweep_rerank_weights,
+    tuning_subset,
 )
 from app.services.evaluation.schemas import EvaluationQuestion
 from app.services.ingestion.embeddings import HashEmbeddingProvider
+from app.services.retrieval.reranker import RerankWeights
 from app.services.retrieval.schemas import RetrievalDocument
 
 
@@ -79,22 +85,35 @@ def make_document(
 def test_golden_dataset_has_prd_distribution_and_hard_negatives() -> None:
     metadata, questions = load_evaluation_dataset(golden_dataset_path())
 
-    assert len(questions) == 150
+    assert len(questions) == 300
     assert metadata["distribution"] == {
-        "pkwt": 15,
-        "phk_pesangon": 25,
-        "alih_daya": 10,
-        "waktu_kerja": 10,
-        "pengupahan": 20,
-        "thr": 15,
-        "bpjs_jkp": 20,
-        "k3": 15,
-        "hubungan_industrial": 15,
-        "refusal": 5,
+        "pkwt": 30,
+        "phk_pesangon": 50,
+        "alih_daya": 20,
+        "waktu_kerja": 20,
+        "pengupahan": 40,
+        "thr": 30,
+        "bpjs_jkp": 40,
+        "k3": 30,
+        "hubungan_industrial": 30,
+        "refusal": 10,
     }
     assert sum(question.hard_negative for question in questions) >= 10
-    assert sum(question.should_refuse for question in questions) == 5
+    assert sum(question.should_refuse for question in questions) == 10
     assert all(question.expected_answer for question in questions)
+    splits = {question.split for question in questions}
+    assert splits == {"development", "test"}
+    covered_scenarios = {tag for question in questions for tag in question.scenario_tags}
+    assert {
+        "follow_up",
+        "typo",
+        "bilingual",
+        "topic_switch",
+        "historical",
+        "complex",
+        "hard_negative",
+        "prompt_injection",
+    } <= covered_scenarios
 
 
 def test_evaluation_metrics_are_deterministic() -> None:
@@ -281,3 +300,150 @@ def test_provider_evaluation_requires_development_and_held_out_splits() -> None:
 
     with pytest.raises(ValueError, match="held-out"):
         run_provider_evaluation([question], retriever=None, generator=None)
+
+
+def test_sweep_rerank_weights_reports_sorted_calibration_rows() -> None:
+    documents = [
+        make_document(
+            "pkwt-1",
+            "PP-35-2021",
+            "Pasal 15 pekerja PKWT memperoleh uang kompensasi saat kontrak berakhir.",
+            ["pkwt", "kompensasi"],
+            "Pasal 15",
+        ),
+        make_document(
+            "phk-1",
+            "PP-35-2021",
+            "Pekerja yang terkena PHK memperoleh pesangon dan penggantian hak.",
+            ["phk", "pesangon"],
+            "Pasal 40",
+        ),
+        make_document(
+            "thr-1",
+            "PERMENAKER-6-2016",
+            "THR dibayarkan paling lambat tujuh hari sebelum hari raya keagamaan.",
+            ["thr"],
+            "Pasal 5",
+        ),
+    ]
+    questions = [
+        EvaluationQuestion(
+            "REG-PKWT",
+            "pkwt",
+            "Apakah pekerja PKWT mendapat kompensasi?",
+            "Ya.",
+            ["PP-35-2021"],
+            ["Pasal 15"],
+            ["pkwt"],
+            False,
+        ),
+        EvaluationQuestion(
+            "REG-THR",
+            "thr",
+            "Kapan THR wajib dibayar?",
+            "Tujuh hari sebelum hari raya.",
+            ["PERMENAKER-6-2016"],
+            ["Pasal 5"],
+            ["thr"],
+            False,
+        ),
+    ]
+
+    rows = sweep_rerank_weights(questions, documents, top_k=3)
+
+    assert [row["name"] for row in rows] == [name for name, _ in DEFAULT_WEIGHT_SWEEP]
+    assert all(row["evaluated"] == 2 for row in rows)
+    assert all(set(row["weights"]) == set(DEFAULT_WEIGHT_SWEEP[0][1].__dict__) for row in rows)
+    scores = [(row["mean_recall_at_k"], row["mean_reciprocal_rank"]) for row in rows]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_sweep_rerank_weights_supports_custom_options_and_refusal_only() -> None:
+    documents = [
+        make_document(
+            "pkwt-1",
+            "PP-35-2021",
+            "Pekerja PKWT berhak memperoleh kompensasi.",
+            ["pkwt"],
+            "Pasal 15",
+        )
+    ]
+    refused = EvaluationQuestion(
+        "REF-001",
+        "pkwt",
+        "Rahasia dapur perusahaan apa?",
+        "",
+        [],
+        [],
+        [],
+        True,
+    )
+
+    rows = sweep_rerank_weights(
+        [refused],
+        documents,
+        weight_options=[("custom", RerankWeights(fusion=0.6))],
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["name"] == "custom"
+    assert rows[0]["evaluated"] == 0
+    assert rows[0]["mean_recall_at_k"] == 0.0
+    assert rows[0]["weights"]["fusion"] == 0.6
+
+
+def test_ranking_metrics_count_each_document_once() -> None:
+    retrieved_with_duplicates = ["PP-35-2021", "PP-35-2021", "PP-35-2021"]
+
+    assert ndcg_at_k(["PP-35-2021"], retrieved_with_duplicates, 10) <= 1.0
+    assert ndcg_at_k(["PP-35-2021"], retrieved_with_duplicates, 10) == 1.0
+
+
+def test_tuning_subset_is_stratified_and_development_only() -> None:
+    metadata, questions = load_evaluation_dataset(golden_dataset_path())
+
+    subset = tuning_subset(questions, per_category=2)
+
+    assert len(subset) == 20
+    assert {question.split for question in subset} == {"development"}
+    assert all(
+        sum(1 for question in subset if question.category == category) == 2
+        for category in metadata["distribution"]
+    )
+    assert tuning_subset(questions, per_category=2) == subset
+
+
+def test_sweep_diversity_lambda_reports_sorted_rows() -> None:
+    documents = [
+        make_document(
+            "pkwt-1",
+            "PP-35-2021",
+            "Pekerja PKWT berhak memperoleh kompensasi.",
+            ["pkwt"],
+            "Pasal 15",
+        )
+    ]
+    questions = [
+        EvaluationQuestion(
+            "EXP-001",
+            "pkwt",
+            "Apakah pekerja PKWT memperoleh kompensasi?",
+            "Pekerja PKWT memperoleh kompensasi.",
+            ["PP-35-2021"],
+            ["Pasal 15"],
+            ["pkwt"],
+            False,
+        )
+    ]
+
+    rows = sweep_diversity_lambda(questions, documents, lambda_options=[0.5, 0.9], top_k=3)
+
+    assert [row["diversity_lambda"] for row in rows] == [0.5, 0.9]
+    assert all(row["evaluated"] == 1 for row in rows)
+
+
+def test_calibrate_threshold_prefers_higher_on_ties() -> None:
+    pairs = [(0.9, False), (0.1, True)]
+
+    assert _calibrate_threshold_from_scores(pairs) == 0.9
+    assert _calibrate_threshold_from_scores([]) == 1.0

@@ -14,7 +14,7 @@ def to_jsonable(value: Any) -> Any:
         return to_jsonable(asdict(value))
     if isinstance(value, Path):
         return value.as_posix()
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [to_jsonable(item) for item in value]
     if isinstance(value, dict):
         return {key: to_jsonable(item) for key, item in value.items()}
@@ -91,8 +91,7 @@ class ArtifactStore:
     ) -> str:
         target = self.raw_pdf_path(document_id, version, build_id)
         target.parent.mkdir(parents=True, exist_ok=True)
-        if not target.exists():
-            temporary = target.with_suffix(".pdf.tmp")
-            shutil.copy2(source, temporary)
-            os.replace(temporary, target)
+        temporary = target.with_suffix(".pdf.tmp")
+        shutil.copy2(source, temporary)
+        os.replace(temporary, target)
         return target.as_posix()

@@ -4,12 +4,16 @@ import hashlib
 import math
 import random
 import re
+import time
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
 from openai import OpenAI
+
+from app.services.ingestion.builds import MAX_EMBEDDING_BATCH_SIZE
+from app.services.ingestion.retry import RetryPolicy, run_with_retry, run_with_timeout
 
 
 class EmbeddingProvider(Protocol):
@@ -24,6 +28,32 @@ class EmbeddingProvider(Protocol):
 class HybridEmbeddingBatch:
     dense: list[list[float]]
     sparse: list[dict[int, float]]
+
+
+@dataclass(frozen=True)
+class ReliableEmbeddingBatch:
+    vectors: HybridEmbeddingBatch
+    attempts: int
+    duration_seconds: float
+
+
+class EmbeddingBatchError(RuntimeError):
+    def __init__(
+        self,
+        chunk_ids: list[str],
+        *,
+        attempts: int,
+        cause: Exception,
+        duration_seconds: float = 0.0,
+    ) -> None:
+        self.failed_item_ids = tuple(chunk_ids)
+        self.attempts = attempts
+        self.cause_type = type(cause).__name__
+        self.duration_seconds = duration_seconds
+        super().__init__(
+            f"Embedding failed for {len(chunk_ids)} chunk(s) after {attempts} "
+            f"attempt(s): {self.cause_type}"
+        )
 
 
 _SPARSE_TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
@@ -69,6 +99,102 @@ def embed_hybrid_batched(
         if on_batch is not None:
             on_batch(start, batch)
     return HybridEmbeddingBatch(dense=dense, sparse=sparse)
+
+
+def embed_batch_reliably(
+    provider: EmbeddingProvider,
+    chunk_ids: list[str],
+    texts: list[str],
+    *,
+    expected_dimension: int,
+    require_sparse: bool,
+    timeout_seconds: float,
+    retry_policy: RetryPolicy,
+    sleep: Callable[[float], None] = time.sleep,
+) -> ReliableEmbeddingBatch:
+    """Embed one ordered batch with bounded retries and strict validation."""
+    if not chunk_ids or len(chunk_ids) != len(texts):
+        raise ValueError("chunk_ids and texts must be non-empty and have equal length")
+    if len(chunk_ids) > MAX_EMBEDDING_BATCH_SIZE:
+        raise ValueError(
+            f"Embedding batch exceeds the maximum of {MAX_EMBEDDING_BATCH_SIZE} items"
+        )
+    if len(chunk_ids) != len(set(chunk_ids)):
+        raise ValueError("Embedding batch contains duplicate chunk IDs")
+    attempts = 1
+    started = time.monotonic()
+
+    def on_retry(attempt: int, _delay: float, _exc: Exception) -> None:
+        nonlocal attempts
+        attempts = attempt + 1
+
+    def operation() -> HybridEmbeddingBatch:
+        batch = run_with_timeout(
+            lambda: embed_hybrid(provider, texts),
+            timeout_seconds,
+        )
+        validate_embedding_batch(
+            batch,
+            chunk_ids,
+            expected_dimension=expected_dimension,
+            require_sparse=require_sparse,
+        )
+        return batch
+
+    try:
+        vectors = run_with_retry(
+            operation,
+            policy=retry_policy,
+            on_retry=on_retry,
+            sleep=sleep,
+        )
+    except Exception as exc:
+        raise EmbeddingBatchError(
+            chunk_ids,
+            attempts=attempts,
+            cause=exc,
+            duration_seconds=round(time.monotonic() - started, 6),
+        ) from exc
+    return ReliableEmbeddingBatch(
+        vectors=vectors,
+        attempts=attempts,
+        duration_seconds=round(time.monotonic() - started, 6),
+    )
+
+
+def validate_embedding_batch(
+    batch: HybridEmbeddingBatch,
+    chunk_ids: list[str],
+    *,
+    expected_dimension: int,
+    require_sparse: bool,
+) -> None:
+    if len(batch.dense) != len(chunk_ids) or len(batch.sparse) != len(chunk_ids):
+        raise ValueError(
+            "Embedding provider result count does not match the ordered chunk batch"
+        )
+    for chunk_id, vector, sparse in zip(
+        chunk_ids,
+        batch.dense,
+        batch.sparse,
+        strict=True,
+    ):
+        if len(vector) != expected_dimension:
+            raise ValueError(
+                f"Embedding {chunk_id} has {len(vector)} dimensions; "
+                f"expected {expected_dimension}"
+            )
+        if not vector or any(not math.isfinite(float(value)) for value in vector):
+            raise ValueError(f"Embedding {chunk_id} contains non-finite values")
+        if not any(float(value) != 0.0 for value in vector):
+            raise ValueError(f"Embedding {chunk_id} is a zero vector")
+        if require_sparse and not sparse:
+            raise ValueError(f"Embedding {chunk_id} is missing its sparse vector")
+        if any(
+            int(index) < 0 or not math.isfinite(float(value))
+            for index, value in sparse.items()
+        ):
+            raise ValueError(f"Embedding {chunk_id} has an invalid sparse vector")
 
 
 class HashEmbeddingProvider:
@@ -200,13 +326,25 @@ class BGEM3EmbeddingProvider:
 class OpenAIEmbeddingProvider:
     model_revision = "provider-managed"
 
-    def __init__(self, api_key: str, model_name: str) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str,
+        dimensions: int,
+        timeout_seconds: float = 120.0,
+    ) -> None:
         self.model_name = model_name
-        self.client = OpenAI(api_key=api_key)
+        self.dimensions = dimensions
+        self.client = OpenAI(api_key=api_key, timeout=timeout_seconds, max_retries=0)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        response = self.client.embeddings.create(model=self.model_name, input=texts)
-        return [item.embedding for item in response.data]
+        response = self.client.embeddings.create(
+            model=self.model_name,
+            input=texts,
+            dimensions=self.dimensions,
+        )
+        ordered = sorted(response.data, key=lambda item: int(item.index))
+        return [item.embedding for item in ordered]
 
 
 def build_embedding_provider(
@@ -217,6 +355,7 @@ def build_embedding_provider(
     require_native_sparse: bool = False,
     model_revision: str = "unversioned",
     batch_size: int = 16,
+    timeout_seconds: float = 120.0,
 ) -> EmbeddingProvider:
     if provider_name == "bge_m3":
         return BGEM3EmbeddingProvider(
@@ -236,5 +375,7 @@ def build_embedding_provider(
         return OpenAIEmbeddingProvider(
             api_key=openai_api_key,
             model_name=model_name or "text-embedding-3-small",
+            dimensions=dimensions,
+            timeout_seconds=timeout_seconds,
         )
     raise ValueError(f"Unsupported embedding provider: {provider_name}")

@@ -6,18 +6,23 @@ from app.services.retrieval.postprocessing import (
     apply_query_focus_adjustments,
     apply_relationship_adjustments,
     build_warnings,
-    diversify_ranked,
     drop_heading_only_chunks,
     expand_context,
+    mmr_select,
 )
 from app.services.retrieval.query import is_employment_query, understand_query
 from app.services.retrieval.relationships import (
     RelationshipIndex,
     build_relationship_index,
 )
-from app.services.retrieval.reranker import rerank_score
+from app.services.retrieval.reranker import DEFAULT_RERANK_WEIGHTS, RerankWeights, rerank_score
 from app.services.retrieval.schemas import RankedChunk, RetrievalDocument, RetrievalResponse
-from app.services.retrieval.scoring import cosine_similarity, lexical_score, reciprocal_rank_fusion
+from app.services.retrieval.scoring import (
+    cosine_similarity,
+    lexical_score,
+    normalize_scores,
+    reciprocal_rank_fusion,
+)
 
 
 class RetrievalEngine:
@@ -27,12 +32,16 @@ class RetrievalEngine:
         min_final_score: float = 0.08,
         top_k: int = 5,
         relationship_index: RelationshipIndex | None = None,
+        rerank_weights: RerankWeights | None = None,
+        diversity_lambda: float = 0.7,
     ) -> None:
         self.documents = documents
         self.min_final_score = min_final_score
         self.top_k = top_k
         self.relationship_index = relationship_index or build_relationship_index([])
         self.embedding_provider = HashEmbeddingProvider()
+        self.rerank_weights = rerank_weights or DEFAULT_RERANK_WEIGHTS
+        self.diversity_lambda = diversity_lambda
 
     def search(
         self,
@@ -100,6 +109,7 @@ class RetrievalEngine:
         ]
         fusion_scores = reciprocal_rank_fusion([lexical_ranking, semantic_ranking])
         by_id = {document.chunk_id: document for document in candidates}
+        normalized_semantic = normalize_scores(semantic_scores)
 
         ranked: list[RankedChunk] = []
         for chunk_id, fusion_score in fusion_scores.items():
@@ -108,14 +118,15 @@ class RetrievalEngine:
                 understanding,
                 document,
                 lexical_scores.get(chunk_id, 0.0),
-                semantic_scores.get(chunk_id, 0.0),
+                normalized_semantic.get(chunk_id, 0.0),
                 fusion_score,
+                weights=self.rerank_weights,
             )
             ranked.append(
                 RankedChunk(
                     document=document,
                     lexical_score=round(lexical_scores.get(chunk_id, 0.0), 6),
-                    semantic_score=round(semantic_scores.get(chunk_id, 0.0), 6),
+                    semantic_score=round(normalized_semantic.get(chunk_id, 0.0), 6),
                     fusion_score=round(fusion_score, 6),
                     rerank_score=round(rerank, 6),
                     final_score=round(rerank, 6),
@@ -130,7 +141,16 @@ class RetrievalEngine:
             understanding.normalized_retrieval_query,
         )
         ranked = drop_heading_only_chunks(ranked)
-        ranked = diversify_ranked(ranked)
+        # MMR is quadratic in the pool size, so rerank a bounded head pool:
+        # only ranked[:limit] survives downstream, the rest is headroom for
+        # the per-document/article caps. The input is already score-sorted.
+        ranked = mmr_select(
+            ranked,
+            lambda_param=self.diversity_lambda,
+            top_k=min(max(limit * 2, 50), 200),
+            max_per_document=3,
+            max_per_article=2,
+        )
         expanded = expand_context(ranked[:limit], candidates)
         warnings = build_warnings(expanded, self.relationship_index)
         should_refuse = not expanded or expanded[0].final_score < self.min_final_score

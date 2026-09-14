@@ -1,9 +1,16 @@
 from __future__ import annotations
 
-from app.services.answering.schemas import PromptTemplate
-from app.services.retrieval.schemas import RetrievalResponse
+from app.services.answering.citations import compact_text
+from app.services.answering.schemas import HistoryTurn, PromptTemplate
+from app.services.retrieval.schemas import RankedChunk, RetrievalResponse
 
-PROMPT_VERSION_ID = "kerjapedia-grounded-answer-v5"
+PROMPT_VERSION_ID = "kerjapedia-grounded-answer-v6"
+
+# Context budget: only citable chunks reach the model, each truncated so a
+# single long chunk cannot crowd out the rest of the evidence.
+MAX_CONTEXT_CHUNK_CHARS = 2000
+MAX_HISTORY_TURNS = 2
+MAX_HISTORY_ENTRY_CHARS = 500
 
 SYSTEM_PROMPT = "\n".join(
     [
@@ -61,7 +68,7 @@ SYSTEM_PROMPT = "\n".join(
 USER_TEMPLATE = """Pertanyaan pengguna:
 {query}
 
-Konteks terpilih (sumber hukum):
+{history_block}Konteks terpilih (sumber hukum, hanya chunk ini yang boleh dikutip):
 {context}
 
 Mulai langsung dari inti jawaban. Pertanyaan sederhana dijawab dalam 2-5 kalimat.
@@ -84,18 +91,51 @@ def default_prompt_template() -> PromptTemplate:
     )
 
 
-def render_user_prompt(query: str, retrieval: RetrievalResponse) -> str:
+def render_history_block(history: tuple[HistoryTurn, ...] | list[HistoryTurn] | None) -> str:
+    """Render at most MAX_HISTORY_TURNS prior turns for follow-up resolution.
+
+    Returns an empty string when there is no history so the template collapses
+    back to the single-turn shape.
+    """
+    turns = list(history or [])[-MAX_HISTORY_TURNS:]
+    if not turns:
+        return ""
+    lines = []
+    for turn in turns:
+        question = compact_text(turn.question, MAX_HISTORY_ENTRY_CHARS)
+        answer = compact_text(turn.answer, MAX_HISTORY_ENTRY_CHARS)
+        lines.append(f"Sebelumnya — Pengguna: {question}\nSebelumnya — Asisten: {answer}")
+    header = "Riwayat percakapan (hanya untuk konteks pertanyaan lanjutan):\n"
+    return header + "\n\n".join(lines) + "\n\n"
+
+
+def render_user_prompt(
+    query: str,
+    retrieval: RetrievalResponse,
+    *,
+    selected: list[RankedChunk] | None = None,
+    max_chunk_chars: int = MAX_CONTEXT_CHUNK_CHARS,
+    history: tuple[HistoryTurn, ...] | list[HistoryTurn] | None = None,
+) -> str:
+    # Only citable chunks are rendered: extra retrieved chunks cost tokens
+    # without being quotable, and push cited evidence out of attention.
+    chunks = list(selected) if selected is not None else retrieval.results
     context_lines = []
-    for index, item in enumerate(retrieval.results, start=1):
+    for index, item in enumerate(chunks, start=1):
         document = item.document
         metadata = document.metadata
         short_title = metadata.get("short_title") or document.document_id
         article = document.article or "Tanpa pasal"
         paragraph = f", {document.paragraph}" if document.paragraph else ""
+        text = compact_text(document.text, max_chunk_chars)
         context_lines.append(
             f"[{index}] {short_title}, {article}{paragraph}, "
-            f"hal. {document.page_start}-{document.page_end}: {document.text}"
+            f"hal. {document.page_start}-{document.page_end}: {text}"
         )
 
     context = "\n\n".join(context_lines) if context_lines else "Tidak ada konteks."
-    return USER_TEMPLATE.format(query=query, context=context)
+    return USER_TEMPLATE.format(
+        query=query,
+        history_block=render_history_block(history),
+        context=context,
+    )

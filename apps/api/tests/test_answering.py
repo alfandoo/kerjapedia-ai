@@ -3,10 +3,13 @@ from app.services.answering.claim_verifier import (
     verify_claims_deterministically,
 )
 from app.services.answering.generator import AnswerGenerator, _detect_language
-from app.services.answering.schemas import Citation, GroundedClaim
+from app.services.answering.memory_hardening import build_history_turns
+from app.services.answering.prompts import MAX_CONTEXT_CHUNK_CHARS, render_user_prompt
+from app.services.answering.schemas import Citation, GroundedClaim, HistoryTurn
 from app.services.ingestion.embeddings import HashEmbeddingProvider
 from app.services.retrieval.engine import RetrievalEngine
-from app.services.retrieval.schemas import RetrievalDocument
+from app.services.retrieval.query import understand_query
+from app.services.retrieval.schemas import RankedChunk, RetrievalDocument, RetrievalResponse
 
 
 def make_document(
@@ -67,7 +70,7 @@ def test_answer_generation_returns_structured_citations() -> None:
     assert response.citations[0].article == "Pasal 15"
     assert response.confidence > 0
     assert response.related_documents[0].short_title == "PP 35/2021"
-    assert response.prompt_version_id == "kerjapedia-grounded-answer-v5"
+    assert response.prompt_version_id == "kerjapedia-grounded-answer-v6"
     assert "\n-" not in response.answer
     assert "cit_001" not in response.answer
     assert "PP 35/2021" in response.answer
@@ -300,8 +303,7 @@ def test_claim_verifier_matches_spelled_out_indonesian_numbers() -> None:
         page_start=1,
         page_end=1,
         quote=(
-            "Pengusaha wajib membayar THR paling lambat tujuh hari "
-            "sebelum hari raya keagamaan."
+            "Pengusaha wajib membayar THR paling lambat tujuh hari sebelum hari raya keagamaan."
         ),
         source_url="https://peraturan.bpk.go.id/",
         local_file=None,
@@ -368,3 +370,156 @@ def test_answer_generation_asks_clarification_for_ambiguous_question() -> None:
     assert response.clarification_question is not None
     assert response.refusal_reason is None
     assert response.citations == []
+
+
+def _ranked_chunk(chunk_id: str, text: str) -> RankedChunk:
+    return RankedChunk(
+        document=make_document(chunk_id, text, ["pkwt"], article="Pasal 15"),
+        lexical_score=0.9,
+        semantic_score=0.9,
+        fusion_score=0.05,
+        rerank_score=0.8,
+        final_score=0.8,
+        match_reasons=[],
+    )
+
+
+def _retrieval_with_chunks(texts: list[str]):
+    engine = RetrievalEngine(
+        documents=[
+            make_document(f"chunk-{index}", text, ["pkwt"], article=f"Pasal {15 + index}")
+            for index, text in enumerate(texts)
+        ],
+        top_k=len(texts),
+    )
+    return engine.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=len(texts))
+
+
+def test_render_user_prompt_limits_context_to_selected_chunks() -> None:
+    understanding = understand_query("Berapa kompensasi PKWT?")
+    texts = [
+        "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
+        "Ketentuan perhitungan kompensasi diatur lebih lanjut oleh menteri.",
+        "Serikat pekerja berhak membuat perjanjian kerja bersama.",
+        "Pengusaha wajib membayar upah tepat waktu setiap bulan.",
+        "Waktu kerja lembur diatur dalam peraturan perusahaan.",
+    ]
+    retrieval = RetrievalResponse(
+        query=understanding,
+        results=[_ranked_chunk(f"chunk-{index}", text) for index, text in enumerate(texts)],
+        warnings=[],
+        should_refuse=False,
+        refusal_reason=None,
+    )
+    selected = retrieval.results[:2]
+
+    prompt = render_user_prompt("Berapa kompensasi PKWT?", retrieval, selected=selected)
+
+    assert "[1]" in prompt and "[2]" in prompt
+    assert "[3]" not in prompt
+    assert "Waktu kerja lembur" not in prompt
+    assert "hanya chunk ini yang boleh dikutip" in prompt
+
+
+def test_render_user_prompt_truncates_long_chunks() -> None:
+    long_text = "Ketentuan kompensasi PKWT berlaku. " * 200
+    retrieval = _retrieval_with_chunks([long_text])
+
+    prompt = render_user_prompt("Berapa kompensasi PKWT?", retrieval)
+
+    assert len(long_text) > MAX_CONTEXT_CHUNK_CHARS
+    assert long_text not in prompt
+    assert prompt.count("Konteks terpilih") == 1
+
+
+def test_render_user_prompt_renders_history_and_collapses_without_it() -> None:
+    retrieval = _retrieval_with_chunks(["Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi."])
+
+    without_history = render_user_prompt("Berapa besarnya?", retrieval)
+    assert "Riwayat percakapan" not in without_history
+
+    with_history = render_user_prompt(
+        "Kalau kontraknya dua tahun?",
+        retrieval,
+        history=(
+            HistoryTurn(
+                question="Apakah pekerja PKWT mendapat kompensasi?",
+                answer="Pekerja PKWT berhak memperoleh uang kompensasi.",
+            ),
+        ),
+    )
+    assert "Riwayat percakapan" in with_history
+    assert "Apakah pekerja PKWT mendapat kompensasi?" in with_history
+    assert "berhak memperoleh uang kompensasi" in with_history
+
+    many_turns = tuple(
+        HistoryTurn(question=f"Pertanyaan {index}?", answer=f"Jawaban {index}.")
+        for index in range(4)
+    )
+    capped = render_user_prompt("Lanjut?", retrieval, history=many_turns)
+    assert "Pertanyaan 0?" not in capped
+    assert "Pertanyaan 3?" in capped
+
+
+def test_base_generator_accepts_history_for_interface_parity() -> None:
+    retrieval = _retrieval_with_chunks(["Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi."])
+
+    response = AnswerGenerator().generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval,
+        history=(HistoryTurn(question="Apa itu PKWT?", answer="Perjanjian Kerja Waktu Tertentu."),),
+    )
+
+    assert response.refusal_reason is None
+    assert response.debug["history_turns"] == 1
+
+
+def test_build_history_turns_collects_only_answered_cited_turns() -> None:
+    def user(content: str) -> dict:
+        return {"role": "user", "content": content, "message_id": "u-1"}
+
+    def assistant(content: str, *, answered: bool = True) -> dict:
+        return {
+            "role": "assistant",
+            "content": content,
+            "metadata": {
+                "answer": {
+                    "answer_status": "answered" if answered else "refused",
+                    "refusal_reason": None if answered else "insufficient_context",
+                    "citations": [{"chunk_id": "chunk-1"}] if answered else [],
+                }
+            },
+        }
+
+    messages = [
+        user("Apakah pekerja PKWT mendapat kompensasi?"),
+        assistant("Pekerja PKWT berhak memperoleh uang kompensasi."),
+        user("Rahasia yang tidak ada jawabannya"),
+        assistant("Informasi tidak ditemukan.", answered=False),
+        user("Kapan dibayar?"),
+        assistant("Kompensasi dibayar saat kontrak berakhir."),
+    ]
+
+    turns = build_history_turns(messages)
+
+    assert len(turns) == 2
+    assert turns[0].question == "Apakah pekerja PKWT mendapat kompensasi?"
+    assert turns[1].answer == "Kompensasi dibayar saat kontrak berakhir."
+
+
+def test_build_history_turns_skips_turns_containing_sensitive_data() -> None:
+    messages = [
+        {"role": "user", "content": "Gaji saya 5000000, hubungi 081234567890 ya"},
+        {
+            "role": "assistant",
+            "content": "Aturan pengupahan berlaku umum.",
+            "metadata": {
+                "answer": {
+                    "answer_status": "answered",
+                    "citations": [{"chunk_id": "chunk-1"}],
+                }
+            },
+        },
+    ]
+
+    assert build_history_turns(messages) == ()

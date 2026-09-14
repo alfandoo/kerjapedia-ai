@@ -202,7 +202,7 @@ def create_evaluation_run(
         } != {
             "embedding": settings.embedding_model,
             "reranker": settings.reranker_model,
-            "generator": settings.groq_model,
+            "generator": settings.openrouter_model,
             "verifier": settings.claim_verifier_model,
             "prompt": PROMPT_VERSION_ID,
         }:
@@ -229,9 +229,9 @@ def create_evaluation_run(
         if not (
             settings.vector_store == "pinecone"
             and settings.embedding_provider == "bge_m3"
-            and settings.llm_provider == "groq"
+            and settings.llm_provider == "openrouter"
             and settings.reranker_provider == "pinecone"
-            and settings.claim_verifier_provider == "groq"
+            and settings.claim_verifier_provider == "openrouter"
             and settings.rag_fail_closed
         ):
             raise HTTPException(

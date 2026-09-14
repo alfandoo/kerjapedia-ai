@@ -8,11 +8,13 @@ from dataclasses import asdict, dataclass
 from importlib import metadata
 from typing import Any
 
-PIPELINE_VERSION = "kerjapedia-ingestion-v2"
-PARSER_VERSION = "kerjapedia-legal-parser-v2"
-CHUNKER_VERSION = "kerjapedia-legal-chunker-v2"
-OCR_PROFILE_VERSION = "ocrmypdf-ind-eng-v1"
+PIPELINE_VERSION = "kerjapedia-ingestion-v15-amendment-provenance"
+PARSER_VERSION = "kerjapedia-legal-parser-v10"
+CHUNKER_VERSION = "kerjapedia-legal-chunker-v6"
+OCR_PROFILE_VERSION = "ocrmypdf-page-fallback-v2"
 DEFAULT_BGE_M3_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
+BUILD_IDENTITY_SCHEMA_VERSION = "build-identity-v2"
+MAX_EMBEDDING_BATCH_SIZE = 64
 
 
 @dataclass(frozen=True)
@@ -27,12 +29,31 @@ class IngestionBuildConfig:
     min_merge_tokens: int = 180
     parent_tokens: int = 1200
     embedding_batch_size: int = 16
+    embedding_timeout_seconds: float = 120.0
+    embedding_max_retries: int = 3
+    embedding_retry_initial_seconds: float = 1.0
     ocr_jobs: int = 2
     embedding_model: str = "BAAI/bge-m3"
     embedding_revision: str = DEFAULT_BGE_M3_REVISION
     embedding_dimension: int = 1024
     require_native_sparse: bool = True
+    evaluation_thresholds: dict[str, int | float] | None = None
     runtime: dict[str, str] | None = None
+
+    def __post_init__(self) -> None:
+        if not 1 <= self.embedding_batch_size <= MAX_EMBEDDING_BATCH_SIZE:
+            raise ValueError(
+                f"embedding_batch_size must be between 1 and "
+                f"{MAX_EMBEDDING_BATCH_SIZE}"
+            )
+        if self.embedding_timeout_seconds <= 0:
+            raise ValueError("embedding_timeout_seconds must be positive")
+        if self.embedding_max_retries < 0:
+            raise ValueError("embedding_max_retries must not be negative")
+        if self.embedding_retry_initial_seconds < 0:
+            raise ValueError("embedding_retry_initial_seconds must not be negative")
+        if self.embedding_dimension < 1:
+            raise ValueError("embedding_dimension must be positive")
 
     def payload(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -54,6 +75,7 @@ class IngestionBuildConfig:
 class BuildIdentity:
     build_id: str
     config_hash: str
+    metadata_hash: str
     config: IngestionBuildConfig
 
 
@@ -61,15 +83,55 @@ def make_build_identity(
     document_id: str,
     source_sha256: str,
     config: IngestionBuildConfig,
+    metadata_hash: str | None = None,
 ) -> BuildIdentity:
+    resolved_metadata_hash = metadata_hash or hashlib.sha256(b"unscoped").hexdigest()
     digest = hashlib.sha256(
-        f"{document_id}:{source_sha256}:{config.config_hash}".encode()
+        ":".join(
+            (
+                BUILD_IDENTITY_SCHEMA_VERSION,
+                document_id,
+                source_sha256,
+                resolved_metadata_hash,
+                config.config_hash,
+            )
+        ).encode()
     ).hexdigest()
     return BuildIdentity(
         build_id=f"ingb_{digest[:32]}",
         config_hash=config.config_hash,
+        metadata_hash=resolved_metadata_hash,
         config=config,
     )
+
+
+def document_metadata_hash(document: Any) -> str:
+    """Hash retrieval-relevant source metadata using a canonical representation."""
+    payload = {
+        "document_id": str(document.document_id),
+        "title": str(document.title),
+        "short_title": str(document.short_title),
+        "regulation_type": str(document.regulation_type),
+        "number": int(document.number),
+        "year": int(document.year),
+        "issuer": str(document.issuer),
+        "topics": sorted(str(topic) for topic in document.topics),
+        "legal_status": str(document.legal_status),
+        "source_name": str(document.source_name),
+        "source_url": str(document.source_url),
+        "local_file": str(document.local_file),
+        "file_name": str(document.file_name),
+        "size_bytes": int(document.size_bytes),
+        "sha256": str(document.sha256),
+        "verification_status": str(document.verification_status),
+    }
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def provider_revision(provider: object) -> str:
@@ -125,6 +187,11 @@ def build_config_from_settings(
         min_merge_tokens=int(settings.ingestion_min_merge_tokens),
         parent_tokens=int(settings.ingestion_parent_tokens),
         embedding_batch_size=int(settings.ingestion_embedding_batch_size),
+        embedding_timeout_seconds=float(settings.ingestion_embedding_timeout_seconds),
+        embedding_max_retries=int(settings.ingestion_embedding_max_retries),
+        embedding_retry_initial_seconds=float(
+            settings.ingestion_embedding_retry_initial_seconds
+        ),
         ocr_jobs=max(1, min(int(settings.ingestion_ocr_jobs), 2)),
         embedding_model=str(provider.model_name),
         embedding_revision=provider_revision(provider),
