@@ -12,6 +12,7 @@ from app.services.ingestion.external_embeddings import (
     accept_external_embeddings,
 )
 from app.services.ingestion.external_vector_indexing import (
+    APPROVED_GOVERNANCE_MARKERS,
     ExternalStagingIndexError,
     StagingIndexConfig,
     _is_namespace_not_found,
@@ -153,6 +154,29 @@ def test_stages_and_verifies_all_external_vectors(tmp_path: Path) -> None:
     assert store.vectors["chunk-1"]["publication_status"] == "draft"
     manifest = json.loads(paths[4].read_text(encoding="utf-8"))
     assert manifest["expected_vector_ids"] == ["chunk-1", "chunk-2"]
+
+
+def test_approved_markers_override_staging_defaults(tmp_path: Path) -> None:
+    paths = _fixture(tmp_path)
+    store = FakeStagingStore()
+
+    stage_external_embeddings(
+        store=store,
+        chunks_path=paths[0],
+        embeddings_path=paths[1],
+        colab_manifest_path=paths[2],
+        import_receipt_path=paths[3],
+        staging_manifest_path=paths[4],
+        namespace="production",
+        config=StagingIndexConfig(batch_size=2, retry_initial_seconds=0),
+        sleep=lambda _: None,
+        governance_markers=APPROVED_GOVERNANCE_MARKERS,
+    )
+
+    assert store.vectors["chunk-1"]["publication_status"] == "published"
+    assert store.vectors["chunk-1"]["source_verification_status"] == "verified"
+    assert store.vectors["chunk-1"]["legal_review_status"] == "verified"
+    assert store.vectors["chunk-1"]["is_current"] is True
 
 
 def test_failed_batch_is_cleaned_and_never_receipted_as_verified(tmp_path: Path) -> None:

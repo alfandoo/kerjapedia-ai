@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
 from app.api.dependencies import AdminUser, DbSession, LegalReviewerUser
 from app.api.schemas import (
@@ -12,21 +12,17 @@ from app.api.schemas import (
     EvaluationRunRequest,
 )
 from app.api.state import now_utc
-from app.api.utils import project_root, storage_root
+from app.api.utils import project_root
 from app.core.config import settings
 from app.models.business import EvaluationDataset, EvaluationQuestionReview, EvaluationRun
 from app.models.ingestion import DocumentRelationship, RagIndexRelease
 from app.services.answering.prompts import PROMPT_VERSION_ID
 from app.services.evaluation.dataset import load_evaluation_dataset
-from app.services.evaluation.policy import RELEASE_QUALITY_GATES, REQUIRED_RELEASE_SCENARIOS
-from app.services.evaluation.ragas_metrics import build_ragas_faithfulness
+from app.services.evaluation.policy import REQUIRED_RELEASE_SCENARIOS
 from app.services.evaluation.reviews import verified_question_reviewers
-from app.services.evaluation.runner import run_experiments, run_provider_evaluation
 from app.services.evaluation.schemas import EvaluationQuestion
-from app.services.providers import answer_generator_from_settings, pinecone_store_from_settings
-from app.services.retrieval.governance import load_retrieval_governance
+from app.services.evaluation.tasks import execute_evaluation_run
 from app.services.retrieval.relationships import relationship_snapshot_hash
-from app.services.retrieval.store import load_artifact_documents
 
 router = APIRouter(prefix="/evaluation", tags=["evaluation"])
 
@@ -140,9 +136,10 @@ def load_seed_dataset(session: DbSession, _: AdminUser) -> dict:
     }
 
 
-@router.post("/runs")
+@router.post("/runs", status_code=status.HTTP_202_ACCEPTED)
 def create_evaluation_run(
     payload: EvaluationRunRequest,
+    background_tasks: BackgroundTasks,
     session: DbSession,
     _: AdminUser,
 ) -> dict:
@@ -238,70 +235,42 @@ def create_evaluation_run(
                 status_code=409,
                 detail="Release evaluation requires the fail-closed production RAG providers.",
             )
-        governance = load_retrieval_governance(session, allow_unpublished=False)
-        report = run_provider_evaluation(
-            questions=questions,
-            retriever=pinecone_store_from_settings(
-                settings,
-                namespace=release.namespace,
-                relationship_index=governance.relationship_index,
-                allow_unpublished=False,
-            ),
-            generator=answer_generator_from_settings(settings),
-            top_k=payload.top_k,
-            ragas_scorer=(build_ragas_faithfulness(settings) if settings.ragas_enabled else None),
-        )
-        report["provenance"] = {
-            "release_id": release.release_id,
-            "namespace": release.namespace,
-            "embedding_model": release.embedding_model,
-            "reranker_model": release.reranker_model,
-            "generator_model": release.generator_model,
-            "verifier_model": release.verifier_model,
-            "prompt_version_id": release.prompt_version_id,
-            "relationship_snapshot_hash": release.relationship_snapshot_hash,
-        }
-    else:
-        documents = load_artifact_documents(storage_root())
-        report = run_experiments(
-            questions=questions,
-            documents=documents,
-            modes=payload.experiment_modes,
-            top_k=payload.top_k,
-        )
-
+        development_count = sum(1 for question in questions if question.split == "development")
+    held_out_count = sum(1 for question in questions if question.split == "test")
+    progress_total = (
+        (development_count + held_out_count)
+        if payload.release_id
+        else len(questions) * len(payload.experiment_modes)
+    )
     run_id = f"evalrun_{uuid4().hex}"
     run = EvaluationRun(
         run_id=run_id,
         dataset_id=payload.dataset_id,
         release_id=payload.release_id,
-        metrics={experiment["mode"]: experiment["metrics"] for experiment in report["experiments"]},
-        report=report,
+        metrics={},
+        report={},
+        status="pending",
+        progress_completed=0,
+        progress_total=progress_total,
+        error=None,
         created_at=now_utc(),
     )
     session.add(run)
     session.commit()
-    # Evaluate quality gates against the primary experiment mode metrics.
-    primary_mode = report["experiments"][0]["mode"] if report.get("experiments") else "rerank"
-    primary_metrics = run.metrics.get(primary_mode, {})
-    quality_gate_results = {}
-    for gate_name, threshold in RELEASE_QUALITY_GATES.items():
-        actual = primary_metrics.get(gate_name)
-        quality_gate_results[gate_name] = {
-            "threshold": threshold,
-            "actual": actual,
-            "passed": actual is not None and actual >= threshold,
-        }
-    all_gates_passed = all(result["passed"] for result in quality_gate_results.values())
+    background_tasks.add_task(
+        execute_evaluation_run, run_id, list(payload.experiment_modes), payload.top_k
+    )
     return {
         "run_id": run_id,
         "dataset_id": payload.dataset_id,
         "release_id": payload.release_id,
+        "status": run.status,
+        "progress_completed": run.progress_completed,
+        "progress_total": run.progress_total,
+        "error": run.error,
         "created_at": run.created_at,
         "metrics": run.metrics,
-        "report": report,
-        "quality_gates": quality_gate_results,
-        "all_quality_gates_passed": all_gates_passed,
+        "report": run.report,
     }
 
 
@@ -313,6 +282,10 @@ def list_evaluation_runs(_: AdminUser, session: DbSession) -> list[dict]:
             "run_id": r.run_id,
             "dataset_id": r.dataset_id,
             "release_id": r.release_id,
+            "status": r.status,
+            "progress_completed": r.progress_completed,
+            "progress_total": r.progress_total,
+            "error": r.error,
             "created_at": r.created_at,
             "metrics": r.metrics,
         }
@@ -332,6 +305,10 @@ def get_evaluation_run(run_id: str, session: DbSession, _: AdminUser) -> dict:
         "run_id": run.run_id,
         "dataset_id": run.dataset_id,
         "release_id": run.release_id,
+        "status": run.status,
+        "progress_completed": run.progress_completed,
+        "progress_total": run.progress_total,
+        "error": run.error,
         "created_at": run.created_at,
         "metrics": run.metrics,
         "report": run.report,

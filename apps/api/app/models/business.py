@@ -5,9 +5,11 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -152,6 +154,10 @@ class EvaluationRun(Base):
     release_id: Mapped[str | None] = mapped_column(ForeignKey("rag_index_releases.release_id"))
     metrics: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     report: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    progress_completed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    progress_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -206,3 +212,44 @@ class DailyUsage(Base):
     prompt_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RagRequestObservation(Base):
+    """One durable row per completed chat turn for the observability page."""
+
+    __tablename__ = "rag_request_observations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    outcome: Mapped[str] = mapped_column(String(40), nullable=False, default="unknown")
+    request_latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prompt_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    llm_model: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    claims_supported: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    claims_unsupported: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    topic: Mapped[str] = mapped_column(String(120), nullable=False, default="unknown")
+    is_followup: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    stage_latencies: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
+
+class RagProviderError(Base):
+    """Provider failure events; kept separate so failed turns stay countable."""
+
+    __tablename__ = "rag_provider_errors"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    stage: Mapped[str] = mapped_column(String(80), nullable=False)
+    provider: Mapped[str] = mapped_column(String(120), nullable=False)
+
+
+class RagRagasEval(Base):
+    """Online RAGAS evaluation attempts with their sampled score."""
+
+    __tablename__ = "rag_ragas_evals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)

@@ -8,7 +8,10 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
+from sqlalchemy import Float as sa_Float
+from sqlalchemy import cast as sa_cast
 from sqlalchemy import func as sa_func
+from sqlalchemy import text as sa_text
 
 from app.api.dependencies import AdminUser, DbSession
 from app.api.schemas import (
@@ -38,6 +41,9 @@ from app.models.business import (
     EvaluationRun,
     Feedback,
     Message,
+    RagProviderError,
+    RagRagasEval,
+    RagRequestObservation,
     UploadedDocument,
     UserProfile,
 )
@@ -269,189 +275,158 @@ def admin_stats(session: DbSession, _: AdminUser) -> dict:
     return result
 
 
-_METRIC_LINE_RE = re.compile(
-    r"^([a-zA-Z_:][a-zA-Z0-9_:]*)\s*(\{[^}]*\})?\s+"
-    r"([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?|NaN|\+Inf|-Inf)\s*$"
-)
-_METRIC_LABEL_RE = re.compile(r'(\w+)="((?:[^"\\]|\\.)*)"')
 
 
-def _parse_prometheus_text(payload: str) -> dict[tuple[str, tuple[tuple[str, str], ...]], float]:
-    samples: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
-    for line in payload.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        match = _METRIC_LINE_RE.match(line)
-        if not match:
-            continue
-        name, raw_labels, raw_value = match.groups()
-        try:
-            value = float(raw_value)
-        except ValueError:
-            continue
-        labels: dict[str, str] = {}
-        if raw_labels:
-            for key, val in _METRIC_LABEL_RE.findall(raw_labels):
-                labels[key] = val.replace('\\"', '"').replace("\\\\", "\\").replace("\\n", "\n")
-        samples[(name, tuple(sorted(labels.items())))] = value
-    return samples
-
-
-def _counter_sum(
-    samples: dict[tuple[str, tuple[tuple[str, str], ...]], float],
-    name: str,
-    required: dict[str, str] | None = None,
-) -> float:
-    total = 0.0
-    for (metric, labels), value in samples.items():
-        if metric != name:
-            continue
-        label_map = dict(labels)
-        if required and any(label_map.get(k) != v for k, v in required.items()):
-            continue
-        total += value
-    return total
-
-
-def _counter_by_label(
-    samples: dict[tuple[str, tuple[tuple[str, str], ...]], float],
-    name: str,
-    label: str,
-) -> dict[str, float]:
-    grouped: dict[str, float] = {}
-    for (metric, labels), value in samples.items():
-        if metric != name:
-            continue
-        label_map = dict(labels)
-        key = label_map.get(label, "unknown")
-        grouped[key] = grouped.get(key, 0.0) + value
-    return grouped
-
-
-def _histogram_stats(
-    samples: dict[tuple[str, tuple[tuple[str, str], ...]], float],
-    base: str,
-    group_by: tuple[str, ...] = (),
-    required: dict[str, str] | None = None,
-) -> dict[str, dict[str, float | None]]:
-    buckets: dict[str, list[tuple[float, float]]] = {}
-    sums: dict[str, float] = {}
-    counts: dict[str, float] = {}
-
-    def _matches(label_map: dict[str, str]) -> bool:
-        if required and any(label_map.get(k) != v for k, v in required.items()):
-            return False
-        return True
-
-    for (metric, labels), value in samples.items():
-        label_map = dict(labels)
-        if not _matches(label_map):
-            continue
-        key = "|".join(label_map.get(dim, "") for dim in group_by) or "all"
-        if metric == f"{base}_bucket":
-            le_raw = label_map.get("le", "+Inf")
-            try:
-                le = float(le_raw)
-            except ValueError:
-                le = float("inf")
-            buckets.setdefault(key, []).append((le, value))
-        elif metric == f"{base}_sum":
-            sums[key] = sums.get(key, 0.0) + value
-        elif metric == f"{base}_count":
-            counts[key] = counts.get(key, 0.0) + value
+def _metrics_histogram(rows: list[tuple]) -> dict[str, dict[str, float | None]]:
+    """Reshape SQL percentile rows into the histogram stats shape the UI reads."""
     stats: dict[str, dict[str, float | None]] = {}
-    for key in set(buckets) | set(sums) | set(counts):
-        count = counts.get(key, 0.0)
-        total = sums.get(key, 0.0)
-        ordered = sorted(buckets.get(key, []))
-        finite = [(le, cum) for le, cum in ordered if le != float("inf")]
-        entry: dict[str, float | None] = {
-            "count": count,
-            "sum": total,
-            "avg": (total / count) if count else None,
-            "p50": None,
-            "p95": None,
-            "p99": None,
+    for key, count, total, p50, p95, p99 in rows:
+        stats[str(key)] = {
+            "count": float(count or 0),
+            "sum": float(total or 0),
+            "avg": (float(total) / float(count)) if count else None,
+            "p50": float(p50) if p50 is not None else None,
+            "p95": float(p95) if p95 is not None else None,
+            "p99": float(p99) if p99 is not None else None,
         }
-        if count and finite:
-            for quantile, field in ((0.5, "p50"), (0.95, "p95"), (0.99, "p99")):
-                threshold = quantile * count
-                entry[field] = next(
-                    (le for le, cum in finite if cum >= threshold),
-                    finite[-1][0],
-                )
-        stats[key] = entry
     return stats
 
 
-@router.get("/metrics")
-def admin_metrics(_: AdminUser) -> dict:
-    try:
-        from prometheus_client import generate_latest
-    except ImportError as exc:
-        raise HTTPException(status_code=503, detail="Metrics exporter is unavailable.") from exc
-    samples = _parse_prometheus_text(generate_latest().decode("utf-8"))
+def _pct(fraction: float):
+    return sa_func.percentile_cont(sa_cast(fraction, sa_Float))
 
-    outcomes = _counter_by_label(samples, "kerjapedia_rag_outcomes_total", "outcome")
-    requests_by_status = _counter_by_label(samples, "kerjapedia_rag_requests_total", "status")
-    stage_latency = _histogram_stats(
-        samples, "kerjapedia_rag_stage_seconds", group_by=("stage",)
+
+@router.get("/metrics")
+def admin_metrics(session: DbSession, _: AdminUser) -> dict:
+    """Aggregate durable per-request observations (survives restarts)."""
+    outcomes = {
+        str(row[0]): int(row[1])
+        for row in session.query(
+            RagRequestObservation.outcome, sa_func.count(RagRequestObservation.id)
+        )
+        .group_by(RagRequestObservation.outcome)
+        .all()
+    }
+    request_count = int(
+        session.query(sa_func.count(RagRequestObservation.id)).scalar() or 0
     )
-    request_latency = _histogram_stats(samples, "kerjapedia_rag_request_seconds").get("all", {})
-    prompt_tokens = _counter_sum(
-        samples, "kerjapedia_rag_tokens_total", {"kind": "prompt_tokens"}
+    stage_rows = session.execute(
+        sa_text(
+            "SELECT s->>'stage' AS stage,"
+            " COUNT(*) AS count,"
+            " SUM((s->>'seconds')::double precision) AS total,"
+            " percentile_cont(0.5::double precision) WITHIN GROUP"
+            " (ORDER BY (s->>'seconds')::double precision) AS p50,"
+            " percentile_cont(0.95::double precision) WITHIN GROUP"
+            " (ORDER BY (s->>'seconds')::double precision) AS p95,"
+            " percentile_cont(0.99::double precision) WITHIN GROUP"
+            " (ORDER BY (s->>'seconds')::double precision) AS p99"
+            " FROM rag_request_observations, jsonb_array_elements(stage_latencies) AS s"
+            " GROUP BY s->>'stage'"
+        )
+    ).all()
+    stage_latency = _metrics_histogram(
+        [(row[0], row[1], row[2], row[3], row[4], row[5]) for row in stage_rows]
     )
-    completion_tokens = _counter_sum(
-        samples, "kerjapedia_rag_tokens_total", {"kind": "completion_tokens"}
+    latency_row = (
+        session.query(
+            sa_func.count(RagRequestObservation.id),
+            sa_func.sum(RagRequestObservation.request_latency_ms),
+            _pct(0.5).within_group(RagRequestObservation.request_latency_ms),
+            _pct(0.95).within_group(RagRequestObservation.request_latency_ms),
+            _pct(0.99).within_group(RagRequestObservation.request_latency_ms),
+        )
+        .filter(RagRequestObservation.request_latency_ms.is_not(None))
+        .one()
     )
-    tokens_by_model: dict[str, dict[str, float]] = {}
-    for (metric, labels), value in samples.items():
-        if metric != "kerjapedia_rag_tokens_total":
-            continue
-        label_map = dict(labels)
-        model = label_map.get("model", "unknown")
-        kind = label_map.get("kind", "unknown")
-        model_entry = tokens_by_model.setdefault(model, {"prompt": 0.0, "completion": 0.0})
-        if kind == "prompt_tokens":
-            model_entry["prompt"] += value
-        elif kind == "completion_tokens":
-            model_entry["completion"] += value
-    supported = _counter_sum(
-        samples, "kerjapedia_rag_claim_verification_total", {"result": "supported"}
+    request_latency = _metrics_histogram(
+        [("all", latency_row[0] or 0, (latency_row[1] or 0) / 1000.0, *[
+            (value / 1000.0) if value is not None else None for value in latency_row[2:]
+        ])]
+    ).get("all", {})
+    token_rows = (
+        session.query(
+            RagRequestObservation.llm_model,
+            sa_func.sum(RagRequestObservation.prompt_tokens),
+            sa_func.sum(RagRequestObservation.completion_tokens),
+        )
+        .group_by(RagRequestObservation.llm_model)
+        .all()
     )
-    unsupported = _counter_sum(
-        samples, "kerjapedia_rag_claim_verification_total", {"result": "unsupported"}
+    tokens_by_model = {
+        str(model or "unknown"): {
+            "prompt": int(prompt or 0),
+            "completion": int(completion or 0),
+        }
+        for model, prompt, completion in token_rows
+    }
+    prompt_tokens = sum(entry["prompt"] for entry in tokens_by_model.values())
+    completion_tokens = sum(entry["completion"] for entry in tokens_by_model.values())
+    supported, unsupported = (
+        session.query(
+            sa_func.sum(RagRequestObservation.claims_supported),
+            sa_func.sum(RagRequestObservation.claims_unsupported),
+        ).one()
     )
+    supported, unsupported = int(supported or 0), int(unsupported or 0)
     claim_total = supported + unsupported
-    ragas_eval = _counter_by_label(samples, "kerjapedia_ragas_eval_total", "status")
-    ragas_faithfulness = _histogram_stats(samples, "kerjapedia_ragas_faithfulness_score").get(
-        "all", {}
+    provider_rows = (
+        session.query(RagProviderError.stage, sa_func.count(RagProviderError.id))
+        .group_by(RagProviderError.stage)
+        .all()
     )
-    behavior_total = _counter_sum(samples, "kerjapedia_rag_user_behavior_total")
-    followups = _counter_sum(
-        samples, "kerjapedia_rag_user_behavior_total", {"is_followup": "true"}
+    provider_errors = {str(stage): int(count) for stage, count in provider_rows}
+    ragas_rows = (
+        session.query(RagRagasEval.status, sa_func.count(RagRagasEval.id))
+        .group_by(RagRagasEval.status)
+        .all()
     )
-    behavior_by_topic = _counter_by_label(
-        samples, "kerjapedia_rag_user_behavior_total", "topic"
+    ragas_eval = {str(status): int(count) for status, count in ragas_rows}
+    faithfulness_row = (
+        session.query(
+            sa_func.count(RagRagasEval.score),
+            sa_func.sum(RagRagasEval.score),
+            _pct(0.5).within_group(RagRagasEval.score),
+            _pct(0.95).within_group(RagRagasEval.score),
+            _pct(0.99).within_group(RagRagasEval.score),
+        )
+        .filter(RagRagasEval.score.is_not(None))
+        .one()
     )
-    provider_errors = _counter_by_label(
-        samples, "kerjapedia_rag_provider_errors_total", "stage"
+    faithfulness_count = int(faithfulness_row[0] or 0)
+    faithfulness_sum = float(faithfulness_row[1] or 0)
+    faithfulness = {
+        "count": float(faithfulness_count),
+        "sum": faithfulness_sum,
+        "avg": (faithfulness_sum / faithfulness_count) if faithfulness_count else None,
+        "p50": float(faithfulness_row[2]) if faithfulness_row[2] is not None else None,
+        "p95": float(faithfulness_row[3]) if faithfulness_row[3] is not None else None,
+        "p99": float(faithfulness_row[4]) if faithfulness_row[4] is not None else None,
+    }
+    behavior_total = request_count
+    followups = int(
+        session.query(sa_func.count(RagRequestObservation.id))
+        .filter(RagRequestObservation.is_followup.is_(True))
+        .scalar()
+        or 0
     )
-    retrieved_by_status = _counter_by_label(
-        samples, "kerjapedia_rag_retrieved_versions_total", "legal_status"
-    )
+    behavior_by_topic = {
+        str(topic): int(count)
+        for topic, count in session.query(
+            RagRequestObservation.topic, sa_func.count(RagRequestObservation.id)
+        )
+        .group_by(RagRequestObservation.topic)
+        .all()
+    }
     return {
         "ragas_enabled": settings.ragas_enabled,
         "ragas_sample_rate": settings.ragas_sample_rate,
         "outcomes": outcomes,
         "requests": {
-            "total": sum(requests_by_status.values()),
-            "by_status": requests_by_status,
+            "total": request_count,
+            "by_status": outcomes,
         },
-        "stage_latency": {
-            key.split("|")[0]: value for key, value in stage_latency.items()
-        },
+        "stage_latency": stage_latency,
         "request_latency": request_latency,
         "tokens": {
             "prompt": prompt_tokens,
@@ -471,17 +446,13 @@ def admin_metrics(_: AdminUser) -> dict:
         },
         "ragas": {
             "eval_total": ragas_eval,
-            "faithfulness": ragas_faithfulness,
+            "faithfulness": faithfulness,
         },
         "behavior": {
             "total": behavior_total,
             "followups": followups,
             "followup_ratio": (followups / behavior_total) if behavior_total else None,
             "by_topic": behavior_by_topic,
-        },
-        "retrieved": {
-            "total": sum(retrieved_by_status.values()),
-            "by_legal_status": retrieved_by_status,
         },
     }
 

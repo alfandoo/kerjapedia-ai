@@ -1,33 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { ChevronDown, ExternalLink, FileText, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useSettings } from "@/features/settings";
-import { documentPdfUrl, submitFeedback } from "@/features/chat/api";
+import { documentPdfUrl } from "@/features/chat/api";
 import type { Citation } from "@/features/chat/types";
+import type { FeedbackRating } from "@/features/chat/api";
 
 type SourcePanelProps = {
   citations?: Citation[];
-  question?: string;
-  focusCitationId?: string | null;
+  rating?: FeedbackRating | null;
+  feedbackError?: string | null;
+  isSubmitting?: boolean;
+  onRate?: (rating: FeedbackRating) => void;
 };
 
 export function SourcePanel({
   citations = [],
-  question = "",
-  focusCitationId = null,
+  rating = null,
+  feedbackError = null,
+  isSubmitting = false,
+  onRate,
 }: SourcePanelProps) {
   const { t: translate } = useSettings();
   const [expandedQuotes, setExpandedQuotes] = useState<Set<string>>(new Set());
-  const [feedback, setFeedback] = useState<"helpful" | "not_helpful" | null>(null);
-
-  useEffect(() => {
-    if (!focusCitationId) return;
-    const target = document.getElementById(`citation-${focusCitationId}`);
-    target?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [focusCitationId, citations]);
 
   function toggleQuote(citationId: string) {
     setExpandedQuotes((current) => {
@@ -42,14 +40,6 @@ export function SourcePanel({
     if (status === "active") return translate("source.statusActive");
     if (status === "needs_verification") return translate("source.statusNeedsVerification");
     return status;
-  }
-
-  async function handleFeedback(rating: "helpful" | "not_helpful") {
-    setFeedback(rating);
-    await submitFeedback({
-      question: question || translate("source.feedbackFallback"),
-      rating,
-    }).catch(() => undefined);
   }
 
   return (
@@ -84,13 +74,8 @@ export function SourcePanel({
                 ? `${citation.page_start}`
                 : `${citation.page_start}–${citation.page_end}`;
 
-            const focused = focusCitationId === citation.citation_id;
             return (
-              <article
-                className={`scroll-mt-4 px-5 py-5 transition ${focused ? "rounded-xl bg-javanese/10 ring-2 ring-inset ring-javanese/50" : ""}`}
-                key={citation.citation_id}
-                id={`citation-${citation.citation_id}`}
-              >
+              <article className="px-5 py-5" key={citation.citation_id}>
                 <div className="flex items-start gap-3">
                   <span
                     className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border border-border bg-secondary font-mono text-[11px] font-semibold text-muted-foreground"
@@ -169,33 +154,39 @@ export function SourcePanel({
           })}
         </div>
       )}
-      {citations.length > 0 ? (
+      {citations.length > 0 && onRate ? (
         <footer className="border-t border-border px-5 py-5">
-          <div className="rounded-lg border border-amber/25 bg-amber-soft px-3.5 py-3 text-xs leading-5 text-amber">
-            {translate("source.verificationNote")}
-          </div>
-          <div className="mt-4">
+          <div>
             <p className="text-xs text-muted-foreground">{translate("source.feedbackQuestion")}</p>
             <div className="mt-2 flex gap-2">
               <button
                 type="button"
-                className={`inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese ${feedback === "helpful" ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]" : "border-border bg-background text-foreground hover:bg-accent"}`}
-                aria-pressed={feedback === "helpful"}
-                onClick={() => void handleFeedback("helpful")}
+                disabled={isSubmitting}
+                className={`inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese disabled:cursor-wait disabled:opacity-60 ${rating === "helpful" ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]" : "border-border bg-background text-foreground hover:bg-accent"}`}
+                aria-pressed={rating === "helpful"}
+                aria-label={translate("source.helpful")}
+                onClick={() => onRate("helpful")}
               >
                 <ThumbsUp className="size-4" />
                 {translate("source.helpful")}
               </button>
               <button
                 type="button"
-                className={`inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese ${feedback === "not_helpful" ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]" : "border-border bg-background text-foreground hover:bg-accent"}`}
-                aria-pressed={feedback === "not_helpful"}
-                onClick={() => void handleFeedback("not_helpful")}
+                disabled={isSubmitting}
+                className={`inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese disabled:cursor-wait disabled:opacity-60 ${rating === "not_helpful" ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]" : "border-border bg-background text-foreground hover:bg-accent"}`}
+                aria-pressed={rating === "not_helpful"}
+                aria-label={translate("source.notHelpful")}
+                onClick={() => onRate("not_helpful")}
               >
                 <ThumbsDown className="size-4" />
                 {translate("source.notHelpful")}
               </button>
             </div>
+            {feedbackError ? (
+              <p className="mt-2 text-xs leading-5 text-red-600" role="alert">
+                {feedbackError}
+              </p>
+            ) : null}
           </div>
           <Link
             href="/legal/disclaimer"

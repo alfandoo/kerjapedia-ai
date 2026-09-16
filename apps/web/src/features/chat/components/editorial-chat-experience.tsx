@@ -21,7 +21,7 @@ import {
   renameConversation,
   submitFeedback,
 } from "@/features/chat/api";
-import type { AnswerPayload, Citation } from "@/features/chat/types";
+import type { Citation } from "@/features/chat/types";
 import type { TranslationKey } from "@/lib/translations";
 
 const SIDEBAR_STORAGE_KEY = "kerjapedia.chat.sidebar.v1";
@@ -51,8 +51,9 @@ export function EditorialChatExperience() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [citations, setCitations] = useState<Citation[]>([]);
-  const [citationQuestion, setCitationQuestion] = useState("");
-  const [focusCitationId, setFocusCitationId] = useState<string | null>(null);
+  const [activeSourceMessageId, setActiveSourceMessageId] = useState<string | null>(null);
+  const [sourceFeedbackError, setSourceFeedbackError] = useState<string | null>(null);
+  const [isSourceSubmitting, setIsSourceSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
   const [isSourceDrawerOpen, setIsSourceDrawerOpen] = useState(false);
@@ -122,11 +123,12 @@ export function EditorialChatExperience() {
     setIsLoading(false);
     setError("Respons dihentikan. Anda dapat melanjutkan dengan pertanyaan baru.");
   }
-  function showSources(answer: AnswerPayload, citationId?: string) {
+  function showSources(message: ChatMessage) {
+    if (!message.answer) return;
     sourceTriggerRef.current = document.activeElement as HTMLElement | null;
-    setCitations(answer.citations);
-    setCitationQuestion(answer.query);
-    setFocusCitationId(citationId ?? null);
+    setCitations(message.answer.citations);
+    setActiveSourceMessageId(message.id);
+    setSourceFeedbackError(null);
     setIsMobileSidebarOpen(false);
     if (window.matchMedia("(max-width: 760px)").matches) {
       setIsSourceSheetOpen(true);
@@ -154,12 +156,14 @@ export function EditorialChatExperience() {
         ];
       });
       const latest = [...nextMessages].reverse().find((item) => item.answer)?.answer;
+      const latestMessageId =
+        [...nextMessages].reverse().find((item) => item.answer)?.id ?? null;
       shouldStickToBottomRef.current = true;
       setConversationId(detail.conversation_id);
       setMessages(nextMessages);
       setCitations(latest?.citations ?? []);
-      setCitationQuestion(latest?.query ?? "");
-      setFocusCitationId(null);
+      setActiveSourceMessageId(latestMessageId);
+      setSourceFeedbackError(null);
       setIsSourceSheetOpen(false);
       setIsSourceDrawerOpen(false);
     } catch (err) {
@@ -173,8 +177,8 @@ export function EditorialChatExperience() {
     setConversationId(null);
     setMessages([]);
     setCitations([]);
-    setCitationQuestion("");
-    setFocusCitationId(null);
+    setActiveSourceMessageId(null);
+    setSourceFeedbackError(null);
     setError(null);
     setIsSourceSheetOpen(false);
     setIsSourceDrawerOpen(false);
@@ -256,7 +260,8 @@ export function EditorialChatExperience() {
       });
       setConversationId(response.conversation_id);
       setCitations(response.answer.citations);
-      setCitationQuestion(trimmed);
+      setActiveSourceMessageId(assistantMessageId);
+      setSourceFeedbackError(null);
       setMessages((current) =>
         current.map((message) =>
           message.id === assistantMessageId
@@ -286,24 +291,59 @@ export function EditorialChatExperience() {
       issue: "citation_incorrect" | "answer_incomplete" | "outdated_regulation" | "other";
       comment: string;
     }
-  ) {
+  ): Promise<boolean> {
+    const previous = feedback[message.id];
     setFeedback((current) => ({ ...current, [message.id]: rating }));
-    await submitFeedback({
-      question: message.answer?.query ?? "Feedback chat",
-      rating,
-      answer_id: message.id,
-      conversation_id: conversationId ?? undefined,
-      issue_category: detail?.issue,
-      comment: detail?.comment || undefined,
-    }).catch(() => setError("Feedback belum dapat disimpan."));
+    setError(null);
+    if (message.id === activeSourceMessageId) setSourceFeedbackError(null);
+    // Frontend message.id is a client-side UUID, not the DB Message.message_id
+    // (msg_...). Sending a fake answer_id makes the backend return 404, so only
+    // send answer_id when it looks like a real DB id. Otherwise fall back to
+    // conversation_id which the backend resolves to the latest assistant answer.
+    const realAnswerId = message.id.startsWith("msg_") ? message.id : undefined;
+    try {
+      await submitFeedback({
+        question: message.answer?.query ?? "Feedback chat",
+        rating,
+        answer_id: realAnswerId,
+        conversation_id: conversationId ?? undefined,
+        issue_category: detail?.issue,
+        comment: detail?.comment || undefined,
+      });
+      return true;
+    } catch {
+      setFeedback((current) => {
+        const next = { ...current };
+        if (previous) next[message.id] = previous;
+        else delete next[message.id];
+        return next;
+      });
+      setError("Feedback belum dapat disimpan.");
+      return false;
+    }
   }
+
+  async function handleSourceRate(rating: "helpful" | "not_helpful"): Promise<void> {
+    if (!activeSourceMessageId || isSourceSubmitting) return;
+    const target = messages.find((message) => message.id === activeSourceMessageId);
+    if (!target) return;
+    setIsSourceSubmitting(true);
+    setSourceFeedbackError(null);
+    const ok = await handleFeedback(target, rating);
+    if (!ok) setSourceFeedbackError("Feedback belum dapat disimpan.");
+    setIsSourceSubmitting(false);
+  }
+
+  const sourceRating = activeSourceMessageId ? (feedback[activeSourceMessageId] ?? null) : null;
 
   const sourcePanel =
     citations.length > 0 ? (
       <SourcePanel
         citations={citations}
-        question={citationQuestion}
-        focusCitationId={focusCitationId}
+        rating={sourceRating}
+        feedbackError={sourceFeedbackError}
+        isSubmitting={isSourceSubmitting}
+        onRate={(rating) => void handleSourceRate(rating)}
       />
     ) : undefined;
 
@@ -388,7 +428,9 @@ export function EditorialChatExperience() {
               messages={messages}
               feedback={feedback}
               onShowSources={showSources}
-              onFeedback={(message, rating) => void handleFeedback(message, rating)}
+              onFeedback={(message, rating, detail) =>
+                void handleFeedback(message, rating, detail)
+              }
               onEditMessage={(message) => {
                 setQuestion(message.content);
                 window.setTimeout(() => inputRef.current?.focus(), 0);
@@ -459,8 +501,10 @@ export function EditorialChatExperience() {
       <SourceSheet
         open={isSourceSheetOpen}
         citations={citations}
-        question={citationQuestion}
-        focusCitationId={focusCitationId}
+        rating={sourceRating}
+        feedbackError={sourceFeedbackError}
+        isSubmitting={isSourceSubmitting}
+        onRate={(rating) => void handleSourceRate(rating)}
         onClose={closeSourceSheet}
       />
     </ChatWorkspaceShell>

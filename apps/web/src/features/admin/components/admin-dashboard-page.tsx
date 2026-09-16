@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EmptyState, PageHeader, StatusBadge } from "./primitives";
 import { AlertIcon, DatabaseIcon, ThumbsDownIcon, ThumbsUpIcon } from "@/components/icons";
-import { BadgeCheck, FileUp, Files, MessageSquareText, Users } from "lucide-react";
+import { BadgeCheck, FileUp, Files, MessageSquareText, RefreshCw, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { clearStoredSession, fetchAdminStats } from "@/features/admin/api";
 import type { AdminStats } from "@/features/admin/types";
@@ -36,7 +36,7 @@ function safeDate(value: string) {
 
 function formatDate(value: string) {
   const d = safeDate(value);
-  if (!d) return "—";
+  if (!d) return "Tidak diketahui";
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
@@ -48,7 +48,7 @@ function formatDate(value: string) {
 
 function formatRelative(value: string) {
   const d = safeDate(value);
-  if (!d) return "—";
+  if (!d) return "Tidak diketahui";
   const minutes = Math.round((Date.now() - d.getTime()) / 60000);
   if (minutes < 1) return "Baru saja";
   if (minutes < 60) return `${minutes} menit lalu`;
@@ -85,29 +85,97 @@ export function AdminDashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [reloadKey, setReloadKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pollFailed, setPollFailed] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const inFlightRef = useRef(false);
+  const lastUpdatedRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchAdminStats(controller.signal)
-      .then((data) => {
-        setStats(data);
-        setLoading(false);
-      })
-      .catch((err) => {
+  const applyStats = useCallback((data: AdminStats) => {
+    setStats(data);
+    setError(null);
+    setPollFailed(false);
+    setLastUpdated(Date.now());
+    lastUpdatedRef.current = Date.now();
+  }, []);
+
+  const handleAuthError = useCallback(() => {
+    clearStoredSession();
+    router.push("/login-admin");
+  }, [router]);
+
+  function isAuthError(message: string) {
+    return message === "Invalid or expired token." || message === "Missing bearer token.";
+  }
+
+  const loadFull = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true);
+      setError(null);
+      try {
+        applyStats(await fetchAdminStats(signal));
+      } catch (err) {
         if ((err as Error).name === "AbortError") return;
         const message = (err as Error).message || "Gagal memuat data dashboard.";
-        if (message === "Invalid or expired token." || message === "Missing bearer token.") {
-          clearStoredSession();
-          router.push("/login-admin");
+        if (isAuthError(message)) {
+          handleAuthError();
           return;
         }
         setError(message);
+      } finally {
         setLoading(false);
-      });
-    return () => controller.abort();
-  }, [router, reloadKey]);
+      }
+    },
+    [applyStats, handleAuthError]
+  );
+
+  const refreshSilent = useCallback(async () => {
+    if (inFlightRef.current || document.hidden) return;
+    inFlightRef.current = true;
+    setRefreshing(true);
+    try {
+      applyStats(await fetchAdminStats());
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      const message = (err as Error).message || "";
+      if (isAuthError(message)) {
+        handleAuthError();
+        return;
+      }
+      setPollFailed(true);
+    } finally {
+      inFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }, [applyStats, handleAuthError]);
+
+  const refreshIfStale = useCallback(() => {
+    const last = lastUpdatedRef.current;
+    if (last !== null && Date.now() - last < 25000) return;
+    void refreshSilent();
+  }, [refreshSilent]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => void loadFull(controller.signal), 0);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [loadFull]);
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (!document.hidden) refreshIfStale();
+    }
+    const id = window.setInterval(refreshIfStale, 30000);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshIfStale]);
 
   if (loading) {
     return (
@@ -132,11 +200,9 @@ export function AdminDashboardPage() {
             action={
               <button
                 type="button"
-                className="h-10 rounded-xl border border-teal-soft bg-white px-5 text-sm font-semibold text-forest transition hover:border-forest hover:text-teal"
+                className="h-11 rounded-xl border border-teal-soft bg-white px-5 text-sm font-semibold text-forest transition hover:border-forest hover:text-teal"
                 onClick={() => {
-                  setError(null);
-                  setLoading(true);
-                  setReloadKey((value) => value + 1);
+                  void loadFull();
                 }}
               >
                 Muat ulang
@@ -209,6 +275,13 @@ export function AdminDashboardPage() {
   if (reviewPending > 0) attentionParts.push(`${reviewPending} dokumen menunggu tinjauan`);
   if (failedDocs > 0) attentionParts.push(`${failedDocs} gagal diproses`);
 
+  const updatedRelative =
+    lastUpdated === null ? null : formatRelative(new Date(lastUpdated).toISOString());
+  const updatedLabel =
+    updatedRelative === null
+      ? null
+      : `Diperbarui ${updatedRelative === "Baru saja" ? "baru saja" : updatedRelative}`;
+
   return (
     <div className={`${styles.dashboard} mx-auto max-w-[1200px] space-y-6`}>
       <PageHeader
@@ -270,10 +343,7 @@ export function AdminDashboardPage() {
               <div className="mt-4 flex items-center gap-2 border-t border-teal-soft pt-3">
                 <span
                   aria-hidden="true"
-                  className={cn(
-                    "size-1.5 shrink-0 rounded-full transition-transform group-hover:scale-125",
-                    foot.dot
-                  )}
+                  className={cn("size-1.5 shrink-0 rounded-full", foot.dot)}
                 />
                 <span className="text-xs leading-relaxed text-muted-text">{foot.text}</span>
               </div>
@@ -288,7 +358,7 @@ export function AdminDashboardPage() {
             <h2 className="text-sm font-semibold text-forest">Kondisi dokumen</h2>
             <Link
               href="/documents"
-              className="text-xs font-semibold text-forest transition hover:text-teal"
+              className="rounded-md px-2 py-3.5 -my-3 -mr-2 text-xs font-semibold text-forest transition hover:text-teal"
             >
               Kelola dokumen
             </Link>
@@ -341,7 +411,14 @@ export function AdminDashboardPage() {
               </>
             ) : (
               <p className="mt-4 rounded-lg border border-dashed border-teal-soft bg-teal-soft/40 px-4 py-6 text-center text-sm text-muted-text">
-                Belum ada dokumen pada knowledge base. Unggah PDF pertama untuk memulai.
+                Belum ada dokumen di basis pengetahuan.{" "}
+                <Link
+                  href="/admin/upload"
+                  className="font-semibold text-forest underline underline-offset-2 transition hover:text-teal"
+                >
+                  Unggah PDF pertama
+                </Link>{" "}
+                untuk memulai.
               </p>
             )}
           </div>
@@ -352,21 +429,30 @@ export function AdminDashboardPage() {
             <h2 className="text-sm font-semibold text-forest">Umpan balik</h2>
             <Link
               href="/admin/feedback"
-              className="text-xs font-semibold text-forest transition hover:text-teal"
+              className="rounded-md px-2 py-3.5 -my-3 -mr-2 text-xs font-semibold text-forest transition hover:text-teal"
             >
-              Lihat semua
+              Lihat semua feedback
             </Link>
           </header>
           <div className="flex flex-col px-6 py-5">
-            <div className="flex items-end justify-between gap-4">
+                        <div className="flex items-end justify-between gap-4">
               <p className="text-sm text-muted-text">Jawaban dinilai membantu</p>
-              <p className="font-mono text-3xl leading-none font-bold tracking-tight text-forest tabular-nums">
-                {stats.feedback.total > 0 ? `${satisfaction}%` : "—"}
-              </p>
+
+              {stats.feedback.total > 0 ? (
+                <p className="font-mono text-3xl leading-none font-bold tracking-tight text-forest tabular-nums">
+                  {satisfaction}%
+                </p>
+              ) : (
+                <p className="text-sm text-muted-text">Belum ada data</p>
+              )}
             </div>
             <div
               role="img"
-              aria-label={`${stats.feedback.total > 0 ? `${satisfaction}%` : "—"} feedback membantu dari total ${stats.feedback.total}`}
+              aria-label={
+                stats.feedback.total > 0
+                  ? `${satisfaction}% feedback membantu dari total ${stats.feedback.total}`
+                  : "Belum ada data feedback"
+              }
               className="mt-3 flex h-2 overflow-hidden rounded-full bg-teal-soft/60"
             >
               {stats.feedback.total > 0 ? (
@@ -410,14 +496,36 @@ export function AdminDashboardPage() {
       </div>
 
       <section className="rounded-xl border border-teal-soft bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
-        <div className="flex items-center justify-between border-b border-teal-soft px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-teal-soft px-6 py-2">
           <h2 className="text-sm font-semibold text-forest">Pemrosesan terbaru</h2>
-          <Link
-            href="/admin/ingestion"
-            className="text-xs font-semibold text-forest transition hover:text-teal"
-          >
-            Lihat semua
-          </Link>
+          <div className="flex items-center gap-1">
+            {pollFailed ? (
+              <span className="mr-1 text-xs text-red">Pembaruan gagal.</span>
+            ) : updatedLabel ? (
+              <span className="mr-1 hidden text-xs text-muted-text tabular-nums sm:inline">
+                {updatedLabel}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void refreshSilent()}
+              disabled={refreshing}
+              aria-label="Muat ulang data"
+              title="Muat ulang data"
+              className="inline-flex size-11 items-center justify-center rounded-lg text-forest transition hover:bg-surface-soft disabled:cursor-wait disabled:opacity-60"
+            >
+              <RefreshCw
+                aria-hidden="true"
+                className={cn("size-[18px]", refreshing && "animate-spin motion-reduce:animate-none")}
+              />
+            </button>
+            <Link
+              href="/admin/ingestion"
+              className="rounded-md px-2 py-3.5 -my-3 -mr-2 text-xs font-semibold text-forest transition hover:text-teal"
+            >
+              Lihat semua pemrosesan
+            </Link>
+          </div>
         </div>
         {stats.ingestion_jobs.recent.length === 0 ? (
           <EmptyState
@@ -439,10 +547,7 @@ export function AdminDashboardPage() {
                   >
                     {job.document_id}
                   </span>
-                  <StatusBadge
-                    tone={ingestionTone[job.status] ?? "neutral"}
-                    pulse={job.status === "running"}
-                  >
+                  <StatusBadge tone={ingestionTone[job.status] ?? "neutral"}>
                     {ingestionLabel[job.status] ?? job.status}
                   </StatusBadge>
                   <time

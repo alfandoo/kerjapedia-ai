@@ -220,7 +220,6 @@ const en = {
   "answer.conversationLabel": "Conversation",
   "answer.thinking": "Thinking…",
   "answer.officialSources": "official sources",
-  "answer.openCitation": "Open source",
   "answer.editMessage": "Edit message",
   "answer.copyMessage": "Copy message",
   "answer.copyAnswer": "Copy answer",

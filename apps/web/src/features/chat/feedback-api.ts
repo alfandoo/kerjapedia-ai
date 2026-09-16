@@ -14,10 +14,16 @@ export async function submitFeedback(payload: {
   issue_category?: FeedbackIssue;
   comment?: string;
 }): Promise<void> {
+  // answer_id must be a real DB Message id (msg_...). Client-side chat message
+  // ids are random UUIDs; sending them makes the backend return 404.
+  const sanitized = { ...payload };
+  if (sanitized.answer_id && !sanitized.answer_id.startsWith("msg_")) {
+    delete sanitized.answer_id;
+  }
   const response = await fetchWithAuthRetry(`${API_URL}/feedback`, {
     method: "POST",
     headers: chatHeaders(true),
-    body: JSON.stringify(payload),
+    body: JSON.stringify(sanitized),
   });
   if (!response.ok) {
     throw new Error("Feedback belum dapat disimpan.");

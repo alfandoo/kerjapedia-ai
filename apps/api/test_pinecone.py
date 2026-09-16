@@ -36,7 +36,7 @@ print(f"Model loaded. Dimension: {provider.dimensions}")
 # Create store
 config = PineconeConfig(
     api_key=api_key,
-    index_name=os.getenv("PINECONE_INDEX_NAME", "kerjapedia-regulations-v2"),
+    index_name=os.getenv("PINECONE_INDEX_NAME", "kerjapedia"),
     namespace=os.getenv("PINECONE_NAMESPACE", "production"),
     cloud=os.getenv("PINECONE_CLOUD", "aws"),
     region=os.getenv("PINECONE_REGION", "us-east-1"),

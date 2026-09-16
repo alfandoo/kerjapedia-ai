@@ -191,7 +191,9 @@ export function AdminDashboard() {
       <Toaster position="bottom-right" richColors />
 
       {isLoading ? (
-        <DocumentsSkeleton />
+        <div role="status" aria-label="Memuat dokumen">
+          <DocumentsSkeleton />
+        </div>
       ) : loadError ? (
         <div role="alert" className={styles.loadError}>
           <EmptyState
@@ -202,6 +204,7 @@ export function AdminDashboard() {
               <Button
                 type="button"
                 variant="outline"
+                className="min-h-11"
                 onClick={() => {
                   setLoadError(null);
                   setIsLoading(true);
@@ -220,14 +223,28 @@ export function AdminDashboard() {
             title="Dokumen"
             description="Kelola dokumen regulasi yang menjadi sumber jawaban KerjaPedia AI."
             actions={
-              <Button
-                asChild
-                className="h-11 bg-javanese px-5 text-sm font-bold text-white shadow-[0_2px_12px_rgba(27,67,50,0.22)] hover:bg-javanese-deep"
-              >
-                <Link href="/admin/upload">
-                  <Upload strokeWidth={2} /> Upload dokumen
-                </Link>
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11"
+                  aria-label="Muat ulang daftar dokumen"
+                  onClick={() => {
+                    setIsLoading(true);
+                    setReloadKey((value) => value + 1);
+                  }}
+                >
+                  <RefreshCw /> Muat ulang
+                </Button>
+                <Button
+                  asChild
+                  className="h-11 bg-javanese px-5 text-sm font-bold text-white shadow-[0_2px_12px_rgba(27,67,50,0.22)] hover:bg-javanese-deep"
+                >
+                  <Link href="/admin/upload">
+                    <Upload strokeWidth={2} /> Upload dokumen
+                  </Link>
+                </Button>
+              </div>
             }
           />
 
@@ -341,6 +358,7 @@ export function AdminDashboard() {
                     type="button"
                     variant="ghost"
                     size="sm"
+                    className="min-h-11"
                     onClick={() => {
                       setSearch("");
                       setStatusFilter("all");
@@ -408,10 +426,7 @@ export function AdminDashboard() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <StatusBadge
-                          tone={ingestionTone[document.ingestion_status]}
-                          pulse={document.ingestion_status === "running"}
-                        >
+                        <StatusBadge tone={ingestionTone[document.ingestion_status]}>
                           {ingestionLabels[document.ingestion_status]}
                         </StatusBadge>
                       </TableCell>
@@ -427,7 +442,9 @@ export function AdminDashboard() {
                         <span className="block text-muted-text">
                           {formatDate(document.updated_at)}
                         </span>
-                        <span className="block text-muted-text">oleh {document.updated_by}</span>
+                        {document.updated_by ? (
+                          <span className="block text-muted-text">oleh {document.updated_by}</span>
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         <Button
@@ -435,7 +452,7 @@ export function AdminDashboard() {
                           variant="ghost"
                           size="icon-sm"
                           aria-label={`Buka ${document.short_title}`}
-                          className="size-10 text-forest"
+                          className="size-11 text-forest"
                           onClick={(event) => {
                             event.stopPropagation();
                             setSelectedId(document.document_id);
@@ -463,7 +480,7 @@ export function AdminDashboard() {
                           }
                           action={
                             documents.length === 0 ? (
-                              <Button asChild>
+                              <Button asChild className="min-h-11">
                                 <Link href="/admin/upload">
                                   <Upload /> Upload dokumen
                                 </Link>
@@ -473,6 +490,7 @@ export function AdminDashboard() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
+                                className="min-h-11"
                                 onClick={() => {
                                   setSearch("");
                                   setStatusFilter("all");
@@ -494,7 +512,8 @@ export function AdminDashboard() {
               {filteredDocuments.length > 0 ? (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
                   <p className="text-xs text-muted-text tabular-nums">
-                    Menampilkan {rangeStart}–{rangeEnd} dari {filteredDocuments.length} dokumen
+                    Menampilkan {rangeStart} sampai {rangeEnd} dari {filteredDocuments.length}{" "}
+                    dokumen
                   </p>
                   {totalPages > 1 ? (
                     <nav aria-label="Navigasi halaman" className="flex items-center gap-1">
@@ -502,6 +521,7 @@ export function AdminDashboard() {
                         type="button"
                         variant="outline"
                         size="icon-sm"
+                        className="size-11"
                         disabled={safePage === 1}
                         aria-label="Halaman sebelumnya"
                         onClick={() => goToPage(safePage - 1)}
@@ -518,6 +538,7 @@ export function AdminDashboard() {
                         type="button"
                         variant="outline"
                         size="icon-sm"
+                        className="size-11"
                         disabled={safePage === totalPages}
                         aria-label="Halaman berikutnya"
                         onClick={() => goToPage(safePage + 1)}

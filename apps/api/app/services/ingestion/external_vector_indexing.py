@@ -36,6 +36,23 @@ MAX_BATCH_SIZE = 100
 PINECONE_METADATA_TEXT_LIMIT = 12_000
 STAGING_MANIFEST_SCHEMA_VERSION = "kerjapedia-external-staging-index-v1"
 
+STAGING_GOVERNANCE_MARKERS = {
+    "publication_status": "draft",
+    "source_verification_status": "pending",
+    "legal_review_status": "pending",
+    "is_current": False,
+}
+
+# Markers for a production write. Only truthful after the postgres import
+# approval gate passed for the same batch: stage with defaults first, run
+# the import, then rewrite with this flag.
+APPROVED_GOVERNANCE_MARKERS = {
+    "publication_status": "published",
+    "source_verification_status": "verified",
+    "legal_review_status": "verified",
+    "is_current": True,
+}
+
 
 class ExternalVectorStore(Protocol):
     def clear_namespace(self) -> None: ...
@@ -209,6 +226,7 @@ def stage_external_embeddings(
     namespace: str,
     config: StagingIndexConfig | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    governance_markers: Mapping[str, Any] | None = None,
 ) -> StagingIndexResult:
     """Clear, write, verify, and receipt an immutable external staging namespace."""
     config = config or StagingIndexConfig()
@@ -244,6 +262,7 @@ def stage_external_embeddings(
                     chunks[record["chunk_id"]],
                     namespace,
                     embedding_sha256,
+                    governance_markers,
                 )
             )
             if len(batch) == config.batch_size:
@@ -362,6 +381,7 @@ def _pinecone_vector(
     chunk: dict[str, Any],
     namespace: str,
     embedding_sha256: str,
+    governance: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     dense = embedding.get("dense_vector")
     sparse = embedding.get("sparse_vector")
@@ -395,7 +415,7 @@ def _pinecone_vector(
             "indices": [index for index, _ in sparse_pairs],
             "values": [value for _, value in sparse_pairs],
         },
-        "metadata": _vector_metadata(chunk, embedding, namespace, embedding_sha256),
+        "metadata": _vector_metadata(chunk, embedding, namespace, embedding_sha256, governance),
     }
 
 
@@ -404,11 +424,13 @@ def _vector_metadata(
     embedding: dict[str, Any],
     namespace: str,
     embedding_sha256: str,
+    governance: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     provenance = chunk.get("metadata") or {}
     document = provenance.get("document") or {}
     structure = provenance.get("structure") or {}
     ingestion = provenance.get("ingestion") or {}
+    markers = {**STAGING_GOVERNANCE_MARKERS, **(governance or {})}
     section = " | ".join(
         str(value) for value in (structure.get("bagian"), structure.get("paragraf")) if value
     )
@@ -444,10 +466,10 @@ def _vector_metadata(
         "text": str(chunk["content"])[:PINECONE_METADATA_TEXT_LIMIT],
         "retrieval_text": str(chunk["content"])[:PINECONE_METADATA_TEXT_LIMIT],
         # Staged vectors cannot be retrieved as a published corpus.
-        "publication_status": "draft",
-        "source_verification_status": "pending",
-        "legal_review_status": "pending",
-        "is_current": False,
+        "publication_status": markers["publication_status"],
+        "source_verification_status": markers["source_verification_status"],
+        "legal_review_status": markers["legal_review_status"],
+        "is_current": markers["is_current"],
         "staging_namespace": namespace,
     }
     return {key: value for key, value in metadata.items() if value is not None}
@@ -619,11 +641,23 @@ def main() -> None:
     parser.add_argument("--namespace")
     parser.add_argument("--index-name")
     parser.add_argument("--batch-size", type=int, default=MAX_BATCH_SIZE)
+    parser.add_argument(
+        "--production-markers",
+        action="store_true",
+        help="Write approved governance markers instead of staging defaults. "
+        "Use only for a batch whose documents passed the postgres import "
+        "approval gate; the manifest goes to production_index_manifest.json.",
+    )
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[5]
     embedding_dir = root / "storage/ingestion/embeddings/BAAI-bge-m3" / DEFAULT_REVISION
     embeddings_path = embedding_dir / "bge_m3_embeddings.jsonl"
     namespace = args.namespace or default_namespace(_sha256(embeddings_path))
+    manifest_name = (
+        "production_index_manifest.json"
+        if args.production_markers
+        else "staging_index_manifest.json"
+    )
     result = stage_external_embeddings(
         store=PineconeStagingStore(
             api_key=settings.pinecone_api_key or "",
@@ -634,9 +668,9 @@ def main() -> None:
         embeddings_path=embeddings_path,
         colab_manifest_path=embedding_dir / "bge_m3_embedding_manifest.json",
         import_receipt_path=embedding_dir / "embedding_import_manifest.json",
-        staging_manifest_path=embedding_dir / "staging_index_manifest.json",
+        staging_manifest_path=embedding_dir / manifest_name,
         namespace=namespace,
-        config=StagingIndexConfig(batch_size=args.batch_size),
+        governance_markers=APPROVED_GOVERNANCE_MARKERS if args.production_markers else None,
     )
     print(json.dumps(asdict(result), ensure_ascii=False, sort_keys=True))
 

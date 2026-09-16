@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { StatusBadge } from "./primitives";
+import { Callout } from "./primitives";
 import { cn } from "@/lib/utils";
 import type { EvaluationMetricSet, EvaluationRunDetail } from "@/features/admin/types";
 export const modeLabel: Record<string, string> = {
@@ -28,7 +29,7 @@ export function sortModes(metrics: Record<string, EvaluationMetricSet>): string[
 }
 
 export function pct(value: number | null | undefined) {
-  if (value == null) return "—";
+  if (value == null) return "Belum ada data";
   return `${Math.round(value * 100)}%`;
 }
 
@@ -39,7 +40,7 @@ function safeDate(value: string) {
 
 export function formatDateTime(value: string) {
   const d = safeDate(value);
-  if (!d) return "—";
+  if (!d) return "Tidak diketahui";
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
@@ -51,7 +52,7 @@ export function formatDateTime(value: string) {
 
 export function relativeTime(value: string) {
   const d = safeDate(value);
-  if (!d) return "—";
+  if (!d) return "Tidak diketahui";
   const diff = Date.now() - d.getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return "Baru saja";
@@ -165,6 +166,12 @@ export function RunDetailDialog({
     );
 
   const modes = sortModes(detail.metrics);
+  const isActive = detail.status === "pending" || detail.status === "running";
+  const isFailed = detail.status === "failed";
+  const progressPct =
+    detail.progress_total > 0
+      ? Math.min(100, Math.round((detail.progress_completed / detail.progress_total) * 100))
+      : 0;
   const experiments = detail.report?.experiments ?? [];
   const topicSet = new Set<string>();
   for (const experiment of experiments) {
@@ -211,7 +218,41 @@ export function RunDetailDialog({
             )}
           </div>
         </DialogHeader>
-        <nav aria-label="Bagian laporan evaluasi" className={modalStyles.tabs}>
+        {isActive ? (
+          <div className="rounded-xl border border-line bg-surface-soft p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-tinta">
+                {detail.status === "pending" ? "Antre diproses" : "Evaluasi berjalan"}
+              </p>
+              <p className="text-xs text-muted-text tabular-nums" role="status">
+                {detail.progress_completed} dari {detail.progress_total} pertanyaan
+              </p>
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Progres evaluasi"
+              aria-valuemin={0}
+              aria-valuemax={detail.progress_total}
+              aria-valuenow={detail.progress_completed}
+              className="mt-3 h-2 overflow-hidden rounded-full bg-teal-soft"
+            >
+              <div
+                className="h-full rounded-full bg-forest transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-muted-text">
+              Halaman boleh ditinggal; hasil masuk otomatis.
+            </p>
+          </div>
+        ) : isFailed ? (
+          <Callout tone="danger" title="Evaluasi gagal">
+            {detail.error ?? "Run berhenti karena kesalahan internal."} Tutup dialog ini lalu
+            jalankan ulang dari halaman evaluasi.
+          </Callout>
+        ) : (
+          <>
+            <nav aria-label="Bagian laporan evaluasi" className={modalStyles.tabs}>
           {[
             { id: "summary", label: "Ringkasan" },
             { id: "topics", label: "Per topik" },
@@ -272,7 +313,7 @@ export function RunDetailDialog({
                   <strong>Recall@5</strong> menunjukkan cakupan sumber relevan pada lima hasil
                   teratas. <strong>MRR</strong> mengukur posisi hasil relevan pertama.
                 </p>
-                <p className="mt-2">Nilai “—” berarti metrik belum tersedia.</p>
+                <p className="mt-2">Nilai &quot;Belum ada data&quot; berarti metrik belum tersedia.</p>
               </div>
             </section>
           )}
@@ -341,7 +382,7 @@ export function RunDetailDialog({
                 <label className="flex items-center gap-2 text-sm text-muted-text">
                   Mode
                   <select
-                    className="min-h-10 rounded-lg border border-line bg-white px-3 text-tinta"
+                    className="min-h-11 rounded-lg border border-line bg-white px-3 text-tinta"
                     value={modeFilter}
                     onChange={(event) => {
                       setModeFilter(event.target.value);
@@ -401,8 +442,8 @@ export function RunDetailDialog({
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-text">
                     <span role="status">
-                      {(currentPage - 1) * 5 + 1}–{Math.min(currentPage * 5, rows.length)} dari{" "}
-                      {rows.length} hasil
+                      {(currentPage - 1) * 5 + 1} sampai {Math.min(currentPage * 5, rows.length)}{" "}
+                      dari {rows.length} hasil
                     </span>
                     <nav
                       aria-label="Pagination hasil pertanyaan"
@@ -411,6 +452,7 @@ export function RunDetailDialog({
                       <Button
                         size="sm"
                         variant="outline"
+                        className="min-h-11"
                         disabled={currentPage === 1}
                         onClick={() => setPage(currentPage - 1)}
                       >
@@ -422,6 +464,7 @@ export function RunDetailDialog({
                       <Button
                         size="sm"
                         variant="outline"
+                        className="min-h-11"
                         disabled={currentPage === pageCount}
                         onClick={() => setPage(currentPage + 1)}
                       >
@@ -438,6 +481,8 @@ export function RunDetailDialog({
             </section>
           )}
         </div>
+            </>
+          )}
         <footer className={modalStyles.footer}>
           <span
             title={detail.run_id}
@@ -446,7 +491,7 @@ export function RunDetailDialog({
             ID: {detail.run_id}
           </span>
           <DialogClose asChild>
-            <Button variant="outline">Tutup</Button>
+            <Button variant="outline" className="min-h-11">Tutup</Button>
           </DialogClose>
         </footer>
       </DialogContent>

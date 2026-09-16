@@ -1,11 +1,10 @@
 "use client";
 
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 
 import { AlertTriangle, Copy, FileText, Pencil, Share2, ThumbsDown, ThumbsUp } from "lucide-react";
-import type { AnswerClaim, ChatMessage, Citation } from "../types";
+import type { ChatMessage } from "../types";
 import type { FeedbackIssue, FeedbackRating } from "@/features/chat/api";
-import type { AnswerPayload } from "@/features/chat/types";
 import type { TranslationKey } from "@/lib/translations";
 import { useSettings } from "@/features/settings";
 
@@ -17,7 +16,7 @@ type FeedbackDetail = {
 type ConversationThreadProps = {
   messages: ChatMessage[];
   feedback: Record<string, FeedbackRating>;
-  onShowSources: (answer: AnswerPayload, citationId?: string) => void;
+  onShowSources: (message: ChatMessage) => void;
   onFeedback: (message: ChatMessage, rating: FeedbackRating, detail?: FeedbackDetail) => void;
   onEditMessage: (message: ChatMessage) => void;
 };
@@ -49,98 +48,18 @@ function formatMessageTime(value: string, language: "id" | "en") {
 type AnswerBlock =
   { kind: "paragraph"; text: string } | { kind: "list"; ordered: boolean; items: string[] };
 
-function boldNodes(text: string, keyPrefix: string) {
-  return text
+function inlineRendered(text: string) {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  return cleaned
     .split(/(\*\*[^*]+\*\*)/g)
     .filter(Boolean)
     .map((part, index) =>
       part.startsWith("**") && part.endsWith("**") ? (
-        <strong key={`${keyPrefix}-b-${index}`}>{part.slice(2, -2)}</strong>
+        <strong key={index}>{part.slice(2, -2)}</strong>
       ) : (
-        <span key={`${keyPrefix}-b-${index}`}>{part}</span>
+        <span key={index}>{part}</span>
       )
     );
-}
-
-function normalizeForMatch(value: string) {
-  return value.toLowerCase().replace(/\s+/g, " ").trim();
-}
-
-function splitSentences(text: string) {
-  const matches = text.match(/[^.!?…]+[.!?…]+["”)'\]]*|\S[^.!?…]*$/g);
-  if (!matches) return [text];
-  return matches.map((part) => part.trim()).filter(Boolean);
-}
-
-function citationIndexesForSentence(
-  sentence: string,
-  claims: AnswerClaim[] | undefined,
-  chunkToCitationIndex: Map<string, number>
-) {
-  const normalized = normalizeForMatch(sentence);
-  if (normalized.length < 10 || !claims?.length) return [];
-  const indexes: number[] = [];
-  for (const claim of claims) {
-    if (claim.supported === false) continue;
-    const claimText = normalizeForMatch(claim.text ?? "");
-    if (claimText.length < 10) continue;
-    const covers =
-      claimText.includes(normalized) || (normalized.includes(claimText) && claimText.length >= 20);
-    if (!covers) continue;
-    for (const chunkId of claim.cited_chunk_ids ?? []) {
-      const index = chunkToCitationIndex.get(chunkId);
-      if (index !== undefined && !indexes.includes(index)) indexes.push(index);
-    }
-  }
-  return indexes.sort((a, b) => a - b);
-}
-
-function InlineCitedText({
-  text,
-  blockKey,
-  claims,
-  citations,
-  chunkToCitationIndex,
-  onOpenCitation,
-  openCitationPrefix,
-}: {
-  text: string;
-  blockKey: string;
-  claims: AnswerClaim[] | undefined;
-  citations: Citation[];
-  chunkToCitationIndex: Map<string, number>;
-  onOpenCitation: (citationId: string) => void;
-  openCitationPrefix: string;
-}) {
-  const cleaned = text.replace(/\s+/g, " ").trim();
-  const sentences = splitSentences(cleaned);
-  return (
-    <>
-      {sentences.map((sentence, sentenceIndex) => {
-        const refs = citationIndexesForSentence(sentence, claims, chunkToCitationIndex)
-          .map((citationIndex) => ({ citationIndex, citation: citations[citationIndex] }))
-          .filter((ref) => ref.citation);
-        return (
-          <span key={`${blockKey}-s-${sentenceIndex}`}>
-            {boldNodes(sentence, `${blockKey}-s-${sentenceIndex}`)}
-            {refs.map(({ citationIndex, citation }) => (
-              <button
-                key={`${blockKey}-s-${sentenceIndex}-cit-${citationIndex}`}
-                type="button"
-                onClick={() => onOpenCitation(citation.citation_id)}
-                title={citation.document_title}
-                aria-label={`${openCitationPrefix}: ${citation.short_title || citation.document_title}`}
-                className="mx-[3px] inline-flex min-h-[22px] items-center gap-1 rounded-full border border-transparent bg-javanese px-2 py-px align-baseline text-[11px] font-semibold text-white transition hover:bg-forest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese"
-              >
-                <FileText className="size-3 shrink-0" aria-hidden="true" />
-                {citation.short_title || `Sumber ${citationIndex + 1}`}
-              </button>
-            ))}{" "}
-          </span>
-        );
-      })}
-    </>
-  );
 }
 
 function answerBlocks(content: string): AnswerBlock[] {
@@ -196,36 +115,19 @@ function answerBlocks(content: string): AnswerBlock[] {
 
 const AnswerContent = memo(function AnswerContent({
   content,
-  citations,
-  claims,
-  onOpenCitation,
-  openCitationPrefix,
+  lang,
   streaming,
 }: {
   content: string;
-  citations: Citation[];
-  claims: AnswerClaim[] | undefined;
-  onOpenCitation: (citationId: string) => void;
-  openCitationPrefix: string;
+  lang: "id" | "en";
   streaming: boolean;
 }) {
   const blocks = answerBlocks(content);
-  const chunkToCitationIndex = useMemo(() => {
-    const map = new Map<string, number>();
-    citations.forEach((citation, index) => {
-      if (!map.has(citation.chunk_id)) map.set(citation.chunk_id, index);
-    });
-    return map;
-  }, [citations]);
-  const citedProps = {
-    claims,
-    citations,
-    chunkToCitationIndex,
-    onOpenCitation,
-    openCitationPrefix,
-  };
   return (
-    <div className="mb-2 mt-1 text-[15px] leading-[26px] text-foreground [&_strong]:font-semibold [&_strong]:text-foreground">
+    <div
+      lang={lang}
+      className="mb-2 mt-1 text-pretty text-[15px] leading-[26px] text-foreground [&_strong]:font-semibold [&_strong]:text-foreground"
+    >
       {blocks.map((block, index) =>
         block.kind === "list" ? (
           block.ordered ? (
@@ -234,12 +136,8 @@ const AnswerContent = memo(function AnswerContent({
               key={`list-${index}`}
             >
               {block.items.map((item, itemIndex) => (
-                <li key={item} className="pl-0.5">
-                  <InlineCitedText
-                    text={item}
-                    blockKey={`list-${index}-i-${itemIndex}`}
-                    {...citedProps}
-                  />
+                <li key={`list-${index}-item-${itemIndex}`} className="pl-0.5">
+                  {inlineRendered(item)}
                 </li>
               ))}
             </ol>
@@ -249,19 +147,18 @@ const AnswerContent = memo(function AnswerContent({
               key={`list-${index}`}
             >
               {block.items.map((item, itemIndex) => (
-                <li key={item} className="pl-0.5">
-                  <InlineCitedText
-                    text={item}
-                    blockKey={`list-${index}-i-${itemIndex}`}
-                    {...citedProps}
-                  />
+                <li key={`list-${index}-item-${itemIndex}`} className="pl-0.5">
+                  {inlineRendered(item)}
                 </li>
               ))}
             </ul>
           )
         ) : (
-          <p className="mb-2.5 max-w-[72ch] break-words last:mb-0" key={`p-${index}`}>
-            <InlineCitedText text={block.text} blockKey={`p-${index}`} {...citedProps} />
+          <p
+            className="mb-2.5 max-w-[72ch] break-words text-justify hyphens-auto last:mb-0"
+            key={`p-${index}`}
+          >
+            {inlineRendered(block.text)}
           </p>
         )
       )}
@@ -413,12 +310,7 @@ export function ConversationThread({
               ) : (
                 <AnswerContent
                   content={displayContent}
-                  citations={message.answer?.citations ?? []}
-                  claims={message.answer?.claims}
-                  onOpenCitation={(citationId) =>
-                    onShowSources(message.answer as AnswerPayload, citationId)
-                  }
-                  openCitationPrefix={translate("answer.openCitation")}
+                  lang={resolvedLanguage}
                   streaming={Boolean(message.streaming)}
                 />
               )}
@@ -426,7 +318,7 @@ export function ConversationThread({
                 <button
                   className="mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-transparent bg-javanese px-3 text-[11px] font-semibold text-white transition hover:bg-forest"
                   type="button"
-                  onClick={() => onShowSources(message.answer as AnswerPayload)}
+                  onClick={() => onShowSources(message)}
                 >
                   <FileText className="size-[16px]" />
                   {message.answer.citations.length} {translate("answer.officialSources")}
@@ -486,7 +378,7 @@ export function ConversationThread({
                       type="button"
                       className={`grid size-8 place-items-center rounded-lg border transition ${
                         feedback[message.id] === "helpful"
-                          ? "border-border bg-accent text-foreground"
+                          ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]"
                           : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
                       }`}
                       aria-label={translate("answer.helpful")}
@@ -499,7 +391,7 @@ export function ConversationThread({
                       type="button"
                       className={`grid size-8 place-items-center rounded-lg border transition ${
                         feedback[message.id] === "not_helpful"
-                          ? "border-border bg-accent text-foreground"
+                          ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]"
                           : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
                       }`}
                       aria-label={translate("answer.notHelpful")}

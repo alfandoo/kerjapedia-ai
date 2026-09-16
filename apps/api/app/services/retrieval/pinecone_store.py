@@ -46,7 +46,7 @@ PINECONE_MAX_UPSERT_BATCH_SIZE = 100
 @dataclass(frozen=True)
 class PineconeConfig:
     api_key: str
-    index_name: str = "kerjapedia-regulations-v2"
+    index_name: str = "kerjapedia"
     namespace: str = "production"
     cloud: str = "aws"
     region: str = "us-east-1"

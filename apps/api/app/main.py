@@ -43,6 +43,14 @@ async def lifespan(_app: FastAPI):
         from app.db.session import assert_schema_current
 
         assert_schema_current()
+        try:
+            from app.services.evaluation.tasks import fail_stuck_runs
+
+            reset = fail_stuck_runs()
+            if reset:
+                logger.info("marked %s stuck evaluation runs as failed", reset)
+        except Exception as exc:
+            logger.warning("stuck evaluation run reset failed: %s", exc)
     if settings.app_env.lower() != "test" and settings.embedding_provider == "bge_m3":
         # Warm both encoders at boot (torch import + ~2.3 GB model load +
         # first HF snapshot): the first user query must not pay cold start.

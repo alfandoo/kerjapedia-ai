@@ -5,20 +5,25 @@ import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "rea
 import { SourcePanel } from "./source-panel";
 import { useSettings } from "@/features/settings";
 import type { Citation } from "@/features/chat/types";
+import type { FeedbackRating } from "@/features/chat/api";
 
 type SourceSheetProps = {
   open: boolean;
   citations: Citation[];
-  question: string;
-  focusCitationId?: string | null;
+  rating?: FeedbackRating | null;
+  feedbackError?: string | null;
+  isSubmitting?: boolean;
+  onRate?: (rating: FeedbackRating) => void;
   onClose: () => void;
 };
 
 export function SourceSheet({
   open,
   citations,
-  question,
-  focusCitationId = null,
+  rating = null,
+  feedbackError = null,
+  isSubmitting = false,
+  onRate,
   onClose,
 }: SourceSheetProps) {
   const { t: translate } = useSettings();
@@ -97,7 +102,13 @@ export function SourceSheet({
             ×
           </button>
         </div>
-        <SourcePanel citations={citations} question={question} focusCitationId={focusCitationId} />
+        <SourcePanel
+          citations={citations}
+          rating={rating}
+          feedbackError={feedbackError}
+          isSubmitting={isSubmitting}
+          onRate={onRate}
+        />
       </section>
     </div>
   );

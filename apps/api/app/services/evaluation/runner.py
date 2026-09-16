@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, replace
 
 from app.services.answering.generator import AnswerGenerator, _detect_language
@@ -39,13 +40,27 @@ _REFUSAL_THRESHOLDS = {
 }
 
 
+ProgressCallback = Callable[[int, int], None]
+"""Called as ``callback(completed, total)`` after each evaluated question."""
+
+
 def run_experiments(
     questions: list[EvaluationQuestion],
     documents: list[RetrievalDocument],
     modes: list[ExperimentMode] | tuple[ExperimentMode, ...] = EXPERIMENT_MODES,
     top_k: int = 5,
+    on_progress: ProgressCallback | None = None,
 ) -> dict:
-    reports = [run_experiment(questions, documents, mode, top_k) for mode in modes]
+    total = len(questions) * len(modes)
+    reports = []
+    for mode_index, mode in enumerate(modes):
+        base = mode_index * len(questions)
+
+        def report_mode(completed: int, _total: int, _base: int = base) -> None:
+            if on_progress is not None:
+                on_progress(_base + completed, total)
+
+        reports.append(run_experiment(questions, documents, mode, top_k, report_mode))
     return {
         "question_count": len(questions),
         "top_k": top_k,
@@ -58,6 +73,7 @@ def run_experiment(
     documents: list[RetrievalDocument],
     mode: ExperimentMode,
     top_k: int = 5,
+    on_progress: ProgressCallback | None = None,
 ) -> ExperimentReport:
     if mode not in EXPERIMENT_MODES:
         raise ValueError(f"Unsupported experiment mode: {mode}")
@@ -65,7 +81,7 @@ def run_experiment(
     generator = AnswerGenerator()
     results: list[QuestionEvaluation] = []
 
-    for question in questions:
+    for index, question in enumerate(questions):
         retrieval = engine.search(question.question, top_k=max(top_k, len(documents)))
         ranked = _rank(retrieval.results, mode)
         selected = ranked[: max(top_k, 10)]
@@ -149,6 +165,8 @@ def run_experiment(
                 warnings=retrieval.warnings,
             )
         )
+        if on_progress is not None:
+            on_progress(index + 1, len(questions))
 
     per_topic = {
         category: _aggregate(
@@ -483,11 +501,22 @@ def run_provider_evaluation(
     generator,
     top_k: int = 10,
     ragas_scorer=None,
+    on_progress: ProgressCallback | None = None,
 ) -> dict:
     development = [question for question in questions if question.split == "development"]
     held_out = [question for question in questions if question.split == "test"]
     if not development or not held_out:
         raise ValueError("Provider evaluation requires development and held-out test splits.")
+
+    total = len(development) + len(held_out)
+
+    def report_development(completed: int, _total: int) -> None:
+        if on_progress is not None:
+            on_progress(completed, total)
+
+    def report_held_out(completed: int, _total: int) -> None:
+        if on_progress is not None:
+            on_progress(len(development) + completed, total)
 
     development_results = _evaluate_provider_questions(
         development,
@@ -496,6 +525,7 @@ def run_provider_evaluation(
         top_k,
         threshold=_REFUSAL_THRESHOLDS["rerank"],
         ragas_scorer=ragas_scorer,
+        on_progress=report_development,
     )
     development_metrics = _aggregate(development_results, development)
     calibrated_threshold = development_metrics.recommended_refusal_threshold
@@ -506,6 +536,7 @@ def run_provider_evaluation(
         top_k,
         threshold=calibrated_threshold,
         ragas_scorer=ragas_scorer,
+        on_progress=report_held_out,
     )
     test_metrics = replace(
         _aggregate(test_results, held_out),
@@ -541,9 +572,10 @@ def _evaluate_provider_questions(
     top_k: int,
     threshold: float,
     ragas_scorer=None,
+    on_progress: ProgressCallback | None = None,
 ) -> list[QuestionEvaluation]:
     results: list[QuestionEvaluation] = []
-    for question in questions:
+    for index, question in enumerate(questions):
         retrieval = retriever.search(
             question.question,
             top_k=max(10, top_k),
@@ -636,4 +668,6 @@ def _evaluate_provider_questions(
                 warnings=retrieval.warnings,
             )
         )
+        if on_progress is not None:
+            on_progress(index + 1, len(questions))
     return results

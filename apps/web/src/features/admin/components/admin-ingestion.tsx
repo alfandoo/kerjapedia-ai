@@ -62,7 +62,7 @@ function safeDate(value: string) {
 
 function formatDateTime(value: string) {
   const d = safeDate(value);
-  if (!d) return "—";
+  if (!d) return "Tidak diketahui";
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
@@ -74,7 +74,7 @@ function formatDateTime(value: string) {
 
 function relativeTime(value: string) {
   const d = safeDate(value);
-  if (!d) return "—";
+  if (!d) return "Tidak diketahui";
   const diff = Date.now() - d.getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return "Baru saja";
@@ -86,7 +86,7 @@ function relativeTime(value: string) {
 }
 
 function formatDuration(seconds: number | null | undefined): string {
-  if (seconds == null || seconds <= 0) return "—";
+  if (seconds == null || seconds <= 0) return "Belum ada data";
   if (seconds < 60) return "Kurang dari 1 menit";
   const mins = Math.round(seconds / 60);
   if (mins < 60) return `${mins} menit`;
@@ -315,6 +315,7 @@ export function AdminIngestion() {
         actions={
           <Button
             variant="outline"
+            className="min-h-11"
             disabled={isLoading}
             onClick={() => {
               setIsLoading(true);
@@ -333,7 +334,9 @@ export function AdminIngestion() {
       )}
 
       {isLoading ? (
-        <IngestionSkeleton />
+        <div role="status" aria-label="Memuat daftar ingestion">
+          <IngestionSkeleton />
+        </div>
       ) : loadError ? (
         <div role="alert">
           <Callout tone="danger" title="Data belum tersedia">
@@ -346,7 +349,7 @@ export function AdminIngestion() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
-                label: "Total job",
+                label: "Total pekerjaan",
                 value: stats.total,
                 icon: Database,
                 color: "text-tinta",
@@ -410,7 +413,7 @@ export function AdminIngestion() {
                       setPage(1);
                     }}
                     className={cn(
-                      "min-h-10 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
+                      "min-h-11 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
                       filter === opt.value
                         ? "bg-javanese text-white"
                         : "bg-surface-soft text-muted-text hover:bg-teal-soft hover:text-tinta"
@@ -420,7 +423,7 @@ export function AdminIngestion() {
                   </button>
                 ))}
                 <span className="ml-auto text-xs text-muted-text">
-                  {filtered.length} dari {jobs.length} job
+                  {filtered.length} dari {jobs.length} pekerjaan
                 </span>
               </div>
 
@@ -438,23 +441,24 @@ export function AdminIngestion() {
                       ? "Unggah PDF untuk mulai menyiapkan dokumen."
                       : "Pilih status lain untuk melihat pekerjaan."
                   }
-                  action={
-                    jobs.length === 0 ? (
-                      <Button asChild>
-                        <Link href="/admin/upload">Upload PDF</Link>
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setFilter("all");
-                          setPage(1);
-                        }}
-                      >
-                        Tampilkan semua
-                      </Button>
-                    )
-                  }
+                    action={
+                      jobs.length === 0 ? (
+                        <Button asChild className="min-h-11">
+                          <Link href="/admin/upload">Upload PDF</Link>
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="min-h-11"
+                          onClick={() => {
+                            setFilter("all");
+                            setPage(1);
+                          }}
+                        >
+                          Tampilkan semua
+                        </Button>
+                      )
+                    }
                 />
               ) : (
                 <div className="overflow-hidden rounded-xl border border-line bg-white">
@@ -487,10 +491,9 @@ export function AdminIngestion() {
                             <TableCell className="max-w-64 whitespace-normal px-4 py-4">
                               <button
                                 type="button"
-                                aria-pressed={selected}
                                 title={job.document_id}
                                 onClick={() => showDetail(job.job_id)}
-                                className="block min-h-8 text-left text-sm font-semibold text-tinta underline-offset-4 hover:underline break-all"
+                                className="block min-h-11 text-left text-sm font-semibold text-tinta underline-offset-4 hover:underline break-all"
                               >
                                 {job.document_id}
                               </button>
@@ -512,10 +515,7 @@ export function AdminIngestion() {
                               )}
                             </TableCell>
                             <TableCell>
-                              <StatusBadge
-                                tone={jobTones[job.status]}
-                                pulse={job.status === "running"}
-                              >
+                              <StatusBadge tone={jobTones[job.status]}>
                                 {jobLabels[job.status]}
                               </StatusBadge>
                             </TableCell>
@@ -529,7 +529,7 @@ export function AdminIngestion() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="mr-2"
+                                className="mr-2 min-h-11"
                                 aria-label={`Detail ${job.document_id}`}
                                 aria-controls="ingestion-detail"
                                 onClick={() => showDetail(job.job_id)}
@@ -540,7 +540,7 @@ export function AdminIngestion() {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="shrink-0"
+                                className="min-h-11 shrink-0"
                                 aria-label={`Jalankan ulang ${job.document_id}`}
                                 disabled={
                                   rerunPending ||
@@ -581,7 +581,7 @@ export function AdminIngestion() {
                           setPageSize(Number(event.target.value));
                           setPage(1);
                         }}
-                        className="min-h-9 rounded-md border border-line bg-white px-2 text-sm text-tinta focus-visible:outline-2 focus-visible:outline-forest"
+                        className="min-h-11 rounded-md border border-line bg-white px-2 text-sm text-tinta focus-visible:outline-2 focus-visible:outline-forest"
                       >
                         {[5, 10, 20, 50].map((size) => (
                           <option key={size} value={size}>
@@ -591,8 +591,8 @@ export function AdminIngestion() {
                       </select>
                     </label>
                     <span role="status">
-                      {pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} dari{" "}
-                      {filtered.length} pekerjaan
+                      {pageStart + 1} sampai {Math.min(pageStart + pageSize, filtered.length)}{" "}
+                      dari {filtered.length} pekerjaan
                     </span>
                     <nav
                       aria-label="Pagination daftar ingestion"
@@ -602,6 +602,7 @@ export function AdminIngestion() {
                         type="button"
                         variant="outline"
                         size="sm"
+                        className="min-h-11"
                         disabled={currentPage === 1}
                         onClick={() => setPage(currentPage - 1)}
                       >
@@ -614,6 +615,7 @@ export function AdminIngestion() {
                         type="button"
                         variant="outline"
                         size="sm"
+                        className="min-h-11"
                         disabled={currentPage === pageCount}
                         onClick={() => setPage(currentPage + 1)}
                       >
@@ -676,7 +678,7 @@ export function AdminIngestion() {
                         <div className="min-w-0">
                           <dt className="text-xs text-muted-text">Chunk</dt>
                           <dd className="font-mono text-sm font-medium tabular-nums">
-                            {selectedJob.result?.chunk_count ?? "—"}
+                            {selectedJob.result?.chunk_count ?? "Belum ada data"}
                           </dd>
                         </div>
                         <div className="min-w-0">
@@ -718,7 +720,7 @@ export function AdminIngestion() {
 
                       <Button
                         variant="outline"
-                        className="w-full"
+                        className="min-h-11 w-full"
                         disabled={
                           rerunPending ||
                           jobs.some(

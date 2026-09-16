@@ -220,7 +220,6 @@ const id = {
   "answer.conversationLabel": "Percakapan",
   "answer.thinking": "Berpikir…",
   "answer.officialSources": "sumber resmi",
-  "answer.openCitation": "Buka sumber",
   "answer.editMessage": "Edit pesan",
   "answer.copyMessage": "Salin pesan",
   "answer.copyAnswer": "Salin jawaban",

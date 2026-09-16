@@ -17,7 +17,7 @@ engine = create_engine(
     max_overflow=20,
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-EXPECTED_SCHEMA_REVISION = "20260914_0011"
+EXPECTED_SCHEMA_REVISION = "20260916_0014"
 
 
 def create_session() -> Session:

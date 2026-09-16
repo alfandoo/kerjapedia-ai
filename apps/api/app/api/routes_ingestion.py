@@ -352,6 +352,12 @@ def create_ingestion_job(
             job.version_id = job_version_id
             job.build_id = identity.build_id
         session.commit()
+        try:
+            from app.api.routes_admin import _stats_cache
+
+            _stats_cache.clear()
+        except Exception:
+            logger.debug("Unable to invalidate admin stats cache", exc_info=True)
         return _job_payload(job, build)
     if job is None:
         job = IngestionJob(
@@ -381,6 +387,12 @@ def create_ingestion_job(
     build.quality_report = {}
     build.artifact_manifest = {}
     session.commit()
+    try:
+        from app.api.routes_admin import _stats_cache
+
+        _stats_cache.clear()
+    except Exception:
+        logger.debug("Unable to invalidate admin stats cache", exc_info=True)
 
     try:
         if settings.celery_enabled:

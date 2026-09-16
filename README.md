@@ -54,7 +54,7 @@ Untuk mode industri, isi minimal variabel berikut di `.env`:
 ```bash
 VECTOR_STORE=pinecone
 PINECONE_API_KEY=...
-PINECONE_INDEX_NAME=kerjapedia-regulations-v2
+PINECONE_INDEX_NAME=kerjapedia
 PINECONE_NAMESPACE=production
 EMBEDDING_PROVIDER=bge_m3
 EMBEDDING_MODEL=BAAI/bge-m3

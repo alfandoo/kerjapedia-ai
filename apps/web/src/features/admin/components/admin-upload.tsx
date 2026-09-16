@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageHeader } from "./primitives";
+import { ingestionLabels } from "./document-inspector";
 import { cn } from "@/lib/utils";
 import styles from "./admin-upload.module.css";
 import detailStyles from "./document-detail.module.css";
@@ -85,6 +86,7 @@ export function AdminUpload() {
   const [ingestDone, setIngestDone] = useState(false);
   const [ingestError, setIngestError] = useState<string | null>(null);
   const ingestPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const ingestFailuresRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -157,23 +159,42 @@ export function AdminUpload() {
       const job = await createIngestionJob(uploaded.document_id);
       // Job starts as "running" — poll until it finishes
       if (job.status === "running" || job.status === "queued") {
+        ingestFailuresRef.current = 0;
         ingestPollRef.current = setInterval(async () => {
+          if (document.hidden) return;
           try {
             const updated = await fetchIngestionJob(job.job_id);
+            ingestFailuresRef.current = 0;
             if (updated.status !== "running" && updated.status !== "queued") {
               if (ingestPollRef.current) clearInterval(ingestPollRef.current);
               ingestPollRef.current = null;
               if (updated.status === "completed") {
                 setIngestDone(true);
               } else {
+                const warnings = (
+                  updated as unknown as { warnings?: unknown }
+                ).warnings;
+                const firstWarning = Array.isArray(warnings)
+                  ? warnings.map(String).find((item) => item.length > 0)
+                  : typeof warnings === "string" && warnings.length > 0
+                    ? warnings
+                    : null;
                 setIngestError(
-                  `Ingestion ${updated.status}: ${(updated as Record<string, unknown>).warnings ?? "Lihat log"}`
+                  `Pemrosesan ${ingestionLabels[updated.status] ?? updated.status}: ${firstWarning ?? "periksa halaman status pemrosesan."}`
                 );
               }
               setIngesting(false);
             }
           } catch {
-            // keep polling
+            ingestFailuresRef.current += 1;
+            if (ingestFailuresRef.current >= 10) {
+              if (ingestPollRef.current) clearInterval(ingestPollRef.current);
+              ingestPollRef.current = null;
+              setIngestError(
+                "Status pemrosesan tidak dapat dipantau. Periksa halaman status pemrosesan."
+              );
+              setIngesting(false);
+            }
           }
         }, 3000);
       } else if (job.status === "completed") {
@@ -196,7 +217,7 @@ export function AdminUpload() {
         title="Upload PDF"
         description="Unggah PDF resmi, pilih topiknya, lalu proses dokumen untuk ditinjau sebelum diterbitkan."
         actions={
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" className="min-h-11">
             <Link href="/documents">
               <ArrowLeft /> Daftar dokumen
             </Link>
@@ -250,6 +271,7 @@ export function AdminUpload() {
                   )}
                 >
                   {s === "select" ? "Pilih dokumen" : s === "configure" ? "Proses" : "Selesai"}
+                  {completed ? <span className="sr-only"> (selesai)</span> : null}
                 </span>
               </div>
             </div>
@@ -303,7 +325,7 @@ export function AdminUpload() {
                     disabled={submitting || ingesting}
                     variant="ghost"
                     size="sm"
-                    className="text-muted-text hover:text-red"
+                    className="min-h-11 text-muted-text hover:text-red"
                     onClick={clearFile}
                   >
                     <X className="size-4" /> Ganti file
@@ -333,6 +355,7 @@ export function AdminUpload() {
                   type="button"
                   variant="outline"
                   size="lg"
+                  className="min-h-11"
                   onClick={() => inputRef.current?.click()}
                 >
                   <FileText className="size-4" /> Pilih file dari komputer
@@ -431,7 +454,7 @@ export function AdminUpload() {
             >
               {submitting ? (
                 <>
-                  <Loader2 className="animate-spin" /> Mengunggah…
+                  <Loader2 className="animate-spin motion-reduce:animate-none" /> Mengunggah…
                 </>
               ) : (
                 <>
@@ -466,7 +489,7 @@ export function AdminUpload() {
                 >
                   {ingesting ? (
                     <>
-                      <Loader2 className="animate-spin" /> Memproses…
+                      <Loader2 className="animate-spin motion-reduce:animate-none" /> Memproses…
                     </>
                   ) : (
                     <>
@@ -503,12 +526,16 @@ export function AdminUpload() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Button asChild variant="outline" className="w-full">
+                  <Button asChild variant="outline" className="min-h-11 w-full">
                     <Link href="/documents">
                       Lihat dokumen <ArrowRight className="size-4" />
                     </Link>
                   </Button>
-                  <Button variant="ghost" className="w-full text-muted-text" onClick={clearFile}>
+                  <Button
+                    variant="ghost"
+                    className="min-h-11 w-full text-muted-text"
+                    onClick={clearFile}
+                  >
                     Upload lagi
                   </Button>
                 </div>

@@ -30,7 +30,7 @@ from app.api.state import UserRecord, now_utc
 from app.api.utils import storage_root
 from app.core.config import settings
 from app.db.session import create_session
-from app.models.business import Conversation, DailyUsage, Message
+from app.models.business import Conversation, DailyUsage, Message, RagRequestObservation
 from app.services.answering.guardrails import (
     apply_output_guardrail,
     build_guardrail_refusal,
@@ -51,6 +51,7 @@ from app.services.retrieval.engine import RetrievalEngine
 from app.services.retrieval.governance import load_retrieval_governance
 from app.services.retrieval.store import load_artifact_documents_snapshot
 from app.services.telemetry import (
+    drain_stage_accumulator,
     observe_rag_completion,
     observe_request_latency,
     observe_stage,
@@ -59,6 +60,7 @@ from app.services.telemetry import (
     record_ragas_eval,
     record_ragas_faithfulness,
     record_user_behavior,
+    reset_stage_accumulator,
     trace_stage,
 )
 
@@ -678,7 +680,7 @@ def _run_ragas_online_eval(question: str, answer_text: str, contexts: list[str])
             contexts=contexts,
         )
         record_ragas_faithfulness(score)
-        record_ragas_eval("success")
+        record_ragas_eval("success", score)
     except Exception:
         record_ragas_eval("failed")
         logger.exception("ragas_online_eval_failed")
@@ -721,9 +723,56 @@ def _observe_request_completion(question: str, memory, answer, retrieval, latenc
     except Exception:
         logger.debug("observability_request_latency_failed", exc_info=True)
     try:
+        _record_request_observation(
+            outcome=getattr(answer, "answer_status", "unknown"),
+            memory=memory,
+            answer=answer,
+            latency_ms=latency_ms,
+        )
+    except Exception:
+        logger.debug("observability_request_row_failed", exc_info=True)
+    try:
         _maybe_sample_ragas_online(question, answer, retrieval)
     except Exception:
         logger.debug("observability_ragas_sampling_failed", exc_info=True)
+
+
+def _record_request_observation(outcome: str, memory=None, answer=None, latency_ms=None) -> None:
+    """Durable per-turn metrics row; isolated session so it never poisons chat."""
+    try:
+        topics = tuple(getattr(memory, "context_topics", ()) or ()) if memory else ()
+        usage = (getattr(answer, "debug", {}) or {}).get(
+            "token_usage", {"prompt_tokens": 0, "completion_tokens": 0}
+        )
+        claims = getattr(answer, "claims", []) or []
+        stages = drain_stage_accumulator()
+        with create_session() as observation_session:
+            observation_session.add(
+                RagRequestObservation(
+                    outcome=str(outcome or "unknown")[:40],
+                    request_latency_ms=float(latency_ms) if latency_ms is not None else None,
+                    prompt_tokens=int(usage.get("prompt_tokens", 0) or 0),
+                    completion_tokens=int(usage.get("completion_tokens", 0) or 0),
+                    llm_model=str(
+                        (getattr(answer, "debug", {}) or {}).get("llm_model", "non_llm")
+                    )[:160],
+                    claims_supported=sum(1 for claim in claims if claim.supported),
+                    claims_unsupported=sum(1 for claim in claims if not claim.supported),
+                    topic=str(topics[0]) if topics else "unknown",
+                    is_followup=bool(getattr(memory, "used", False)) if memory else False,
+                    stage_latencies=[
+                        {
+                            "stage": str(entry.get("stage")),
+                            "provider": str(entry.get("provider")),
+                            "seconds": float(entry.get("seconds", 0) or 0),
+                        }
+                        for entry in stages
+                    ],
+                )
+            )
+            observation_session.commit()
+    except Exception:
+        logger.debug("observability_request_row_failed", exc_info=True)
 
 
 def _log_rag_completion(answer, latency_ms: int) -> None:
@@ -775,6 +824,7 @@ def ask_question(
             )
     conversation = _get_or_create_conversation(payload, active_user, session)
     pending_turn = _begin_turn(conversation, payload, session)
+    reset_stage_accumulator()
 
     try:
         guardrail = evaluate_input_guardrail(payload.question)
@@ -832,6 +882,9 @@ def ask_question(
         )
         record_outcome("failed")
         record_provider_error("rag_pipeline", f"{settings.vector_store}+{settings.llm_provider}")
+        _record_request_observation(
+            "failed", latency_ms=int((time.perf_counter() - started_at) * 1000)
+        )
         logger.exception("rag_failed trace_id=%s", trace_id)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -918,6 +971,7 @@ def ask_question_stream(
         )
     conversation = _get_or_create_conversation(payload, active_user, session)
     pending_turn = _begin_turn(conversation, payload, session)
+    reset_stage_accumulator()
     trace_id = f"rag_{uuid4().hex}"
 
     async def event_stream():
@@ -1006,6 +1060,9 @@ def ask_question_stream(
             record_provider_error(
                 "rag_pipeline",
                 f"{settings.vector_store}+{settings.llm_provider}",
+            )
+            _record_request_observation(
+                "failed", latency_ms=int((time.perf_counter() - started_at) * 1000)
             )
             logger.exception("rag_failed trace_id=%s", trace_id)
             yield _stream_event(

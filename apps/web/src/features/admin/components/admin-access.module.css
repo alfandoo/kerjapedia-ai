@@ -143,7 +143,7 @@
   width: 100%;
   height: 48px;
   padding: 0 14px;
-  border: 1px solid #bdcec2 !important;
+  border: 1px solid #6a8573 !important;
   border-radius: 10px;
   background: #ffffff !important;
   color: #172e23 !important;
@@ -167,11 +167,11 @@
 }
 .screen .reveal {
   position: absolute;
-  top: 3px;
-  right: 3px;
+  top: 2px;
+  right: 2px;
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border-radius: 8px;
   background: transparent;
@@ -181,6 +181,10 @@
 .screen .reveal:hover {
   background: #edf5ef;
   color: #183e2c;
+}
+.screen .reveal:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 .screen button:focus-visible {
   outline: 2px solid #286246;

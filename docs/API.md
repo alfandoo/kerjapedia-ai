@@ -51,8 +51,11 @@ menjadi mekanisme rollback.
 - `POST /evaluation/datasets/{dataset_id}/questions/{question_id}/review`: append-only
   review event oleh role `legal_reviewer`.
 - `POST /evaluation/datasets/seed`: impor 150 seed nonproduksi.
-- `POST /evaluation/runs`: tanpa `release_id` menjalankan eksperimen artifact; dengan
-  `release_id` menjalankan stack production terhadap namespace tersebut.
+- `POST /evaluation/runs` (202): tanpa `release_id` menjalankan eksperimen artifact;
+  dengan `release_id` menjalankan stack production terhadap namespace tersebut. Run
+  berjalan asinkron di latar: respons langsung berisi status `pending`, progres
+  dipolling via `GET /evaluation/runs` dan `GET /evaluation/runs/{id}` hingga
+  `completed`/`failed`.
 
 Release evaluation membutuhkan minimal 300 kasus human-verified dengan split
 `development` dan `test`, serta audit event review terbaru yang verified untuk setiap

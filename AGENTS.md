@@ -41,3 +41,15 @@ Pull requests should include a short summary, affected folders, validation perfo
 ## Security & Configuration Tips
 
 Do not commit secrets, API keys, private notes, or generated vector indexes unless explicitly required. Prefer official government or BPK regulation sources and preserve enough metadata for users to verify citations.
+
+<!-- antislop:start -->
+## antislop
+For UI, copy, people, mobile layout, or code comments work, read `.opencode/skills/antislop/SKILL.md` (core) and then the skill for the task:
+- UI / visual: `.opencode/skills/antislop-ui/SKILL.md`
+- Copy & text: `.opencode/skills/antislop-copywriting/SKILL.md`
+- People: `.opencode/skills/antislop-human/SKILL.md`
+- Mobile / responsive: `.opencode/skills/antislop-layoutmobile/SKILL.md`
+- Code comments: `.opencode/skills/antislop-code/SKILL.md`
+Before starting, ask the user when antislop applies: during the work, or after it is done.
+Standing mode (user-approved): DURING. Apply all antislop skills automatically to relevant work without asking first; still ask only where the rules require a user decision (design direction, asset creation, audit approvals).
+<!-- antislop:end -->

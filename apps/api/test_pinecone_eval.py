@@ -27,7 +27,7 @@ print("Model loaded.")
 
 config = PineconeConfig(
     api_key=os.getenv("PINECONE_API_KEY"),
-    index_name=os.getenv("PINECONE_INDEX_NAME", "kerjapedia-regulations-v2"),
+    index_name=os.getenv("PINECONE_INDEX_NAME", "kerjapedia"),
     namespace=os.getenv("PINECONE_NAMESPACE", "production"),
     cloud=os.getenv("PINECONE_CLOUD", "aws"),
     region=os.getenv("PINECONE_REGION", "us-east-1"),

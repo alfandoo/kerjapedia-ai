@@ -24,6 +24,7 @@ from app.models.ingestion import (
     DocumentChunk,
     DocumentVersion,
     IngestionBuild,
+    IngestionJob,
 )
 from app.services.ingestion.external_embeddings import (
     DEFAULT_DIMENSIONS,
@@ -48,6 +49,7 @@ class ExternalPostgresImportResult:
     document_count: int
     chunk_count: int
     build_ids: dict[str, str]
+    job_ids: dict[str, str]
     chunks_sha256: str
     embeddings_sha256: str
     staging_manifest_sha256: str
@@ -77,6 +79,7 @@ def import_external_bge_snapshot(
     _insert_missing_rows(session, chunks, versions, builds, str(receipt["embeddings_sha256"]), now)
     session.flush()
     _verify_postgres(session, chunks, builds, receipt)
+    job_ids = _record_import_jobs(session, versions, builds, chunks, staging, now)
     return ExternalPostgresImportResult(
         schema_version=POSTGRES_IMPORT_SCHEMA_VERSION,
         status="verified",
@@ -84,6 +87,7 @@ def import_external_bge_snapshot(
         document_count=len(versions),
         chunk_count=len(chunks),
         build_ids={key: value.build_id for key, value in builds.items()},
+        job_ids=job_ids,
         chunks_sha256=str(receipt["chunks_sha256"]),
         embeddings_sha256=str(receipt["embeddings_sha256"]),
         staging_manifest_sha256=_sha256(staging_manifest_path),
@@ -348,53 +352,59 @@ def _insert_missing_rows(
                 metadata["metadata_hash"],
             ):
                 raise ValueError(f"Canonical chunk ID conflicts with existing data: {chunk_id}")
-        else:
-            parent = metadata.get("parent_chunk_id")
-            if parent and parent not in expected_ids:
-                raise ValueError(f"Missing canonical parent chunk: {parent}")
-            section = (
-                " / ".join(
-                    filter(
-                        None,
-                        [
-                            _prefix(structure.get("bagian"), "Bagian "),
-                            _prefix(structure.get("paragraf"), "Paragraf "),
-                        ],
-                    )
-                )
-                or None
-            )
-            session.add(
-                DocumentChunk(
-                    chunk_id=chunk_id,
-                    document_id=document_id,
-                    version_id=version.version_id,
-                    build_id=build.build_id,
-                    chapter=_prefix(structure.get("bab"), "BAB "),
-                    section=section,
-                    article=_prefix(structure.get("pasal"), "Pasal "),
-                    paragraph=_prefix(structure.get("ayat"), "Ayat (", suffix=")"),
-                    page_start=chunk["page_start"],
-                    page_end=chunk["page_end"],
-                    token_count=int(chunk.get("token_count") or 0),
-                    text=chunk["content"],
-                    retrieval_text=chunk["content"],
-                    chunk_type=str(chunk.get("chunk_type") or "substantive"),
-                    artifact_checksum=artifact_hash,
-                    parent_chunk_id=parent,
-                    chunk_index=int(metadata.get("chunk_index", ordinal)),
-                    legal_node_id=structure.get("legal_node_id"),
-                    section_path=list(
-                        chunk.get("section_path") or structure.get("section_path") or []
-                    ),
-                    content_hash=chunk["content_hash"],
-                    metadata_hash=metadata["metadata_hash"],
-                    provenance=chunk["metadata"],
-                    payload=chunk,
-                    created_at=now,
-                    updated_at=now,
+            continue
+        parent = metadata.get("parent_chunk_id")
+        if parent and parent not in expected_ids:
+            raise ValueError(f"Missing canonical parent chunk: {parent}")
+        section = (
+            " / ".join(
+                filter(
+                    None,
+                    [
+                        _prefix(structure.get("bagian"), "Bagian "),
+                        _prefix(structure.get("paragraf"), "Paragraf "),
+                    ],
                 )
             )
+            or None
+        )
+        session.add(
+            DocumentChunk(
+                chunk_id=chunk_id,
+                document_id=document_id,
+                version_id=version.version_id,
+                build_id=build.build_id,
+                chapter=_prefix(structure.get("bab"), "BAB "),
+                section=section,
+                article=_prefix(structure.get("pasal"), "Pasal "),
+                paragraph=_prefix(structure.get("ayat"), "Ayat (", suffix=")"),
+                page_start=chunk["page_start"],
+                page_end=chunk["page_end"],
+                token_count=int(chunk.get("token_count") or 0),
+                text=chunk["content"],
+                retrieval_text=chunk["content"],
+                chunk_type=str(chunk.get("chunk_type") or "substantive"),
+                artifact_checksum=artifact_hash,
+                parent_chunk_id=parent,
+                chunk_index=int(metadata.get("chunk_index", ordinal)),
+                legal_node_id=structure.get("legal_node_id"),
+                section_path=list(
+                    chunk.get("section_path") or structure.get("section_path") or []
+                ),
+                content_hash=chunk["content_hash"],
+                metadata_hash=metadata["metadata_hash"],
+                provenance=chunk["metadata"],
+                payload=chunk,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    # Flush chunks before embeddings: a combined flush can emit embedding
+    # rows first and trip the chunk_embeddings → chunks foreign key.
+    session.flush()
+    for chunk in chunks:
+        chunk_id, document_id = str(chunk["chunk_id"]), str(chunk["document_id"])
+        build = builds[document_id]
         embedding = session.get(ChunkEmbedding, chunk_id)
         if embedding is not None:
             if (
@@ -413,22 +423,22 @@ def _insert_missing_rows(
                 IMPORT_STATUS,
             ):
                 raise ValueError(f"Canonical embedding ID conflicts with existing data: {chunk_id}")
-        else:
-            session.add(
-                ChunkEmbedding(
-                    chunk_id=chunk_id,
-                    build_id=build.build_id,
-                    embedding_model=DEFAULT_MODEL,
-                    embedding_revision=DEFAULT_REVISION,
-                    dimensions=DEFAULT_DIMENSIONS,
-                    vector_norm=None,
-                    embedding=None,
-                    sparse_embedding=None,
-                    retrieval_text_sha256=chunk["content_hash"],
-                    embedding_artifact_sha256=artifact_hash,
-                    import_status=IMPORT_STATUS,
-                )
+            continue
+        session.add(
+            ChunkEmbedding(
+                chunk_id=chunk_id,
+                build_id=build.build_id,
+                embedding_model=DEFAULT_MODEL,
+                embedding_revision=DEFAULT_REVISION,
+                dimensions=DEFAULT_DIMENSIONS,
+                vector_norm=None,
+                embedding=None,
+                sparse_embedding=None,
+                retrieval_text_sha256=chunk["content_hash"],
+                embedding_artifact_sha256=artifact_hash,
+                import_status=IMPORT_STATUS,
             )
+        )
 
 
 def _verify_postgres(
@@ -469,6 +479,56 @@ def _verify_postgres(
 
 def _prefix(value: object, prefix: str, suffix: str = "") -> str | None:
     return f"{prefix}{value}{suffix}" if isinstance(value, str) and value else None
+
+
+def _record_import_jobs(
+    session: Session,
+    versions: dict[str, DocumentVersion],
+    builds: dict[str, IngestionBuild],
+    chunks: list[dict[str, Any]],
+    staging: dict[str, Any],
+    now: datetime,
+) -> dict[str, str]:
+    """Leave one completed job row per document so the dashboard recent list
+    reflects external snapshots, not just local pipeline runs."""
+    counts: dict[str, int] = {}
+    for chunk in chunks:
+        document_id = str(chunk["document_id"])
+        counts[document_id] = counts.get(document_id, 0) + 1
+    namespace = str(staging["namespace"])
+    job_ids: dict[str, str] = {}
+    for document_id, version in versions.items():
+        build = builds[document_id]
+        job_id = f"ingext_{build.build_id.removeprefix('extb_')}"
+        job = session.get(IngestionJob, job_id)
+        artifact_paths = {
+            "external_snapshot": True,
+            "staging_namespace": namespace,
+            "chunk_count": counts.get(document_id, 0),
+        }
+        if job is None:
+            session.add(
+                IngestionJob(
+                    job_id=job_id,
+                    document_id=document_id,
+                    version_id=version.version_id,
+                    status="completed",
+                    warnings=[],
+                    artifact_paths=artifact_paths,
+                    build_id=build.build_id,
+                    created_at=now,
+                )
+            )
+        else:
+            job.document_id = document_id
+            job.version_id = version.version_id
+            job.status = "completed"
+            job.warnings = []
+            job.artifact_paths = artifact_paths
+            job.build_id = build.build_id
+            job.created_at = now
+        job_ids[document_id] = job_id
+    return job_ids
 
 
 def _hash(payload: object) -> str:

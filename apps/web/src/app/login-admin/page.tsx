@@ -31,7 +31,7 @@ export default function LoginPage() {
       router.push("/admin/dashboard");
     } catch (err) {
       const message = (err as Error).message;
-      setStatus(message || "Gagal. Coba lagi.");
+      setStatus(message || "Gagal masuk. Coba lagi.");
       setLoading(false);
     }
   }
@@ -83,6 +83,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   className={styles.reveal}
+                  disabled={loading}
                   aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
                   aria-pressed={showPassword}
                   aria-controls="password"

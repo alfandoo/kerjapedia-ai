@@ -985,6 +985,31 @@ def test_admin_retrieval_playground_returns_ranked_chunks(
     assert response.json()["results"][0]["article"] == "Pasal 15"
 
 
+def test_admin_metrics_persist_chat_turns(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.api.routes_chat.load_artifact_documents_snapshot",
+        lambda *_: [make_document()],
+    )
+    ask = client.post(
+        "/chat/ask",
+        json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
+    )
+    assert ask.status_code == 200
+    _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    metrics = client.get("/admin/metrics", headers=admin_headers(client))
+    assert metrics.status_code == 200
+    body = metrics.json()
+    assert body["requests"]["total"] >= 1
+    assert body["outcomes"].get("answered", 0) >= 1
+    assert body["behavior"]["total"] >= 1
+    assert body["behavior"]["by_topic"]
+    assert body["stage_latency"]
+    assert body["request_latency"]["count"] >= 1
+
+
 def test_feedback_listing_is_admin_only(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -1094,7 +1119,7 @@ def test_evaluation_dataset_and_experiment_run(
     assert reviewed.status_code == 200
     assert reviewed.json()["verified_by"] != "unknown"
     monkeypatch.setattr(
-        "app.api.routes_evaluation.load_artifact_documents",
+        "app.services.evaluation.tasks.load_artifact_documents",
         lambda _: [make_document()],
     )
     run = client.post(
@@ -1108,9 +1133,20 @@ def test_evaluation_dataset_and_experiment_run(
     )
 
     assert dataset.status_code == 200
-    assert run.status_code == 200
-    assert set(run.json()["metrics"]) == {"baseline", "dense", "hybrid", "rerank"}
-    assert run.json()["metrics"]["rerank"]["recall_at_5"] == 1.0
+    assert run.status_code == 202
+    created = run.json()
+    assert created["status"] == "pending"
+    assert created["progress_total"] == 4
+    assert created["metrics"] == {}
+    # TestClient runs background tasks inline, so the run already finished.
+    listed = client.get("/evaluation/runs", headers=headers)
+    finished = [item for item in listed.json() if item["run_id"] == created["run_id"]][0]
+    assert finished["status"] == "completed"
+    assert set(finished["metrics"]) == {"baseline", "dense", "hybrid", "rerank"}
+    assert finished["metrics"]["rerank"]["recall_at_5"] == 1.0
+    detail = client.get(f"/evaluation/runs/{created['run_id']}", headers=headers)
+    assert detail.json()["status"] == "completed"
+    assert detail.json()["report"]["question_count"] == 1
 
 
 def test_upload_document_registers_upload_manifest(

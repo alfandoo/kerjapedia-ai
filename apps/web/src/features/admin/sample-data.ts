@@ -212,6 +212,9 @@ export const fallbackEvaluationRuns: EvaluationRunSummary[] = [
   {
     run_id: "evalrun_sample_001",
     dataset_id: "evalset_golden_v1",
+    status: "completed",
+    progress_completed: 6,
+    progress_total: 6,
     created_at: "2026-07-29T09:00:00Z",
     metrics: {
       hybrid: {
@@ -252,6 +255,9 @@ export const fallbackEvaluationRuns: EvaluationRunSummary[] = [
   {
     run_id: "evalrun_sample_002",
     dataset_id: "evalset_golden_v1",
+    status: "completed",
+    progress_completed: 6,
+    progress_total: 6,
     created_at: "2026-07-22T14:30:00Z",
     metrics: {
       hybrid: {

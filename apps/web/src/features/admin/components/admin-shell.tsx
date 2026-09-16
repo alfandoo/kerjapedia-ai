@@ -6,6 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   Activity,
   ArrowRight,
@@ -61,12 +62,13 @@ const adminNavGroups: {
       { href: "/admin/observability", label: "Observability", icon: Activity },
     ],
   },
+  {
+    label: "Sistem",
+    items: [{ href: "/admin/settings", label: "Pengaturan", icon: Settings }],
+  },
 ];
 
-const allNavItems = [
-  ...adminNavGroups.flatMap((group) => group.items),
-  { href: "/admin/settings", label: "Pengaturan", icon: Settings },
-];
+const allNavItems = adminNavGroups.flatMap((group) => group.items);
 
 function useIsClient() {
   return useSyncExternalStore(
@@ -87,6 +89,10 @@ export function AdminShell({ children }: AdminShellProps) {
     () => typeof window !== "undefined" && readPreference("kp-admin-sidebar") === "collapsed"
   );
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileCloseRef = useRef<HTMLButtonElement>(null);
+  const wasMobileOpenRef = useRef(false);
 
   function toggleCollapsed(next: boolean) {
     setSidebarCollapsed(next);
@@ -99,6 +105,32 @@ export function AdminShell({ children }: AdminShellProps) {
       document.body.style.overflow = "";
     };
   }, [mobileOpen]);
+
+  useEffect(() => {
+    if (mobileOpen) {
+      mobileCloseRef.current?.focus();
+    } else if (wasMobileOpenRef.current) {
+      menuButtonRef.current?.focus();
+    }
+    wasMobileOpenRef.current = mobileOpen;
+  }, [mobileOpen]);
+
+  function keepMobileFocusInside(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.key !== "Tab" || !mobileOpen) return;
+    const focusable = asideRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable?.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -182,7 +214,9 @@ export function AdminShell({ children }: AdminShellProps) {
 
       <aside
         id="admin-sidebar"
+        ref={asideRef}
         aria-label="Navigasi admin"
+        onKeyDown={keepMobileFocusInside}
         className={cn(
           sidebarStyles.sidebar,
           "fixed inset-y-0 left-0 z-50 flex w-[264px] shrink-0 flex-col transition-transform duration-200 motion-reduce:transition-none lg:h-[100dvh] lg:translate-x-0",
@@ -190,7 +224,7 @@ export function AdminShell({ children }: AdminShellProps) {
           sidebarCollapsed ? "lg:w-[76px]" : "lg:w-[248px]"
         )}
       >
-        <div className="flex h-[76px] shrink-0 items-center gap-2 px-4">
+        <div className="flex h-16 shrink-0 items-center gap-2 px-4">
           <span className={sidebarStyles.brandIcon}>
             <ScaleIcon className="size-5" />
           </span>
@@ -202,6 +236,7 @@ export function AdminShell({ children }: AdminShellProps) {
           </div>
           <button
             type="button"
+            ref={mobileCloseRef}
             className={`${sidebarStyles.toggle} ml-auto flex lg:hidden`}
             aria-label="Tutup menu"
             onClick={() => setMobileOpen(false)}
@@ -217,7 +252,7 @@ export function AdminShell({ children }: AdminShellProps) {
             )}
             aria-label="Ciutkan sidebar"
             aria-controls="admin-sidebar"
-            aria-expanded={true}
+            aria-expanded={!sidebarCollapsed}
             onClick={() => toggleCollapsed(true)}
           >
             <PanelLeftClose className="size-4" />
@@ -225,7 +260,10 @@ export function AdminShell({ children }: AdminShellProps) {
         </div>
 
         <nav
-          className={`${sidebarStyles.navigation} flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 pt-4 pb-6`}
+          className={cn(
+            `${sidebarStyles.navigation} flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 pt-4 pb-6`,
+            sidebarCollapsed && "lg:gap-3"
+          )}
           aria-label="Menu admin"
         >
           {adminNavGroups.map((group) => (
@@ -241,7 +279,6 @@ export function AdminShell({ children }: AdminShellProps) {
                     href={item.href}
                     key={item.href}
                     aria-current={active ? "page" : undefined}
-                    aria-label={item.label}
                     title={sidebarCollapsed ? item.label : undefined}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
@@ -272,7 +309,8 @@ export function AdminShell({ children }: AdminShellProps) {
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
-              className="-ml-1 flex size-9 items-center justify-center rounded-lg text-javanese transition hover:bg-surface-soft lg:hidden"
+              ref={menuButtonRef}
+              className="-ml-1 flex size-11 items-center justify-center rounded-lg text-javanese transition hover:bg-surface-soft lg:hidden"
               aria-label="Buka menu navigasi"
               aria-expanded={mobileOpen}
               onClick={() => setMobileOpen(true)}
@@ -282,8 +320,10 @@ export function AdminShell({ children }: AdminShellProps) {
             {sidebarCollapsed && (
               <button
                 type="button"
-                className="hidden size-9 items-center justify-center rounded-lg text-javanese transition hover:bg-surface-soft lg:flex"
+                className="hidden size-11 items-center justify-center rounded-lg text-javanese transition hover:bg-surface-soft lg:flex"
                 aria-label="Buka sidebar"
+                aria-controls="admin-sidebar"
+                aria-expanded={!sidebarCollapsed}
                 onClick={() => toggleCollapsed(false)}
               >
                 <PanelLeftOpen className="size-4" />

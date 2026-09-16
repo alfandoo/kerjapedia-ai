@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     vector_store: str = "artifact"
     pinecone_api_key: str | None = None
-    pinecone_index_name: str = "kerjapedia-regulations-v2"
+    pinecone_index_name: str = "kerjapedia"
     pinecone_namespace: str = "production"
     pinecone_cloud: str = "aws"
     pinecone_region: str = "us-east-1"
@@ -157,9 +157,9 @@ class Settings(BaseSettings):
             raise ValueError("OPENROUTER_API_KEY is required for the OpenRouter LLM provider.")
         if self.vector_store != "pinecone":
             raise ValueError("VECTOR_STORE must be pinecone in production.")
-        if self.pinecone_index_name != "kerjapedia-regulations-v2":
+        if self.pinecone_index_name != "kerjapedia":
             raise ValueError(
-                "Production requires PINECONE_INDEX_NAME=kerjapedia-regulations-v2."
+                "Production requires PINECONE_INDEX_NAME=kerjapedia."
             )
         if (
             self.embedding_provider != "bge_m3"

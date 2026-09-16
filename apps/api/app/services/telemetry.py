@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import logging
 from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 try:
     from prometheus_client import Counter, Histogram
@@ -77,14 +82,38 @@ else:
     RAG_REQUEST_LATENCY = None
 
 
+_stage_accumulator: ContextVar[list[dict[str, Any]] | None] = ContextVar(
+    "kerjapedia_stage_accumulator", default=None
+)
+
+
+def reset_stage_accumulator() -> None:
+    _stage_accumulator.set([])
+
+
+def drain_stage_accumulator() -> list[dict[str, Any]]:
+    entries = _stage_accumulator.get() or []
+    _stage_accumulator.set(None)
+    return entries
+
+
 def record_ragas_faithfulness(score: float) -> None:
     if RAGAS_FAITHFULNESS is not None:
         RAGAS_FAITHFULNESS.observe(score)
 
 
-def record_ragas_eval(status: str) -> None:
+def record_ragas_eval(status: str, score: float | None = None) -> None:
     if RAGAS_EVAL_TOTAL is not None:
         RAGAS_EVAL_TOTAL.labels(status=status).inc()
+    try:
+        from app.db.session import create_session
+        from app.models.business import RagRagasEval
+
+        with create_session() as session:
+            session.add(RagRagasEval(status=status, score=score))
+            session.commit()
+    except Exception:
+        logger.debug("ragas eval observation not persisted", exc_info=True)
 
 
 def record_user_behavior(topic: str, is_followup: bool) -> None:
@@ -103,6 +132,11 @@ def observe_request_latency(elapsed_seconds: float) -> None:
 def observe_stage(stage: str, provider: str, elapsed_seconds: float) -> None:
     if RAG_STAGE_LATENCY is not None:
         RAG_STAGE_LATENCY.labels(stage=stage, provider=provider).observe(elapsed_seconds)
+    accumulator = _stage_accumulator.get()
+    if accumulator is not None:
+        accumulator.append(
+            {"stage": stage, "provider": provider, "seconds": float(elapsed_seconds)}
+        )
 
 
 def record_outcome(outcome: str) -> None:
@@ -113,6 +147,15 @@ def record_outcome(outcome: str) -> None:
 def record_provider_error(stage: str, provider: str) -> None:
     if RAG_PROVIDER_ERRORS is not None:
         RAG_PROVIDER_ERRORS.labels(stage=stage, provider=provider).inc()
+    try:
+        from app.db.session import create_session
+        from app.models.business import RagProviderError
+
+        with create_session() as session:
+            session.add(RagProviderError(stage=stage[:80], provider=provider[:120]))
+            session.commit()
+    except Exception:
+        logger.debug("provider error observation not persisted", exc_info=True)
 
 
 def observe_rag_completion(answer, retrieval) -> None:

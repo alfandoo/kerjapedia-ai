@@ -149,6 +149,11 @@ export type EvaluationDataset = {
 export type EvaluationRunSummary = {
   run_id: string;
   dataset_id: string;
+  release_id?: string | null;
+  status: "pending" | "running" | "completed" | "failed" | string;
+  progress_completed: number;
+  progress_total: number;
+  error?: string | null;
   created_at: string;
   metrics: Record<string, EvaluationMetricSet>;
 };

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, FlaskConical, Gauge, Loader2, Play, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronDown, FlaskConical, Gauge, Play, RefreshCw } from "lucide-react";
 import { Toaster, toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -77,18 +77,17 @@ export function AdminEvaluation() {
   const [runDatasetId, setRunDatasetId] = useState("");
   const [runModes, setRunModes] = useState<string[]>(["hybrid", "rerank"]);
   const [runTopK, setRunTopK] = useState("5");
-  const [running, setRunning] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [runError, setRunError] = useState("");
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    if (!running) return;
-    const started = Date.now();
-    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
-    return () => clearInterval(timer);
-  }, [running]);
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<EvaluationRunDetail | null>(null);
+  const detailRef = useRef<EvaluationRunDetail | null>(null);
+  useEffect(() => {
+    detailRef.current = detail;
+  });
+  const pollBusy = useRef(false);
+  const lastStatuses = useRef<Record<string, string>>({});
 
   useEffect(() => {
     const controller = new AbortController();
@@ -100,6 +99,7 @@ export function AdminEvaluation() {
         if (controller.signal.aborted) return;
         setDatasets(datasetItems);
         setRuns(runItems);
+        for (const item of runItems) lastStatuses.current[item.run_id] = item.status;
         setRunDatasetId((current) =>
           datasetItems.some((item) => item.dataset_id === current)
             ? current
@@ -150,24 +150,30 @@ export function AdminEvaluation() {
   async function startRun() {
     if (
       runBusy.current ||
+      submitting ||
       !runModes.length ||
       !datasets.some((item) => item.dataset_id === runDatasetId)
     )
       return;
     runBusy.current = true;
     setRunError("");
-    setElapsed(0);
-    setRunning(true);
+    setSubmitting(true);
     try {
       const next = await createEvaluationRun({
         dataset_id: runDatasetId,
         experiment_modes: runModes,
         top_k: Number(runTopK),
       });
+      lastStatuses.current[next.run_id] = next.status;
       setRuns((current) => [
         {
           run_id: next.run_id,
           dataset_id: next.dataset_id,
+          release_id: next.release_id,
+          status: next.status,
+          progress_completed: next.progress_completed,
+          progress_total: next.progress_total,
+          error: next.error,
           created_at: next.created_at,
           metrics: next.metrics,
         },
@@ -179,14 +185,13 @@ export function AdminEvaluation() {
       setDetailLoading(false);
       setDetail(next);
       setDetailOpen(true);
-      toast.success("Evaluasi selesai dijalankan.");
     } catch {
       setRunError(
-        "Hasil evaluasi belum dapat diterima. Periksa koneksi dan muat ulang riwayat sebelum mencoba lagi agar tidak membuat evaluasi ganda."
+        "Evaluasi belum dapat dimulai. Periksa koneksi lalu coba lagi."
       );
     } finally {
       runBusy.current = false;
-      setRunning(false);
+      setSubmitting(false);
     }
   }
 
@@ -205,6 +210,51 @@ export function AdminEvaluation() {
       if (request === detailRequest.current) setDetailLoading(false);
     }
   }
+
+  function isActiveRun(status: string | undefined) {
+    return status === "pending" || status === "running";
+  }
+
+  const refreshActive = useCallback(async () => {
+    if (pollBusy.current || document.hidden) return;
+    pollBusy.current = true;
+    try {
+      const liveDetail = detailRef.current;
+      const [summaries, freshDetail] = await Promise.all([
+        fetchEvaluationRuns(),
+        liveDetail && isActiveRun(liveDetail.status)
+          ? fetchEvaluationRun(liveDetail.run_id).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      for (const summary of summaries) {
+        const previous = lastStatuses.current[summary.run_id];
+        if (previous === "pending" || previous === "running") {
+          if (summary.status === "completed") toast.success("Evaluasi selesai dijalankan.");
+          else if (summary.status === "failed")
+            toast.error("Evaluasi gagal. Buka detail untuk informasinya.");
+        }
+        lastStatuses.current[summary.run_id] = summary.status;
+      }
+      setRuns(summaries);
+      if (freshDetail) setDetail(freshDetail);
+    } catch {
+      // keep stale data; next tick retries
+    } finally {
+      pollBusy.current = false;
+    }
+  }, []);
+
+  const needsPoll =
+    !loading &&
+    !loadError &&
+    (runs.some((run) => isActiveRun(run.status)) ||
+      (detail !== null && isActiveRun(detail.status)));
+
+  useEffect(() => {
+    if (!needsPoll) return;
+    const id = window.setInterval(() => void refreshActive(), 5000);
+    return () => window.clearInterval(id);
+  }, [needsPoll, refreshActive]);
 
   const pageCount = Math.max(1, Math.ceil(runs.length / pageSize));
   const currentPage = Math.min(page, pageCount);
@@ -225,14 +275,16 @@ export function AdminEvaluation() {
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              disabled={loading || loadError || seeding || running}
+              className="min-h-11"
+              disabled={loading || loadError || seeding || submitting}
               onClick={() => void seed()}
             >
-              <RefreshCw className={seeding ? "animate-spin" : ""} /> Muat dataset
+              <RefreshCw className={seeding ? "animate-spin motion-reduce:animate-none" : ""} />{" "}
+              Muat dataset
             </Button>
             <Button
-              className="bg-javanese text-white hover:bg-forest"
-              disabled={loading || loadError || running || seeding || !datasets.length}
+              className="min-h-11 bg-javanese text-white hover:bg-forest"
+              disabled={loading || loadError || submitting || seeding || !datasets.length}
               onClick={() => setRunDialogOpen(true)}
             >
               <Play /> Jalankan evaluasi
@@ -242,7 +294,7 @@ export function AdminEvaluation() {
       />
 
       {loading ? (
-        <div aria-busy="true" aria-label="Memuat evaluasi" className="space-y-4">
+        <div role="status" aria-label="Memuat evaluasi" aria-busy="true" className="space-y-4">
           <Skeleton className="h-48 w-full" />
           <Skeleton className="h-64 w-full" />
         </div>
@@ -251,7 +303,7 @@ export function AdminEvaluation() {
           <p className="text-sm text-red">Data evaluasi belum dapat dimuat.</p>
           <Button
             variant="outline"
-            className="mt-4"
+            className="mt-4 min-h-11"
             onClick={() => {
               setLoading(true);
               setLoadError(false);
@@ -293,7 +345,7 @@ export function AdminEvaluation() {
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
                 Riwayat evaluasi
-                <StatusBadge tone="neutral">{runs.length} run</StatusBadge>
+                <StatusBadge tone="neutral">{runs.length} evaluasi</StatusBadge>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -339,6 +391,19 @@ export function AdminEvaluation() {
                               >
                                 {run.run_id}
                               </p>
+                              {isActiveRun(run.status) ? (
+                                <p className="mt-1 text-xs text-muted-text tabular-nums">
+                                  {run.status === "pending" ? "Antre" : "Berjalan"} ·{" "}
+                                  {run.progress_completed} dari {run.progress_total} pertanyaan
+                                </p>
+                              ) : run.status === "failed" ? (
+                                <p
+                                  title={run.error ?? undefined}
+                                  className="mt-1 line-clamp-2 text-xs text-red"
+                                >
+                                  Gagal{run.error ? `: ${run.error}` : ""}
+                                </p>
+                              ) : null}
                             </TableCell>
                             <TableCell className="px-4">
                               <div className="flex flex-wrap gap-1">
@@ -364,6 +429,7 @@ export function AdminEvaluation() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="min-h-11"
                                 onClick={() => void openDetail(run)}
                                 aria-label={`Detail evaluasi ${run.run_id}`}
                               >
@@ -379,7 +445,7 @@ export function AdminEvaluation() {
                     <label className="flex items-center gap-2">
                       Baris per halaman
                       <select
-                        className="min-h-9 rounded-md border border-line bg-white px-2 text-tinta"
+                        className="min-h-11 rounded-md border border-line bg-white px-2 text-tinta"
                         value={pageSize}
                         onChange={(event) => {
                           setPageSize(Number(event.target.value));
@@ -394,13 +460,14 @@ export function AdminEvaluation() {
                       </select>
                     </label>
                     <span role="status">
-                      {start + 1}–{Math.min(start + pageSize, runs.length)} dari {runs.length}{" "}
-                      evaluasi
+                      {start + 1} sampai {Math.min(start + pageSize, runs.length)} dari{" "}
+                      {runs.length} evaluasi
                     </span>
                     <nav aria-label="Pagination evaluasi" className="flex items-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
+                        className="min-h-11"
                         disabled={currentPage === 1}
                         onClick={() => setPage(currentPage - 1)}
                       >
@@ -412,6 +479,7 @@ export function AdminEvaluation() {
                       <Button
                         variant="outline"
                         size="sm"
+                        className="min-h-11"
                         disabled={currentPage === pageCount}
                         onClick={() => setPage(currentPage + 1)}
                       >
@@ -425,29 +493,36 @@ export function AdminEvaluation() {
           </Card>
         </>
       )}
-      {(running || runError) && !runDialogOpen && (
+      {runError && !runDialogOpen ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-white p-4">
-          <p role="status" className="text-sm text-tinta">
-            {running
-              ? "Evaluasi masih berjalan. Tetap buka halaman ini."
-              : "Hasil evaluasi belum dapat diterima."}
+          <p role="alert" className="text-sm text-tinta">
+            {runError}
           </p>
           <Button variant="outline" onClick={() => setRunDialogOpen(true)}>
-            Lihat status
+            Buka dialog
           </Button>
         </div>
-      )}
-      <section
-        aria-labelledby="evaluation-guide-title"
-        className="rounded-xl border border-line bg-white p-5 sm:p-6"
-      >
-        <h2 id="evaluation-guide-title" className="text-base font-semibold text-tinta">
-          Memahami mode dan metrik
-        </h2>
-        <p className="mt-1 text-sm text-muted-text">
-          Gunakan panduan ini untuk membaca hasil perbandingan evaluasi.
-        </p>
-        <div className="mt-6 space-y-6">
+      ) : null}
+      <details className="group rounded-xl border border-line bg-white">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 marker:hidden sm:px-6 [&::-webkit-details-marker]:hidden">
+          <div>
+            <h2
+              id="evaluation-guide-title"
+              className="text-base font-semibold text-tinta"
+            >
+              Memahami mode dan metrik
+            </h2>
+            <p className="mt-1 text-sm text-muted-text">
+              Gunakan panduan ini untuk membaca hasil perbandingan evaluasi.
+            </p>
+          </div>
+          <ChevronDown
+            aria-hidden="true"
+            className="size-5 shrink-0 text-muted-text transition-transform group-open:rotate-180"
+          />
+        </summary>
+        <div className="px-5 pb-5 sm:px-6 sm:pb-6">
+          <div className="mt-1 space-y-6">
           <div>
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-text">
               Retrieval modes
@@ -522,7 +597,8 @@ export function AdminEvaluation() {
           bukan persentase kepastian jawaban. Top K menentukan jumlah hasil yang diambil; pilih
           minimal 5 untuk membandingkan Recall@5 dengan lima hasil penuh.
         </p>
-      </section>
+        </div>
+      </details>
 
       {/* Run dialog */}
       <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
@@ -530,67 +606,13 @@ export function AdminEvaluation() {
           className={`admin-theme ${styles.ingestion} ${styles.detailModal} max-h-[85dvh] overflow-y-auto p-6 sm:max-w-lg`}
         >
           <DialogHeader>
-            <DialogTitle>{running ? "Evaluasi sedang berjalan" : "Jalankan evaluasi"}</DialogTitle>
+            <DialogTitle>Jalankan evaluasi</DialogTitle>
             <DialogDescription>
-              {running
-                ? "Permintaan sudah dikirim. Hasil akan ditampilkan setelah API selesai merespons."
-                : "Pilih dataset dan mode pencarian yang ingin dibandingkan."}
+              Pilih dataset dan mode pencarian yang ingin dibandingkan. Hasil menyusul:
+              halaman boleh ditinggal, progres dipantau dari riwayat.
             </DialogDescription>
           </DialogHeader>
-          {running ? (
-            <div className="space-y-5 py-2">
-              <div
-                className="flex items-center gap-4 rounded-xl border border-line bg-surface-soft p-5"
-                role="status"
-              >
-                <Loader2
-                  className="size-7 shrink-0 animate-spin text-forest motion-reduce:animate-none"
-                  aria-hidden="true"
-                />
-                <div>
-                  <p className="font-semibold text-tinta">Memproses dataset evaluasi</p>
-                  <p className="mt-1 text-sm text-muted-text">
-                    Waktu proses bergantung pada jumlah pertanyaan dan mode yang dipilih.
-                  </p>
-                </div>
-              </div>
-              <dl className="grid grid-cols-2 gap-4 text-sm">
-                <div className="col-span-2">
-                  <dt className="text-xs text-muted-text">Dataset</dt>
-                  <dd className="mt-1 font-medium break-words">{datasetName(runDatasetId)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-text">Pertanyaan</dt>
-                  <dd className="mt-1">
-                    {datasets.find((item) => item.dataset_id === runDatasetId)?.questions.length ??
-                      "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-text">Jumlah hasil</dt>
-                  <dd className="mt-1">{runTopK} per pertanyaan</dd>
-                </div>
-                <div className="col-span-2">
-                  <dt className="text-xs text-muted-text">Mode</dt>
-                  <dd className="mt-2 flex flex-wrap gap-2">
-                    {runModes.map((mode) => (
-                      <StatusBadge key={mode} tone="neutral">
-                        {modeLabel[mode] ?? mode}
-                      </StatusBadge>
-                    ))}
-                  </dd>
-                </div>
-              </dl>
-              <p className="text-xs text-muted-text">
-                Waktu berjalan:{" "}
-                <span className="font-mono tabular-nums">
-                  {Math.floor(elapsed / 60)}m {elapsed % 60}s
-                </span>
-                . Tetap buka halaman ini hingga proses selesai.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
+          <div className="space-y-4">
               {runError && (
                 <p
                   role="alert"
@@ -601,8 +623,8 @@ export function AdminEvaluation() {
               )}
               <div className="space-y-1.5">
                 <Label htmlFor="eval-dataset">Dataset</Label>
-                <Select disabled={running} value={runDatasetId} onValueChange={setRunDatasetId}>
-                  <SelectTrigger id="eval-dataset" className="w-full">
+                <Select disabled={submitting} value={runDatasetId} onValueChange={setRunDatasetId}>
+                  <SelectTrigger id="eval-dataset" className="min-h-11 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className={`admin-theme ${styles.ingestion}`}>
@@ -625,10 +647,10 @@ export function AdminEvaluation() {
                         type="button"
                         key={mode}
                         aria-pressed={selected}
-                        disabled={running}
+                        disabled={submitting}
                         onClick={() => toggleMode(mode)}
                         className={cn(
-                          "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors",
+                          "flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors",
                           selected
                             ? "border-forest bg-teal-soft text-forest"
                             : "border-line text-muted-text hover:bg-surface-soft"
@@ -651,8 +673,8 @@ export function AdminEvaluation() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="eval-top-k">Jumlah hasil (Top K)</Label>
-                <Select disabled={running} value={runTopK} onValueChange={setRunTopK}>
-                  <SelectTrigger id="eval-top-k" className="w-full">
+                <Select disabled={submitting} value={runTopK} onValueChange={setRunTopK}>
+                  <SelectTrigger id="eval-top-k" className="min-h-11 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className={`admin-theme ${styles.ingestion}`}>
@@ -674,21 +696,22 @@ export function AdminEvaluation() {
                 </p>
               )}
             </div>
-          )}
           <DialogFooter className="mx-0 mb-0 mt-2 rounded-none border-line bg-transparent px-0 pb-0 pt-4">
-            <Button variant="outline" onClick={() => setRunDialogOpen(false)}>
-              {running ? "Sembunyikan" : "Batal"}
+            <Button
+              variant="outline"
+              className="min-h-11"
+              onClick={() => setRunDialogOpen(false)}
+            >
+              Batal
             </Button>
-            {!running && (
-              <Button
-                className="bg-javanese text-white hover:bg-forest"
-                disabled={runModes.length === 0 || !runDatasetId}
-                onClick={() => void startRun()}
-              >
-                <FlaskConical />
-                {runError ? "Coba lagi" : "Jalankan evaluasi"}
-              </Button>
-            )}
+            <Button
+              className="min-h-11 bg-javanese text-white hover:bg-forest"
+              disabled={runModes.length === 0 || !runDatasetId || submitting}
+              onClick={() => void startRun()}
+            >
+              <FlaskConical />
+              {runError ? "Coba lagi" : "Jalankan evaluasi"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
