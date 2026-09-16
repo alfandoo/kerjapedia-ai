@@ -22,9 +22,17 @@ TOPIC_KEYWORDS = {
         "phk",
         "pemutusan hubungan kerja",
         "pesangon",
+        "uang pisah",
+        "mengundurkan diri",
+        "pengunduran diri",
+        "resign",
+        "resignation",
+        "surat peringatan",
+        "skorsing",
         "termination",
         "dismissal",
         "severance",
+        "warning letter",
     ],
     "thr": ["thr", "tunjangan hari raya", "religious holiday allowance"],
     "pengupahan": [
@@ -33,9 +41,11 @@ TOPIC_KEYWORDS = {
         "upah minimum",
         "umk",
         "ump",
+        "lembur",
         "wage",
         "salary",
         "minimum wage",
+        "overtime",
     ],
     "bpjs": [
         "bpjs",
@@ -43,8 +53,14 @@ TOPIC_KEYWORDS = {
         "jkp",
         "jkk",
         "jkm",
+        "jp",
         "jaminan sosial",
+        "jaminan pensiun",
+        "usia pensiun",
+        "pensiun",
         "employment social security",
+        "pension",
+        "retirement",
     ],
     "k3": [
         "k3",
@@ -52,24 +68,57 @@ TOPIC_KEYWORDS = {
         "kesehatan kerja",
         "p2k3",
         "smk3",
+        "bahaya",
+        "kecelakaan kerja",
         "occupational safety",
         "occupational health",
         "workplace safety",
+        "workplace hazard",
     ],
     "serikat_pekerja": ["serikat pekerja", "serikat buruh", "trade union", "labor union"],
     "hubungan_industrial": [
         "hubungan industrial",
         "perselisihan",
+        "mogok",
+        "pemogokan",
+        "bipartit",
+        "tripartit",
+        "mediasi",
+        "konsiliasi",
+        "arbitrase",
+        "phi",
         "industrial relations",
         "labor dispute",
         "labour dispute",
+        "strike",
     ],
     "alih_daya": ["alih daya", "outsourcing"],
     "tenaga_kerja_asing": ["tka", "tenaga kerja asing", "foreign worker"],
+    "waktu_kerja": [
+        "waktu kerja",
+        "jam kerja",
+        "jam normal",
+        "waktu istirahat",
+        "istirahat",
+        "lembur",
+        "cuti",
+        "working hours",
+        "overtime",
+        "leave",
+    ],
 }
 
 INTENT_KEYWORDS = {
-    "definition": ["apa itu", "definisi", "pengertian", "what is", "definition"],
+    "definition": [
+        "apa itu",
+        "apa yang dimaksud",
+        "definisi",
+        "pengertian",
+        "maksud dari",
+        "jelaskan",
+        "what is",
+        "definition",
+    ],
     "duration": ["berapa lama", "durasi", "jangka waktu", "batas maksimal", "how long"],
     "eligibility": ["siapa yang berhak", "berhak", "syarat", "who is eligible", "eligible"],
     "procedure": ["cara", "prosedur", "bagaimana", "how to", "procedure"],
@@ -86,9 +135,11 @@ ABBREVIATIONS = {
     "jkp": "jaminan kehilangan pekerjaan",
     "jkk": "jaminan kecelakaan kerja",
     "jkm": "jaminan kematian",
+    "jp": "jaminan pensiun",
     "k3": "keselamatan dan kesehatan kerja",
     "p2k3": "panitia pembina keselamatan dan kesehatan kerja",
     "smk3": "sistem manajemen keselamatan dan kesehatan kerja",
+    "phi": "pengadilan hubungan industrial",
 }
 
 DOMAIN_KEYWORDS = {
@@ -103,6 +154,10 @@ DOMAIN_KEYWORDS = {
     "cuti",
     "lembur",
     "jam kerja",
+    "magang",
+    "pemagangan",
+    "apprenticeship",
+    "internship",
     "permenaker",
     "worker",
     "employee",
@@ -131,6 +186,12 @@ _COMMON_TYPOS = {
     "konpensasi": "kompensasi",
     "karywan": "karyawan",
     "kryawan": "karyawan",
+    "tunjagan": "tunjangan",
+    "pesangoon": "pesangon",
+    "jamian": "jaminan",
+    "peraturaan": "peraturan",
+    "kesehatn": "kesehatan",
+    "keselamtan": "keselamatan",
 }
 
 
@@ -174,7 +235,12 @@ def rewrite_query(
             rewritten.append(compensation_query)
 
     timing_terms = {"kapan", "batas waktu", "tenggat"}
-    if any(term in query for term in timing_terms):
+    # The appended sentence frames timing as a payment deadline, so it must
+    # only fire in a payment context ("kapan daftar BPJS" is timing too, but
+    # "wajib dibayarkan sebelum batas waktu pembayaran" would mislead it).
+    if any(term in query for term in timing_terms) and any(
+        term in expanded for term in _PAYMENT_TERMS
+    ):
         timing_query = f"{expanded} paling lambat wajib dibayarkan sebelum batas waktu pembayaran"
         if timing_query not in rewritten:
             rewritten.append(timing_query)
@@ -189,7 +255,7 @@ def rewrite_query(
 
 def rewrite_termination(query: str, expanded: str, rewritten: list[str]) -> list[str]:
     """Add retrieval expansions for contract-end and compensation rules."""
-    if any(term in expanded for term in _TERMINATION_TERMS):
+    if _mentions_termination(expanded):
         termination_expansion = (
             "berakhirnya PKWT uang kompensasi Pasal 15 16 17 PP 35 Tahun 2021 "
             "pemutusan hubungan kerja pesangon Pasal 40 43 UU 13 Tahun 2003"
@@ -199,10 +265,45 @@ def rewrite_termination(query: str, expanded: str, rewritten: list[str]) -> list
     return rewritten
 
 
-_TERMINATION_TERMS = frozenset(
-    "berakhir selesai habis tamat selesai berakhir putus diputus"
-    " selesai kontrak habis kontrak tamat kontrak berakhir kontrak".split()
+# Single words specific enough to match whole-token only; bare "selesai"
+# ("THR selesai dibayar") and bare "putus" ("keputusan") are deliberately
+# excluded — substring matching on those drags PHK/PKWT boilerplate into
+# unrelated queries and burns a rewrite slot.
+_TERMINATION_WORDS = frozenset({"berakhir", "diputus", "tamat", "habis"})
+_TERMINATION_WORD_RES = tuple(
+    re.compile(rf"\b{re.escape(word)}") for word in sorted(_TERMINATION_WORDS)
 )
+_TERMINATION_PHRASES = (
+    "putus hubungan",
+    "pemutusan hubungan",
+    "habis kontrak",
+    "tamat kontrak",
+    "berakhir kontrak",
+    "selesai kontrak",
+)
+
+
+_PAYMENT_TERMS = frozenset(
+    {
+        "bayar",
+        "gaji",
+        "upah",
+        "thr",
+        "kompensasi",
+        "pesangon",
+        "denda",
+        "tunjangan",
+        "iuran",
+    }
+)
+
+
+def _mentions_termination(expanded: str) -> bool:
+    # Prefix word-boundary: "berakhirnya" still matches, while "keputusan"
+    # can no longer smuggle in via bare "putus".
+    if any(pattern.search(expanded) for pattern in _TERMINATION_WORD_RES):
+        return True
+    return any(phrase in expanded for phrase in _TERMINATION_PHRASES)
 
 # Document-level regulation aliases for laypeople citing by common name.
 _REGULATION_ALIASES: tuple[tuple[str, str, int, int], ...] = (
@@ -211,7 +312,12 @@ _REGULATION_ALIASES: tuple[tuple[str, str, int, int], ...] = (
     (r"\bundang[\s-]+undang\s+ketenagakerjaan\b", "UU", 13, 2003),
 )
 
-_DOCUMENT_ID_RE = re.compile(r"^(UU|PP|PERMENAKER|PERPRES)-(\d+)-(\d{4})$", re.IGNORECASE)
+# Production IDs carry a content-hash suffix (UU-6-2023-47c5b9a4...), so the
+# tail must accept "-<suffix>" instead of demanding end-of-string. Without
+# this, regulation inheritance from conversation context never fires.
+_DOCUMENT_ID_RE = re.compile(
+    r"^(UU|PP|PERMENAKER|PERPRES)-(\d+)-(\d{4})(?:-|$)", re.IGNORECASE
+)
 
 
 def extract_filters(query: str, topics: list[str]) -> dict[str, object]:
@@ -353,4 +459,18 @@ def is_employment_query(query: QueryUnderstanding) -> bool:
     if query.detected_topics:
         return True
     candidate = query.normalized_retrieval_query or query.normalized_query
-    return any(keyword in candidate for keyword in DOMAIN_KEYWORDS)
+    # Strip context prefixes that contain domain keywords but don't indicate
+    # actual employment-related content (e.g., "Dalam hubungan kerja, berapa harga saham?")
+    context_prefixes = [
+        "dalam hubungan kerja, ",
+        "untuk pekerja perusahaan swasta, ",
+        "menurut ketentuan yang berlaku, ",
+        "dalam kondisi umum, ",
+    ]
+    stripped = candidate
+    for prefix in context_prefixes:
+        if stripped.startswith(prefix):
+            stripped = stripped[len(prefix):]
+            break
+    # Check both the stripped version and the original
+    return any(keyword in stripped for keyword in DOMAIN_KEYWORDS)

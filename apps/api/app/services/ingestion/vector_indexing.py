@@ -33,6 +33,8 @@ class VectorWriteStore(Protocol):
         legal_review_status: str = "pending",
         is_current: bool = True,
         replace_document: bool = True,
+        ingestion_timestamp: str | None = None,
+        ingestion_stage_durations: dict[str, float] | None = None,
     ) -> int: ...
 
     def fetch_vector_metadata(self, vector_ids: list[str]) -> dict[str, dict]: ...
@@ -207,6 +209,8 @@ def index_document_reliably(
     legal_review_status: str,
     is_current: bool,
     sleep: Callable[[float], None] = time.sleep,
+    ingestion_timestamp: str | None = None,
+    ingestion_stage_durations: dict[str, float] | None = None,
 ) -> VectorIndexStatistics:
     validate_chunks_for_index(
         document,
@@ -245,6 +249,8 @@ def index_document_reliably(
                     legal_review_status=legal_review_status,
                     is_current=is_current,
                     replace_document=False,
+                    ingestion_timestamp=ingestion_timestamp,
+                    ingestion_stage_durations=ingestion_stage_durations,
                 ),
                 config.timeout_seconds,
             )

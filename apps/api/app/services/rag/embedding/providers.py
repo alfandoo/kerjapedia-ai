@@ -20,6 +20,20 @@ from typing import Protocol
 from app.services.rag.embedding.schemas import EmbeddingConfig
 
 _SPARSE_TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
+# Mirrors the live ingestion fallback: stopwords consume sparse L2 mass
+# without legal signal; short legal tokens and digits stay. Keep both
+# implementations in sync — sparse index spaces must match exactly.
+_SPARSE_STOPWORDS = frozenset(
+    {
+        "adalah", "atau", "dan", "dari", "dengan", "di", "ini", "itu",
+        "ke", "pada", "yang", "untuk", "baik", "bila", "karena",
+        "maupun", "sebagaimana", "sebesar", "serta", "apakah", "apa",
+        "bagaimana", "berapa", "kapan", "siapa", "mengapa", "kenapa",
+        "atas", "dalam", "oleh", "sebagai", "sudah", "telah", "bahwa",
+        "antara", "hingga", "sampai", "saat", "ketika", "juga",
+        "setiap", "the", "and", "or", "of", "to", "in",
+    }
+)
 
 
 class EmbeddingProvider(Protocol):
@@ -37,7 +51,11 @@ class EmbeddingProvider(Protocol):
 
 def lexical_sparse_vector(text: str) -> dict[int, float]:
     """Deterministic lexical sparsity: token hashes, log weights, unit norm."""
-    counts = Counter(_SPARSE_TOKEN_RE.findall(text.lower()))
+    counts = Counter(
+        token
+        for token in _SPARSE_TOKEN_RE.findall(text.lower())
+        if len(token) > 1 and token not in _SPARSE_STOPWORDS
+    )
     weighted: dict[int, float] = {}
     for token, count in counts.items():
         index = int.from_bytes(hashlib.sha256(token.encode("utf-8")).digest()[:4], "big")

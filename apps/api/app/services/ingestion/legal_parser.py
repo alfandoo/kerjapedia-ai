@@ -4,7 +4,7 @@ import re
 
 from app.services.ingestion.schemas import ExtractedPage, LegalSegment
 
-CHAPTER_RE = re.compile(r"^BAB\s+([IVXLCDM]+)\b", re.IGNORECASE)
+CHAPTER_RE = re.compile(r"^BAB\s+([IVXLCDM]+[A-Z]?)\b", re.IGNORECASE)
 SECTION_RE = re.compile(r"^Bagian\s+(.+)$", re.IGNORECASE)
 SUBSECTION_RE = re.compile(r"^Paragraf\s+(.+)$", re.IGNORECASE)
 ARTICLE_RE = re.compile(r"^Pasal\s+([0-9]+[A-Z]?)\s*[.:]?\s*$", re.IGNORECASE)
@@ -12,7 +12,7 @@ PARAGRAPH_RE = re.compile(r"^\(?([0-9]+)\)\s+(.+)$")
 LETTER_RE = re.compile(r"^([a-z])\.\s+(.+)$", re.IGNORECASE)
 APPENDIX_RE = re.compile(r"^LAMPIRAN\b", re.IGNORECASE)
 EXPLANATION_RE = re.compile(r"^PENJELASAN\b", re.IGNORECASE)
-COMPACT_CHAPTER_RE = re.compile(r"^BAB([IVXLCDM]+)\b", re.IGNORECASE)
+COMPACT_CHAPTER_RE = re.compile(r"^BAB([IVXLCDM]+[A-Z]?)\b", re.IGNORECASE)
 OCR_ARTICLE_TEN_PLUS_RE = re.compile(r"\bPasa[l1i][l1i]([0-9]+[A-Z]?)\b", re.IGNORECASE)
 OCR_ARTICLE_RE = re.compile(r"\bPasa[1i]([0-9]+[A-Z]?)\b", re.IGNORECASE)
 COMPACT_ARTICLE_RE = re.compile(r"\bPasal([0-9]+[A-Z]?)\b", re.IGNORECASE)

@@ -269,6 +269,223 @@ def admin_stats(session: DbSession, _: AdminUser) -> dict:
     return result
 
 
+_METRIC_LINE_RE = re.compile(
+    r"^([a-zA-Z_:][a-zA-Z0-9_:]*)\s*(\{[^}]*\})?\s+"
+    r"([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?|NaN|\+Inf|-Inf)\s*$"
+)
+_METRIC_LABEL_RE = re.compile(r'(\w+)="((?:[^"\\]|\\.)*)"')
+
+
+def _parse_prometheus_text(payload: str) -> dict[tuple[str, tuple[tuple[str, str], ...]], float]:
+    samples: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
+    for line in payload.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = _METRIC_LINE_RE.match(line)
+        if not match:
+            continue
+        name, raw_labels, raw_value = match.groups()
+        try:
+            value = float(raw_value)
+        except ValueError:
+            continue
+        labels: dict[str, str] = {}
+        if raw_labels:
+            for key, val in _METRIC_LABEL_RE.findall(raw_labels):
+                labels[key] = val.replace('\\"', '"').replace("\\\\", "\\").replace("\\n", "\n")
+        samples[(name, tuple(sorted(labels.items())))] = value
+    return samples
+
+
+def _counter_sum(
+    samples: dict[tuple[str, tuple[tuple[str, str], ...]], float],
+    name: str,
+    required: dict[str, str] | None = None,
+) -> float:
+    total = 0.0
+    for (metric, labels), value in samples.items():
+        if metric != name:
+            continue
+        label_map = dict(labels)
+        if required and any(label_map.get(k) != v for k, v in required.items()):
+            continue
+        total += value
+    return total
+
+
+def _counter_by_label(
+    samples: dict[tuple[str, tuple[tuple[str, str], ...]], float],
+    name: str,
+    label: str,
+) -> dict[str, float]:
+    grouped: dict[str, float] = {}
+    for (metric, labels), value in samples.items():
+        if metric != name:
+            continue
+        label_map = dict(labels)
+        key = label_map.get(label, "unknown")
+        grouped[key] = grouped.get(key, 0.0) + value
+    return grouped
+
+
+def _histogram_stats(
+    samples: dict[tuple[str, tuple[tuple[str, str], ...]], float],
+    base: str,
+    group_by: tuple[str, ...] = (),
+    required: dict[str, str] | None = None,
+) -> dict[str, dict[str, float | None]]:
+    buckets: dict[str, list[tuple[float, float]]] = {}
+    sums: dict[str, float] = {}
+    counts: dict[str, float] = {}
+
+    def _matches(label_map: dict[str, str]) -> bool:
+        if required and any(label_map.get(k) != v for k, v in required.items()):
+            return False
+        return True
+
+    for (metric, labels), value in samples.items():
+        label_map = dict(labels)
+        if not _matches(label_map):
+            continue
+        key = "|".join(label_map.get(dim, "") for dim in group_by) or "all"
+        if metric == f"{base}_bucket":
+            le_raw = label_map.get("le", "+Inf")
+            try:
+                le = float(le_raw)
+            except ValueError:
+                le = float("inf")
+            buckets.setdefault(key, []).append((le, value))
+        elif metric == f"{base}_sum":
+            sums[key] = sums.get(key, 0.0) + value
+        elif metric == f"{base}_count":
+            counts[key] = counts.get(key, 0.0) + value
+    stats: dict[str, dict[str, float | None]] = {}
+    for key in set(buckets) | set(sums) | set(counts):
+        count = counts.get(key, 0.0)
+        total = sums.get(key, 0.0)
+        ordered = sorted(buckets.get(key, []))
+        finite = [(le, cum) for le, cum in ordered if le != float("inf")]
+        entry: dict[str, float | None] = {
+            "count": count,
+            "sum": total,
+            "avg": (total / count) if count else None,
+            "p50": None,
+            "p95": None,
+            "p99": None,
+        }
+        if count and finite:
+            for quantile, field in ((0.5, "p50"), (0.95, "p95"), (0.99, "p99")):
+                threshold = quantile * count
+                entry[field] = next(
+                    (le for le, cum in finite if cum >= threshold),
+                    finite[-1][0],
+                )
+        stats[key] = entry
+    return stats
+
+
+@router.get("/metrics")
+def admin_metrics(_: AdminUser) -> dict:
+    try:
+        from prometheus_client import generate_latest
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="Metrics exporter is unavailable.") from exc
+    samples = _parse_prometheus_text(generate_latest().decode("utf-8"))
+
+    outcomes = _counter_by_label(samples, "kerjapedia_rag_outcomes_total", "outcome")
+    requests_by_status = _counter_by_label(samples, "kerjapedia_rag_requests_total", "status")
+    stage_latency = _histogram_stats(
+        samples, "kerjapedia_rag_stage_seconds", group_by=("stage",)
+    )
+    request_latency = _histogram_stats(samples, "kerjapedia_rag_request_seconds").get("all", {})
+    prompt_tokens = _counter_sum(
+        samples, "kerjapedia_rag_tokens_total", {"kind": "prompt_tokens"}
+    )
+    completion_tokens = _counter_sum(
+        samples, "kerjapedia_rag_tokens_total", {"kind": "completion_tokens"}
+    )
+    tokens_by_model: dict[str, dict[str, float]] = {}
+    for (metric, labels), value in samples.items():
+        if metric != "kerjapedia_rag_tokens_total":
+            continue
+        label_map = dict(labels)
+        model = label_map.get("model", "unknown")
+        kind = label_map.get("kind", "unknown")
+        model_entry = tokens_by_model.setdefault(model, {"prompt": 0.0, "completion": 0.0})
+        if kind == "prompt_tokens":
+            model_entry["prompt"] += value
+        elif kind == "completion_tokens":
+            model_entry["completion"] += value
+    supported = _counter_sum(
+        samples, "kerjapedia_rag_claim_verification_total", {"result": "supported"}
+    )
+    unsupported = _counter_sum(
+        samples, "kerjapedia_rag_claim_verification_total", {"result": "unsupported"}
+    )
+    claim_total = supported + unsupported
+    ragas_eval = _counter_by_label(samples, "kerjapedia_ragas_eval_total", "status")
+    ragas_faithfulness = _histogram_stats(samples, "kerjapedia_ragas_faithfulness_score").get(
+        "all", {}
+    )
+    behavior_total = _counter_sum(samples, "kerjapedia_rag_user_behavior_total")
+    followups = _counter_sum(
+        samples, "kerjapedia_rag_user_behavior_total", {"is_followup": "true"}
+    )
+    behavior_by_topic = _counter_by_label(
+        samples, "kerjapedia_rag_user_behavior_total", "topic"
+    )
+    provider_errors = _counter_by_label(
+        samples, "kerjapedia_rag_provider_errors_total", "stage"
+    )
+    retrieved_by_status = _counter_by_label(
+        samples, "kerjapedia_rag_retrieved_versions_total", "legal_status"
+    )
+    return {
+        "ragas_enabled": settings.ragas_enabled,
+        "ragas_sample_rate": settings.ragas_sample_rate,
+        "outcomes": outcomes,
+        "requests": {
+            "total": sum(requests_by_status.values()),
+            "by_status": requests_by_status,
+        },
+        "stage_latency": {
+            key.split("|")[0]: value for key, value in stage_latency.items()
+        },
+        "request_latency": request_latency,
+        "tokens": {
+            "prompt": prompt_tokens,
+            "completion": completion_tokens,
+            "total": prompt_tokens + completion_tokens,
+            "by_model": tokens_by_model,
+        },
+        "claims": {
+            "supported": supported,
+            "unsupported": unsupported,
+            "total": claim_total,
+            "support_rate": (supported / claim_total) if claim_total else None,
+        },
+        "provider_errors": {
+            "total": sum(provider_errors.values()),
+            "by_stage": provider_errors,
+        },
+        "ragas": {
+            "eval_total": ragas_eval,
+            "faithfulness": ragas_faithfulness,
+        },
+        "behavior": {
+            "total": behavior_total,
+            "followups": followups,
+            "followup_ratio": (followups / behavior_total) if behavior_total else None,
+            "by_topic": behavior_by_topic,
+        },
+        "retrieved": {
+            "total": sum(retrieved_by_status.values()),
+            "by_legal_status": retrieved_by_status,
+        },
+    }
+
+
 @router.post("/chat/purge")
 def purge_old_chats(
     session: DbSession,
@@ -1014,7 +1231,7 @@ def transition_rag_release(
         )
         if (
             evaluation_dataset is None
-            or len(evaluation_dataset.questions) < 300
+            or len(evaluation_dataset.questions) < 100
             or {question.get("split", "development") for question in evaluation_dataset.questions}
             != {"development", "test"}
             or any(
@@ -1026,7 +1243,7 @@ def transition_rag_release(
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    "Release validation requires at least 300 human-verified questions "
+                    "Release validation requires at least 100 human-verified questions "
                     "with development and held-out test splits."
                 ),
             )

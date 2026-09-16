@@ -16,25 +16,80 @@ const EMAIL_PATTERN =
 
 const TYPO_DOMAINS = new Set([
   // gmail
-  "gmial.com", "gmial.co", "gmial.id", "gamil.com", "gamil.co", "gmail.co",
-  "gmail.ocm", "gmail.cmo", "gmailcom.com", "gmaill.com", "gmai.com",
-  "gmaill.co", "gmale.com", "gmali.com", "gmiall.com", "gmail.con",
-  "gmail.c.om", "gmaill.net", "gmaill.org", "gmail1.com",
-  "gmiall.co", "gmails.com", "gmailss.com", "gmil.com", "gmeil.com",
-  "geemail.com", "gmial.net", "gamil.net", "gmailcon",
+  "gmial.com",
+  "gmial.co",
+  "gmial.id",
+  "gamil.com",
+  "gamil.co",
+  "gmail.co",
+  "gmail.ocm",
+  "gmail.cmo",
+  "gmailcom.com",
+  "gmaill.com",
+  "gmai.com",
+  "gmaill.co",
+  "gmale.com",
+  "gmali.com",
+  "gmiall.com",
+  "gmail.con",
+  "gmail.c.om",
+  "gmaill.net",
+  "gmaill.org",
+  "gmail1.com",
+  "gmiall.co",
+  "gmails.com",
+  "gmailss.com",
+  "gmil.com",
+  "gmeil.com",
+  "geemail.com",
+  "gmial.net",
+  "gamil.net",
+  "gmailcon",
   "gmiall.com.co",
   // yahoo
-  "ahoo.com", "yhhhoo.com", "yahho.com", "yahooo.com", "yahoo.cm",
-  "yahoo.co", "yhooo.com", "yahoo.con", "yahhoo.com", "yahuu.com",
-  "yaho.com", "yhoo.com",
+  "ahoo.com",
+  "yhhhoo.com",
+  "yahho.com",
+  "yahooo.com",
+  "yahoo.cm",
+  "yahoo.co",
+  "yhooo.com",
+  "yahoo.con",
+  "yahhoo.com",
+  "yahuu.com",
+  "yaho.com",
+  "yhoo.com",
   // hotmail / outlook
-  "hotmal.com", "hotmil.com", "hotmial.com", "hotmail.cm", "hotmail.co",
-  "hotmaill.com", "hotmail.con", "hotmial.co", "oeutlook.com",
-  "outlok.com", "outloo.com", "outloook.com", "outllook.com", "outllok.com",
-  "outlokk.com", "outook.com", "outllook.co", "outlook.co", "outlok.co",
+  "hotmal.com",
+  "hotmil.com",
+  "hotmial.com",
+  "hotmail.cm",
+  "hotmail.co",
+  "hotmaill.com",
+  "hotmail.con",
+  "hotmial.co",
+  "oeutlook.com",
+  "outlok.com",
+  "outloo.com",
+  "outloook.com",
+  "outllook.com",
+  "outllok.com",
+  "outlokk.com",
+  "outook.com",
+  "outllook.co",
+  "outlook.co",
+  "outlok.co",
   // proton / icloud / others
-  "protonmal.com", "protonmial.com", "pmail.com", "iclod.com", "icloud.co",
-  "iclod.co", "icloud.cm", "icloud.com.co", "icloudd.com", "icloudid.com",
+  "protonmal.com",
+  "protonmial.com",
+  "pmail.com",
+  "iclod.com",
+  "icloud.co",
+  "iclod.co",
+  "icloud.cm",
+  "icloud.com.co",
+  "icloudd.com",
+  "icloudid.com",
 ]);
 
 const KNOWN_PROVIDER_DOMAINS: Record<string, Set<string>> = {
@@ -128,9 +183,7 @@ export function passwordStrength(
   opts: { email?: string } = {}
 ): { level: PasswordStrength; issues: PasswordPolicyIssue[] } {
   const issues = passwordIssues(password, opts);
-  const blocking = issues.filter(
-    (issue) => issue !== "character_classes"
-  ).length;
+  const blocking = issues.filter((issue) => issue !== "character_classes").length;
   if (blocking > 0 || password.length < PASSWORD_MIN_LENGTH) return { level: "weak", issues };
   const classes = characterClassCount(password);
   if (password.length >= 12 && classes >= 4) return { level: "strong", issues };
@@ -138,10 +191,7 @@ export function passwordStrength(
   return { level: "weak", issues };
 }
 
-export function passwordAcceptable(
-  password: string,
-  opts: { email?: string } = {}
-): boolean {
+export function passwordAcceptable(password: string, opts: { email?: string } = {}): boolean {
   if (!password) return false;
   const { level, issues } = passwordStrength(password, opts);
   return level !== "weak" && issues.length === 0;

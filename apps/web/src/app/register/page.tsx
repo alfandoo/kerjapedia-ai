@@ -39,9 +39,7 @@ function RegisterPageContent() {
       }
       router.push("/chat");
     } catch (err) {
-      setStatus(
-        translateAuthError(translate, (err as Error).message || "Gagal. Coba lagi.")
-      );
+      setStatus(translateAuthError(translate, (err as Error).message || "Gagal. Coba lagi."));
       setLoading(false);
     }
   }

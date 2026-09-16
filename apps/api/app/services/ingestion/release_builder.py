@@ -78,6 +78,8 @@ def build_index_release(release_id: str, storage_root: Path) -> dict[str, Any]:
         "vector_batches": 0,
         "vector_retries": 0,
     }
+    # P2-2: Ingestion stage timing metrics
+    stage_timing: dict[str, float] = {}
     expected_metadata: dict[str, dict[str, object]] = {}
     document_index_reports: list[tuple[str, str, list[str]]] = []
     try:
@@ -170,6 +172,8 @@ def build_index_release(release_id: str, storage_root: Path) -> dict[str, Any]:
                     size_bytes=version_row.size_bytes,
                     sha256=version_row.sha256,
                     verification_status=version_row.source_verification_status,
+                    source_verification_status=version_row.source_verification_status,
+                    legal_review_status=version_row.legal_review_status,
                 )
                 build_statistics = (build.quality_report or {}).get(
                     "ingestion_statistics"
@@ -229,6 +233,8 @@ def build_index_release(release_id: str, storage_root: Path) -> dict[str, Any]:
                         release.document_versions.get(version_row.document_id)
                         == version_row.version
                     ),
+                    ingestion_timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    ingestion_stage_durations=dict(stage_timing),
                 )
                 statistics["chunks_indexed"] += index_stats.indexed_chunks
                 statistics["vector_batches"] += index_stats.batches
@@ -287,6 +293,7 @@ def build_index_release(release_id: str, storage_root: Path) -> dict[str, Any]:
                 "ingestion_evaluation_report_errors": report_errors,
                 "duration_seconds": round(time.monotonic() - started, 3),
                 "ingestion_builds": dict(release.ingestion_builds or {}),
+                "ingestion_stage_timing": stage_timing,
             }
             session.commit()
             return release.build_summary

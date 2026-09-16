@@ -43,6 +43,8 @@ def sample_document() -> DocumentMetadata:
         size_bytes=1,
         sha256="abcd" * 16,
         verification_status="pending_detail_url",
+        source_verification_status="pending",
+        legal_review_status="pending",
     )
 
 
@@ -78,6 +80,22 @@ def test_normalize_legal_line_repairs_common_pdf_artifacts(
     expected: str,
 ) -> None:
     assert normalize_legal_line(raw) == expected
+
+
+def test_parse_legal_segments_detects_suffixed_chapter() -> None:
+    pages = [
+        ExtractedPage(
+            page_number=1,
+            text="BAB XIIIA\nPasal 99\n(1) Isi ketentuan sisipan.",
+            text_length=40,
+            requires_ocr=False,
+        )
+    ]
+
+    segments = parse_legal_segments("PP-51-2023", pages)
+
+    assert any(segment.chapter == "BAB XIIIA" for segment in segments)
+    assert any(segment.article == "Pasal 99" for segment in segments)
 
 
 def test_parse_compact_article_keeps_paragraph_on_correct_article() -> None:

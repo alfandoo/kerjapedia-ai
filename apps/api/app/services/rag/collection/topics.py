@@ -21,6 +21,7 @@ TOPIC_VOCABULARY: tuple[str, ...] = (
     "hubungan_industrial",
     "alih_daya",
     "tenaga_kerja_asing",
+    "waktu_kerja",
 )
 
 _TOPIC_HINTS: dict[str, tuple[str, ...]] = {
@@ -29,11 +30,20 @@ _TOPIC_HINTS: dict[str, tuple[str, ...]] = {
     "thr": ("thr", "tunjangan hari raya"),
     "pengupahan": ("upah", "gaji", "umk", "ump"),
     "bpjs": ("bpjs", "jht", "jkp", "jkk", "jkm", "jaminan sosial"),
-    "k3": ("k3", "keselamatan kerja", "kesehatan kerja", "smk3"),
+    "k3": ("k3", "keselamatan kerja", "kesehatan kerja", "smk3", "bahaya"),
     "serikat_pekerja": ("serikat pekerja", "serikat buruh"),
-    "hubungan_industrial": ("hubungan industrial", "perselisihan"),
+    "hubungan_industrial": (
+        "hubungan industrial",
+        "perselisihan",
+        "bipartit",
+        "mediasi",
+        "konsiliasi",
+        "arbitrase",
+        "phi",
+    ),
     "alih_daya": ("alih daya", "outsourcing"),
     "tenaga_kerja_asing": ("tenaga kerja asing",),
+    "waktu_kerja": ("waktu kerja", "jam kerja", "lembur", "cuti"),
 }
 
 

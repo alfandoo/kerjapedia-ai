@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import logging
+
 from app.services.answering.citations import compact_text
 from app.services.answering.schemas import HistoryTurn, PromptTemplate
 from app.services.retrieval.schemas import RankedChunk, RetrievalResponse
+from app.services.retrieval.token_budget import TokenBudget, count_tokens
 
-PROMPT_VERSION_ID = "kerjapedia-grounded-answer-v6"
+logger = logging.getLogger("kerjapedia.context")
+
+PROMPT_VERSION_ID = "kerjapedia-grounded-answer-v7"
 
 # Context budget: only citable chunks reach the model, each truncated so a
 # single long chunk cannot crowd out the rest of the evidence.
@@ -117,8 +122,11 @@ def render_user_prompt(
     max_chunk_chars: int = MAX_CONTEXT_CHUNK_CHARS,
     history: tuple[HistoryTurn, ...] | list[HistoryTurn] | None = None,
 ) -> str:
-    # Only citable chunks are rendered: extra retrieved chunks cost tokens
-    # without being quotable, and push cited evidence out of attention.
+    """Render the user prompt with context chunks.
+
+    This is the standard rendering path. For token-aware selection, use
+    ``render_user_prompt_with_budget`` instead.
+    """
     chunks = list(selected) if selected is not None else retrieval.results
     context_lines = []
     for index, item in enumerate(chunks, start=1):
@@ -139,3 +147,83 @@ def render_user_prompt(
         history_block=render_history_block(history),
         context=context,
     )
+
+
+def render_user_prompt_with_budget(
+    query: str,
+    retrieval: RetrievalResponse,
+    *,
+    selected: list[RankedChunk] | None = None,
+    budget: TokenBudget | None = None,
+    max_chunk_chars: int = MAX_CONTEXT_CHUNK_CHARS,
+    history: tuple[HistoryTurn, ...] | list[HistoryTurn] | None = None,
+) -> tuple[str, dict[str, int]]:
+    """Render the user prompt with token-budget-aware chunk selection.
+
+    Returns (rendered_prompt, token_usage) where token_usage contains
+    breakdown of token consumption.
+    """
+    chunks = list(selected) if selected is not None else retrieval.results
+    history_block = render_history_block(history)
+
+    # Token budget allocation
+    if budget is not None:
+        system_tokens = count_tokens(SYSTEM_PROMPT)
+        query_tokens = count_tokens(query)
+        history_tokens = count_tokens(history_block)
+        budget = TokenBudget(
+            model_window=budget.model_window,
+            system_prompt_tokens=system_tokens,
+            history_tokens=history_tokens,
+            query_tokens=query_tokens,
+            reserved_output_tokens=budget.reserved_output_tokens,
+            safety_margin_tokens=budget.safety_margin_tokens,
+        )
+        chunks = budget.select_chunks_within_budget(
+            chunks,
+            max_chunks=budget.model_window,  # will be limited by budget
+            max_chars_per_chunk=max_chunk_chars,
+        )
+
+    context_lines = []
+    for index, item in enumerate(chunks, start=1):
+        document = item.document
+        metadata = document.metadata
+        short_title = metadata.get("short_title") or document.document_id
+        article = document.article or "Tanpa pasal"
+        paragraph = f", {document.paragraph}" if document.paragraph else ""
+        text = compact_text(document.text, max_chunk_chars)
+        context_lines.append(
+            f"[{index}] {short_title}, {article}{paragraph}, "
+            f"hal. {document.page_start}-{document.page_end}: {text}"
+        )
+
+    context = "\n\n".join(context_lines) if context_lines else "Tidak ada konteks."
+    prompt = USER_TEMPLATE.format(
+        query=query,
+        history_block=history_block,
+        context=context,
+    )
+
+    # Token usage tracking
+    context_tokens = count_tokens(context)
+    total_tokens = count_tokens(SYSTEM_PROMPT) + count_tokens(prompt)
+    token_usage = {
+        "system_tokens": count_tokens(SYSTEM_PROMPT),
+        "query_tokens": count_tokens(query),
+        "history_tokens": count_tokens(history_block),
+        "context_tokens": context_tokens,
+        "total_prompt_tokens": total_tokens,
+        "chunks_selected": len(chunks),
+        "available_budget": budget.available_for_context if budget else 0,
+    }
+
+    logger.info(
+        "context_rendered chunks=%d context_tokens=%d total_tokens=%d budget=%d",
+        len(chunks),
+        context_tokens,
+        total_tokens,
+        budget.available_for_context if budget else 0,
+    )
+
+    return prompt, token_usage

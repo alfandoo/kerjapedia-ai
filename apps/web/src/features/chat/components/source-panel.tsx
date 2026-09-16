@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ChevronDown, ExternalLink, FileText, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useSettings } from "@/features/settings";
@@ -11,12 +11,23 @@ import type { Citation } from "@/features/chat/types";
 type SourcePanelProps = {
   citations?: Citation[];
   question?: string;
+  focusCitationId?: string | null;
 };
 
-export function SourcePanel({ citations = [], question = "" }: SourcePanelProps) {
+export function SourcePanel({
+  citations = [],
+  question = "",
+  focusCitationId = null,
+}: SourcePanelProps) {
   const { t: translate } = useSettings();
   const [expandedQuotes, setExpandedQuotes] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState<"helpful" | "not_helpful" | null>(null);
+
+  useEffect(() => {
+    if (!focusCitationId) return;
+    const target = document.getElementById(`citation-${focusCitationId}`);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusCitationId, citations]);
 
   function toggleQuote(citationId: string) {
     setExpandedQuotes((current) => {
@@ -73,8 +84,13 @@ export function SourcePanel({ citations = [], question = "" }: SourcePanelProps)
                 ? `${citation.page_start}`
                 : `${citation.page_start}–${citation.page_end}`;
 
+            const focused = focusCitationId === citation.citation_id;
             return (
-              <article className="px-5 py-5" key={citation.citation_id}>
+              <article
+                className={`scroll-mt-4 px-5 py-5 transition ${focused ? "rounded-xl bg-javanese/10 ring-2 ring-inset ring-javanese/50" : ""}`}
+                key={citation.citation_id}
+                id={`citation-${citation.citation_id}`}
+              >
                 <div className="flex items-start gap-3">
                   <span
                     className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border border-border bg-secondary font-mono text-[11px] font-semibold text-muted-foreground"

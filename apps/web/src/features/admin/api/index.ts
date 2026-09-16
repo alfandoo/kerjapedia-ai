@@ -1,6 +1,7 @@
 import { API_URL, parseJsonResponse } from "@/lib/api-client";
 import { fetchWithAuthRetry } from "@/features/auth";
 import type {
+  AdminMetrics,
   AdminOverview,
   AdminRelationship,
   AdminStats,
@@ -29,6 +30,15 @@ export async function fetchAdminStats(signal?: AbortSignal): Promise<AdminStats>
   return parseJsonResponse<AdminStats>(response);
 }
 
+export async function fetchAdminMetrics(signal?: AbortSignal): Promise<AdminMetrics> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/metrics`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
+  return parseJsonResponse<AdminMetrics>(response);
+}
+
 export async function fetchAdminSettings(signal?: AbortSignal): Promise<AdminSettings> {
   const response = await fetchWithAuthRetry(
     `${API_URL}/admin/settings`,
@@ -38,7 +48,11 @@ export async function fetchAdminSettings(signal?: AbortSignal): Promise<AdminSet
   return parseJsonResponse<AdminSettings>(response);
 }
 
-export async function fetchAuditLogs(page = 1, limit = 10, signal?: AbortSignal): Promise<{ entries: AuditLogEntry[]; total: number }> {
+export async function fetchAuditLogs(
+  page = 1,
+  limit = 10,
+  signal?: AbortSignal
+): Promise<{ entries: AuditLogEntry[]; total: number }> {
   const response = await fetchWithAuthRetry(
     `${API_URL}/admin/audit-logs?page=${page}&limit=${limit}`,
     { headers: adminHeaders() },
@@ -58,7 +72,12 @@ export async function fetchAdminOverview(signal?: AbortSignal): Promise<AdminOve
 
 export async function updateAdminDocument(
   documentId: string,
-  payload: { legal_status: string; verification_status: string; topics: string[]; source_url: string }
+  payload: {
+    legal_status: string;
+    verification_status: string;
+    topics: string[];
+    source_url: string;
+  }
 ): Promise<void> {
   const response = await fetchWithAuthRetry(`${API_URL}/admin/documents/${documentId}`, {
     method: "PATCH",
@@ -75,16 +94,19 @@ export async function verifyDocument(
   evidenceUrl: string,
   notes?: string
 ): Promise<void> {
-  const response = await fetchWithAuthRetry(`${API_URL}/admin/documents/${documentId}/verification`, {
-    method: "POST",
-    headers: adminHeaders(),
-    body: JSON.stringify({
-      verification_type: verificationType,
-      status,
-      evidence_url: evidenceUrl,
-      notes,
-    }),
-  });
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/documents/${documentId}/verification`,
+    {
+      method: "POST",
+      headers: adminHeaders(),
+      body: JSON.stringify({
+        verification_type: verificationType,
+        status,
+        evidence_url: evidenceUrl,
+        notes,
+      }),
+    }
+  );
   await parseJsonResponse(response);
 }
 

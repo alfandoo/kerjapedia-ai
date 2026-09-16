@@ -201,7 +201,15 @@ export function ConversationHistory({
         {error && historyEnabled ? (
           <div className="px-3 py-3 text-xs text-muted-foreground" role="status">
             <p>{translate("sidebar.historyError")}</p>
-            {onRetry ? <button type="button" onClick={onRetry} className="mt-2 text-sidebar-foreground underline underline-offset-4">{translate("sidebar.retryHistory")}</button> : null}
+            {onRetry ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="mt-2 text-sidebar-foreground underline underline-offset-4"
+              >
+                {translate("sidebar.retryHistory")}
+              </button>
+            ) : null}
           </div>
         ) : null}
         {loading && historyEnabled ? (

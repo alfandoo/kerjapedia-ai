@@ -93,11 +93,174 @@ def test_query_understanding_preserves_manifest_regulation_type_casing() -> None
     assert query.filters["number"] == 6
 
 
+@pytest.mark.parametrize(
+    ("question", "expected_topic"),
+    [
+        ("Bagaimana cara mengundurkan diri yang benar?", "phk"),
+        ("Saya mau resign, apa hak saya?", "phk"),
+        ("Berapa uang pisah untuk pekerja resign?", "phk"),
+        ("Apa aturan mogok kerja?", "hubungan_industrial"),
+        ("Kapan usia pensiun dan apa itu JP?", "bpjs"),
+        ("Apa aturan magang di perusahaan?", None),
+        ("Apa itu surat peringatan bagi pekerja?", "phk"),
+        ("Apakah skorsing memutus hubungan kerja?", "phk"),
+    ],
+)
+def test_employment_scope_covers_common_worker_phrasings(
+    question: str, expected_topic: str | None
+) -> None:
+    understanding = understand_query(question)
+
+    assert is_employment_query(understanding) is True
+    if expected_topic is not None:
+        assert expected_topic in understanding.detected_topics
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Bagaimana cuaca hari ini?",
+        "Apa ibu kota Jepang?",
+        "Bagi resep rendang padang.",
+    ],
+)
+def test_employment_scope_still_rejects_off_topic_questions(question: str) -> None:
+    assert is_employment_query(understand_query(question)) is False
+
+
+@pytest.mark.parametrize(
+    ("question", "expected_topic"),
+    [
+        ("Berapa jam waktu kerja normal dalam seminggu?", "waktu_kerja"),
+        ("Kapan kerja melebihi jam normal dianggap lembur?", "waktu_kerja"),
+        ("Apa perbedaan waktu istirahat dan cuti tahunan?", "waktu_kerja"),
+        ("Apa hak pekerja jika melihat bahaya di tempat kerja?", "k3"),
+        ("Kalau perundingan bipartit gagal, bagaimana tahap mediasi?", "hubungan_industrial"),
+        ("Apa putusan PHI bersifat final?", "hubungan_industrial"),
+    ],
+)
+def test_topic_detection_covers_previous_blind_spots(
+    question: str, expected_topic: str
+) -> None:
+    understanding = understand_query(question)
+
+    assert expected_topic in understanding.detected_topics
+    assert is_employment_query(understanding) is True
+
+
+def test_overtime_pay_detects_both_pay_and_time_topics() -> None:
+    understanding = understand_query("Apakah perusahaan wajib membayar upah lembur?")
+
+    assert "pengupahan" in understanding.detected_topics
+    assert "waktu_kerja" in understanding.detected_topics
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Apa itu filosofi hukum?",
+        "Siapa pencipta lagu Indonesia Raya?",
+    ],
+)
+def test_topic_keywords_do_not_overfire(question: str) -> None:
+    understanding = understand_query(question)
+
+    assert "hubungan_industrial" not in understanding.detected_topics
+
+
+def test_definition_intent_covers_natural_phrasings() -> None:
+    assert "definition" in understand_query("Apa yang dimaksud dengan PHK?").detected_intents
+    assert "definition" in understand_query("Jelaskan THR.").detected_intents
+
+
+def test_phi_abbreviation_expands_for_retrieval() -> None:
+    query = understand_query("Apa putusan PHI bersifat final?")
+
+    assert any("pengadilan hubungan industrial" in item for item in query.rewritten_queries)
+
+
 def test_inferred_topic_is_a_soft_signal_not_a_hard_filter() -> None:
     query = understand_query("Apakah pekerja PKWT memperoleh kompensasi?")
 
     assert query.filters["inferred_topics"] == ["pkwt"]
     assert "topics" not in query.filters
+
+
+def test_contextual_retrieval_inherits_hashed_document_ids() -> None:
+    # Production IDs carry a content-hash suffix; inheritance must survive it.
+    query = understand_query(
+        "berapa besarnya?",
+        context_topics=("thr",),
+        context_document_ids=("UU-6-2023-47c5b9a46eebba4f75b0c13e",),
+    )
+
+    assert query.filters["regulation_type"] == "UU"
+    assert query.filters["number"] == 6
+    assert query.filters["year"] == 2023
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Kapan THR selesai dibayarkan?",
+        "Apa keputusan sidang perselisihan HI?",
+    ],
+)
+def test_termination_expansion_ignores_generic_words(question: str) -> None:
+    query = understand_query(question)
+
+    assert not any("berakhirnya PKWT" in item for item in query.rewritten_queries)
+
+
+def test_termination_expansion_fires_on_contract_end() -> None:
+    query = understand_query("Berapa kompensasi jika kontrak PKWT habis?")
+
+    assert any("berakhirnya PKWT" in item for item in query.rewritten_queries)
+
+
+def test_timing_expansion_requires_payment_context() -> None:
+    without_payment = understand_query("Kapan perusahaan wajib mendaftarkan BPJS?")
+
+    assert not any(
+        "dibayarkan sebelum batas waktu" in item
+        for item in without_payment.rewritten_queries
+    )
+
+    with_payment = understand_query("Kapan THR dibayarkan?")
+
+    assert any(
+        "dibayarkan sebelum batas waktu" in item for item in with_payment.rewritten_queries
+    )
+
+
+def test_normalize_query_fixes_common_typos() -> None:
+    from app.services.retrieval.query import normalize_query
+
+    assert normalize_query("tunjagan hari raya") == "tunjangan hari raya"
+    assert normalize_query("pesangoon") == "pesangon"
+
+
+def test_engine_scores_semantic_similarity_per_rewrite(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.retrieval.engine import RetrievalEngine
+
+    seen: list[list[str]] = []
+    provider = HashEmbeddingProvider()
+    real_embed = provider.embed
+
+    def spy_embed(texts: list[str]):
+        seen.append(list(texts))
+        return real_embed(texts)
+
+    monkeypatch.setattr(provider, "embed", spy_embed)
+    engine = RetrievalEngine(documents=[])
+    engine.embedding_provider = provider
+    engine.search("Apakah pekerja PKWT memperoleh kompensasi?")
+
+    assert len(seen) == 1
+    assert len(seen[0]) > 1
+    assert any("perjanjian kerja waktu tertentu" in text for text in seen[0])
 
 
 def test_contextual_retrieval_inherits_document_scope_not_articles() -> None:

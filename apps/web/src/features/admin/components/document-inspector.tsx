@@ -61,8 +61,6 @@ export const ingestionTone: Record<AdminDocument["ingestion_status"], BadgeTone>
   queued: "neutral",
 };
 
-const PAGE_SIZE = 10;
-
 function isAuthError(err: unknown): boolean {
   return /token|bearer/i.test((err as Error)?.message ?? "");
 }

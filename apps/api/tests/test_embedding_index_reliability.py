@@ -131,6 +131,8 @@ def sample_document() -> DocumentMetadata:
         size_bytes=100,
         sha256="a" * 64,
         verification_status="verified",
+        source_verification_status="verified",
+        legal_review_status="verified",
     )
 
 

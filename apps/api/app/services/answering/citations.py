@@ -6,13 +6,33 @@ from app.services.answering.schemas import Citation, RelatedDocument
 from app.services.retrieval.schemas import RankedChunk
 
 _WHITESPACE_RE = re.compile(r"\s+")
+_SENTENCE_END_RE = re.compile(r"[.!?]\s")
 
 
 def compact_text(value: str, limit: int = 260) -> str:
+    """Truncate text to limit, preferring sentence boundaries.
+
+    Strategy:
+    1. If text fits within limit, return as-is
+    2. Try to cut at the last sentence boundary before limit
+    3. Fall back to character truncation if no sentence boundary found
+    """
     compacted = _WHITESPACE_RE.sub(" ", value).strip()
     if len(compacted) <= limit:
         return compacted
-    return f"{compacted[: limit - 3].rstrip()}..."
+
+    # Try to find the last sentence boundary before the limit
+    truncated = compacted[: limit - 3]
+    last_sentence_end = -1
+    for match in _SENTENCE_END_RE.finditer(truncated):
+        last_sentence_end = match.end()
+
+    # Use sentence boundary if we found one in the second half of the limit
+    # (to avoid returning very short text)
+    if last_sentence_end > limit // 3:
+        return f"{truncated[:last_sentence_end].rstrip()}..."
+
+    return f"{truncated.rstrip()}..."
 
 
 def build_citations(ranked: list[RankedChunk]) -> list[Citation]:

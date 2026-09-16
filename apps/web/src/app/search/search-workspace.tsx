@@ -14,11 +14,10 @@ const SIDEBAR_STORAGE_KEY = "kerjapedia.chat.sidebar.v1";
 
 export function SearchWorkspace() {
   const router = useRouter();
-  const { conversations, setConversations, historyLoading, historyError, retryHistory } = useConversationHistory();
+  const { conversations, setConversations, historyLoading, historyError, retryHistory } =
+    useConversationHistory();
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
-
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

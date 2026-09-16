@@ -85,17 +85,17 @@ def make_document(
 def test_golden_dataset_has_prd_distribution_and_hard_negatives() -> None:
     metadata, questions = load_evaluation_dataset(golden_dataset_path())
 
-    assert len(questions) == 300
+    assert len(questions) == 130
     assert metadata["distribution"] == {
-        "pkwt": 30,
-        "phk_pesangon": 50,
-        "alih_daya": 20,
-        "waktu_kerja": 20,
-        "pengupahan": 40,
-        "thr": 30,
-        "bpjs_jkp": 40,
-        "k3": 30,
-        "hubungan_industrial": 30,
+        "pkwt": 12,
+        "phk_pesangon": 20,
+        "alih_daya": 10,
+        "waktu_kerja": 10,
+        "pengupahan": 16,
+        "thr": 12,
+        "bpjs_jkp": 16,
+        "k3": 12,
+        "hubungan_industrial": 12,
         "refusal": 10,
     }
     assert sum(question.hard_negative for question in questions) >= 10

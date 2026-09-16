@@ -261,6 +261,7 @@ def expand_context(
     candidates: list[RetrievalDocument],
     *,
     max_expansions: int = 4,
+    score_decay: float = 0.85,
 ) -> list[RankedChunk]:
     if not ranked:
         return []
@@ -312,8 +313,8 @@ def expand_context(
                     lexical_score=0.0,
                     semantic_score=0.0,
                     fusion_score=0.0,
-                    rerank_score=round(item.rerank_score * 0.85, 6),
-                    final_score=round(item.final_score * 0.85, 6),
+                    rerank_score=round(item.rerank_score * score_decay, 6),
+                    final_score=round(item.final_score * score_decay, 6),
                     match_reasons=["context_expansion"],
                 )
             )

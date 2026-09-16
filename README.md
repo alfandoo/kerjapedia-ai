@@ -42,10 +42,12 @@ docker compose up -d
 
 Service lokal:
 
-- PostgreSQL + pgvector: `localhost:5432`
+- PostgreSQL (metadata only): `localhost:5432`
 - Redis: `localhost:6379`
 - MinIO API: `http://localhost:9000`
 - MinIO Console: `http://localhost:9001`
+
+> **Note:** PostgreSQL has pgvector extension enabled but it's not used for production vector search. Pinecone is the production vector store. See [docs/P3_2_PGVECTOR_AUDIT.md](docs/P3_2_PGVECTOR_AUDIT.md) for details.
 
 Untuk mode industri, isi minimal variabel berikut di `.env`:
 

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
+  Activity,
   ArrowRight,
   ShieldCheck,
   ChevronLeft,
@@ -57,6 +58,7 @@ const adminNavGroups: {
       { href: "/admin/feedback", label: "Feedback", icon: MessagesSquare },
       { href: "/admin/retrieval", label: "Retrieval Playground", icon: FlaskConical },
       { href: "/admin/evaluation", label: "Evaluasi RAG", icon: Gauge },
+      { href: "/admin/observability", label: "Observability", icon: Activity },
     ],
   },
 ];
@@ -82,9 +84,7 @@ export function AdminShell({ children }: AdminShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      readPreference("kp-admin-sidebar") === "collapsed"
+    () => typeof window !== "undefined" && readPreference("kp-admin-sidebar") === "collapsed"
   );
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -162,7 +162,8 @@ export function AdminShell({ children }: AdminShellProps) {
   async function handleLogout() {
     try {
       await signOut();
-      window.location.assign("/login-admin");
+      // Full page redirect after logout clears all client state intentionally.
+      window.location.assign("/login-admin"); // eslint-disable-line @next/next/no-location-assign-relative-destination
     } catch (error) {
       toast.error((error as Error).message);
     }

@@ -50,6 +50,7 @@ class QuestionEvaluation:
     reciprocal_rank: float | None
     citation_correctness: float | None
     faithfulness: float | None
+    answer_correctness: float | None
     ragas_faithfulness: float | None
     recall_at_10: float | None
     ndcg_at_10: float | None
@@ -73,6 +74,7 @@ class AggregateMetrics:
     mean_reciprocal_rank: float
     citation_correctness: float
     faithfulness: float
+    answer_correctness: float
     ragas_faithfulness: float
     refusal_accuracy: float
     hard_negative_recall_at_5: float

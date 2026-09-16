@@ -171,7 +171,8 @@ const en = {
   "auth.otpExpired": "The verification code has expired. Please resend it.",
   "auth.otpTooMany": "Too many attempts. Please resend the code.",
   "auth.otpInvalidSession": "This registration session is invalid. Please sign up again.",
-  "auth.errorSessionCreate": "Your account was created, but a session could not be started. Please sign in again.",
+  "auth.errorSessionCreate":
+    "Your account was created, but a session could not be started. Please sign in again.",
   "auth.errorNoPending": "No registration found for this email.",
   "auth.googleOnlyTitle": "Sign in with Google",
   "auth.googleOnlyDescription":
@@ -219,6 +220,7 @@ const en = {
   "answer.conversationLabel": "Conversation",
   "answer.thinking": "Thinking…",
   "answer.officialSources": "official sources",
+  "answer.openCitation": "Open source",
   "answer.editMessage": "Edit message",
   "answer.copyMessage": "Copy message",
   "answer.copyAnswer": "Copy answer",
@@ -248,6 +250,8 @@ const en = {
   "answer.warningHistorical": "Some sources are historical or have been revoked.",
   "answer.warningSuperseded": "Some sources have been amended or replaced by newer regulations.",
   "answer.warningRevoked": "A source has been revoked or superseded by a newer regulation.",
+  "answer.warningDegradedExtractive":
+    "Answer assembled automatically from source quotes — read the official sources for full detail.",
   // Sources
   "source.title": "Sources",
   "source.panelLabel": "Official source list",

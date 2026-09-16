@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, replace
 from typing import Any
 
 from app.services.answering.citations import build_citations, build_related_documents
@@ -17,7 +18,8 @@ from app.services.answering.generator import (
     AnswerGenerator,
     _detect_language,
 )
-from app.services.answering.prompts import render_user_prompt
+from app.services.answering.guardrails import evaluate_context_guardrail, redact_context_pii
+from app.services.answering.prompts import render_user_prompt_with_budget
 from app.services.answering.schemas import (
     AnswerResponse,
     Citation,
@@ -26,6 +28,7 @@ from app.services.answering.schemas import (
     RelatedDocument,
 )
 from app.services.retrieval.schemas import RankedChunk, RetrievalResponse
+from app.services.retrieval.token_budget import TokenBudget
 
 TEMPORARILY_UNAVAILABLE_ID = (
     "Maaf, jawaban terverifikasi belum dapat disusun saat ini. Silakan coba lagi "
@@ -35,6 +38,16 @@ TEMPORARILY_UNAVAILABLE_EN = (
     "Sorry, a verified answer cannot be prepared right now. Please try again shortly "
     "or review the official sources that were found."
 )
+EXTRACTIVE_FALLBACK_WARNING = "answer_degraded_extractive"
+SALVAGE_REPAIR_WARNING = "answer_repaired_by_sentence_salvage"
+_SALVAGE_MAX_CANDIDATES = 3
+_SALVAGE_MAX_CHARS = 6000
+_SALVAGE_MAX_SENTENCES = 12
+EXTRACTIVE_INTRO_ID = "Berikut ringkasan otomatis dari sumber resmi yang ditemukan:"
+EXTRACTIVE_INTRO_EN = "Here is an automated summary of the official sources found:"
+_EXTRACTIVE_MAX_SENTENCES = 2
+_EXTRACTIVE_MAX_CHARS = 600
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 logger = logging.getLogger(__name__)
 
 
@@ -54,9 +67,46 @@ class AnswerValidationError(ValueError):
         self,
         message: str,
         verified_subset: _VerifiedSubset | None = None,
+        candidate_answer: str | None = None,
     ) -> None:
         super().__init__(message)
         self.verified_subset = verified_subset
+        # Answer prose worth sentence-level salvage even when its claims[]
+        # were malformed, missing, or unverifiable as a whole.
+        self.candidate_answer = candidate_answer
+
+
+_TRANSIENT_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+
+def _provider_status_code(exc: Exception) -> int | None:
+    status = getattr(exc, "status_code", None)
+    return status if isinstance(status, int) else None
+
+
+def _is_transient_provider_error(exc: Exception) -> bool:
+    """True for rate limits and upstream outages that a retry may survive.
+
+    Reads the SDK-agnostic `status_code` first so fake clients and future
+    providers work; falls back to OpenAI error types when available.
+    """
+    status = _provider_status_code(exc)
+    if status is not None:
+        return status in _TRANSIENT_STATUS_CODES or 500 <= status < 600
+    try:
+        from openai import (
+            APIConnectionError,
+            APIStatusError,
+            APITimeoutError,
+            RateLimitError,
+        )
+    except ImportError:
+        return False
+    if isinstance(exc, (RateLimitError, APIConnectionError, APITimeoutError)):
+        return True
+    return isinstance(exc, APIStatusError) and (
+        exc.status_code in _TRANSIENT_STATUS_CODES or 500 <= exc.status_code < 600
+    )
 
 
 class OpenRouterAnswerGenerator(AnswerGenerator):
@@ -68,11 +118,24 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         max_retries: int = 2,
         max_tokens: int = 3000,
         max_citations: int = 4,
+        max_context_chunk_chars: int = 2000,
+        context_model_window: int = 12_000,
+        context_reserved_output_tokens: int = 3_000,
+        context_safety_margin_tokens: int = 200,
         verifier_provider: str = "deterministic",
         verifier_model: str | None = None,
         fail_closed: bool = False,
+        transient_max_retries: int = 2,
+        transient_backoff_seconds: float = 2.0,
+        fallback_models: tuple[str, ...] | list[str] = (),
     ) -> None:
-        super().__init__(max_citations=max_citations)
+        super().__init__(
+            max_citations=max_citations,
+            max_context_chunk_chars=max_context_chunk_chars,
+            context_model_window=context_model_window,
+            context_reserved_output_tokens=context_reserved_output_tokens,
+            context_safety_margin_tokens=context_safety_margin_tokens,
+        )
         self.api_key = api_key
         self.model_name = model_name
         self.timeout_seconds = timeout_seconds
@@ -82,6 +145,11 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         self.verifier_provider = verifier_provider
         self.verifier_model = verifier_model or model_name
         self.fail_closed = fail_closed
+        self.transient_max_retries = max(0, transient_max_retries)
+        self.transient_backoff_seconds = max(0.0, transient_backoff_seconds)
+        self.fallback_models = tuple(
+            model.strip() for model in fallback_models if model and model.strip()
+        )
 
     def generate(
         self,
@@ -116,7 +184,10 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         provider_failure_type: str | None = None
         generation_attempts = 0
         verified_subset: _VerifiedSubset | None = None
-        for attempt in range(2):
+        salvage_candidates: list[str] = []
+        validation_failures = 0
+        transient_retries = 0
+        for attempt in range(2 + self.transient_max_retries):
             generation_attempts = attempt + 1
             try:
                 payload = self._call_openrouter(
@@ -166,6 +237,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                         "prompt_version_id": self.prompt_template.prompt_version_id,
                         "token_usage": token_usage,
                         "generation_attempts": attempt + 1,
+                        "transient_retries": transient_retries,
                         "history_turns": len(tuple(history or [])),
                     },
                     claims=claims,
@@ -175,22 +247,41 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 validation_issues = [str(exc)[:400]]
                 if exc.verified_subset is not None:
                     verified_subset = exc.verified_subset
-                if attempt == 0:
-                    continue
-                break
+                candidate = (exc.candidate_answer or "").strip()
+                if candidate and candidate not in salvage_candidates:
+                    salvage_candidates.append(candidate[:_SALVAGE_MAX_CHARS])
+                    del salvage_candidates[: -_SALVAGE_MAX_CANDIDATES]
+                validation_failures += 1
+                if validation_failures >= 2:
+                    break
+                continue
             except Exception as exc:
                 failure_category = "provider_failure"
                 provider_failure_type = type(exc).__name__
                 logger.warning(
-                    "openrouter_generation_provider_failure type=%s attempt=%s",
+                    "openrouter_generation_provider_failure type=%s attempt=%s status=%s",
                     provider_failure_type,
                     generation_attempts,
+                    _provider_status_code(exc),
                 )
-                if attempt == 0 and provider_failure_type == "BadRequestError":
+                if provider_failure_type == "BadRequestError" and validation_failures < 1:
                     validation_issues = [
                         "provider rejected structured output; return minimal valid JSON that "
                         "matches the required schema exactly"
                     ]
+                    validation_failures += 1
+                    continue
+                if _is_transient_provider_error(exc) and (
+                    transient_retries < self.transient_max_retries
+                ):
+                    transient_retries += 1
+                    backoff = self.transient_backoff_seconds * transient_retries
+                    logger.warning(
+                        "openrouter_generation_transient_retry retry=%s backoff_seconds=%s",
+                        transient_retries,
+                        round(backoff, 2),
+                    )
+                    time.sleep(backoff)
                     continue
                 break
 
@@ -227,6 +318,70 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 claims=verified_subset.claims,
             )
 
+        salvaged = None
+        for candidate in reversed(salvage_candidates):
+            salvaged = self._salvage_answer_text(
+                query=query,
+                candidate=candidate,
+                selected=selected,
+                retrieved_chunk_ids=retrieved_chunk_ids,
+            )
+            if salvaged is not None:
+                break
+        if salvaged is not None:
+            _merge_token_usage(token_usage, salvaged.verifier_usage)
+            confidence = self._estimate_confidence(retrieval) * min(
+                claim.support_score for claim in salvaged.claims
+            )
+            logger.warning(
+                "openrouter_generation_sentence_salvage claims=%s",
+                len(salvaged.claims),
+            )
+            return AnswerResponse(
+                query=query,
+                answer=salvaged.answer,
+                citations=salvaged.citations,
+                confidence=round(max(0.0, min(confidence, 0.95)), 3),
+                related_documents=salvaged.related_documents,
+                refusal_reason=None,
+                clarification_question=None,
+                disclaimer=(DISCLAIMER_ID if _detect_language(query) == "id" else DISCLAIMER_EN),
+                prompt_version_id=self.prompt_template.prompt_version_id,
+                retrieved_chunk_ids=retrieved_chunk_ids,
+                warnings=list(
+                    dict.fromkeys([*retrieval.warnings, SALVAGE_REPAIR_WARNING])
+                ),
+                debug={
+                    "llm_provider": "openrouter",
+                    "llm_model": self.model_name,
+                    "verifier_model": self.verifier_model,
+                    "repair": "sentence_salvage",
+                    "failure_category": failure_category,
+                    "validation_issues": validation_issues or [],
+                    "provider_failure_type": provider_failure_type,
+                    "generation_attempts": generation_attempts,
+                    "transient_retries": transient_retries,
+                    "prompt_version_id": self.prompt_template.prompt_version_id,
+                    "token_usage": token_usage,
+                },
+                claims=salvaged.claims,
+            )
+
+        extractive = self._extractive_fallback_response(
+            query=query,
+            retrieval=retrieval,
+            selected=selected,
+            citations=retrieved_citations,
+            retrieved_chunk_ids=retrieved_chunk_ids,
+            token_usage=token_usage,
+            failure_category=failure_category,
+            validation_issues=validation_issues or [],
+            provider_failure_type=provider_failure_type,
+            generation_attempts=generation_attempts,
+            transient_retries=transient_retries,
+        )
+        if extractive is not None:
+            return extractive
         return self._temporarily_unavailable_response(
             query=query,
             retrieval=retrieval,
@@ -238,6 +393,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             validation_issues=validation_issues or [],
             provider_failure_type=provider_failure_type,
             generation_attempts=generation_attempts,
+            transient_retries=transient_retries,
         )
 
     def _validate_payload(
@@ -261,18 +417,25 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             raise AnswerValidationError("answer is empty")
         raw_claims = _claims_from_payload(payload)
         if not raw_claims:
-            raise AnswerValidationError("structured claims are missing")
-        cited_chunk_ids = _resolved_cited_chunk_ids(
-            payload,
-            raw_claims,
-            retrieved_chunk_ids,
-        )
+            raise AnswerValidationError(
+                "structured claims are missing", candidate_answer=answer
+            )
+        try:
+            cited_chunk_ids = _resolved_cited_chunk_ids(
+                payload,
+                raw_claims,
+                retrieved_chunk_ids,
+            )
+        except AnswerValidationError as exc:
+            raise AnswerValidationError(str(exc), candidate_answer=answer) from exc
         cited_ids = set(cited_chunk_ids)
         cited_results = [item for item in selected if item.document.chunk_id in cited_ids]
         citations = build_citations(cited_results)
         if not citations:
-            raise AnswerValidationError("no valid citations remain")
-        claims, verifier_usage = self._verify_claims(raw_claims, citations)
+            raise AnswerValidationError(
+                "no valid citations remain", candidate_answer=answer
+            )
+        claims, verifier_usage = self._verify_claims(query, raw_claims, citations)
         issues: list[str] = []
         if not claims:
             issues.append("structured claims are missing")
@@ -287,7 +450,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 + "; ".join(detached_claims)[:240]
             )
         unsupported = [
-            f"{claim.text} (support={claim.support_score:.2f})"
+            f"{claim.text} (support={claim.support_score:.2f}; {claim.support_detail})"
             for claim in claims
             if not claim.supported
         ]
@@ -310,6 +473,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                     selected,
                     verifier_usage,
                 ),
+                candidate_answer=answer,
             )
         return (
             answer,
@@ -317,6 +481,147 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             build_related_documents(cited_results),
             claims,
             verifier_usage,
+        )
+
+    def _salvage_answer_text(
+        self,
+        *,
+        query: str,
+        candidate: str,
+        selected: list[RankedChunk],
+        retrieved_chunk_ids: list[str],
+    ) -> _VerifiedSubset | None:
+        """Answer from the model's own prose when its claims[] were unusable.
+
+        Splits the candidate into sentences and verifies each one against
+        the retrieved citations with the same gates as normal claims. Only
+        supported sentences survive, in order, and the lead sentence must
+        hold — mirroring _verified_claim_subset so a failed lead cannot be
+        papered over with tangential tail sentences. Returns None when
+        nothing verifiable remains.
+        """
+        cleaned = _clean_answer_text(candidate, retrieved_chunk_ids)
+        if not cleaned:
+            return None
+        sentences = [
+            segment.strip()
+            for segment in _SENTENCE_SPLIT_RE.split(cleaned)
+            if segment.strip() and not re.match(r"^\s*(#{1,6}\s|```)", segment)
+        ][:_SALVAGE_MAX_SENTENCES]
+        if not sentences or _detect_language(" ".join(sentences)) != _detect_language(query):
+            return None
+        citations = build_citations(selected)
+        if not citations:
+            return None
+        all_ids = [citation.chunk_id for citation in citations]
+        checked = verify_claims_deterministically(
+            [(sentence, all_ids) for sentence in sentences],
+            citations,
+            query=query,
+        )
+        if not checked or not checked[0].supported:
+            return None
+        kept = [claim for claim in checked if claim.supported]
+        cited_ids = {chunk_id for claim in kept for chunk_id in claim.cited_chunk_ids}
+        cited_results = [
+            item for item in selected if item.document.chunk_id in cited_ids
+        ]
+        subset_citations = build_citations(cited_results)
+        if not subset_citations:
+            return None
+        return _VerifiedSubset(
+            answer=" ".join(claim.text for claim in kept),
+            citations=subset_citations,
+            related_documents=build_related_documents(cited_results),
+            claims=kept,
+            verifier_usage={},
+        )
+
+    def _extractive_fallback_response(
+        self,
+        *,
+        query: str,
+        retrieval: RetrievalResponse,
+        selected: list[RankedChunk],
+        citations: list[Citation],
+        retrieved_chunk_ids: list[str],
+        token_usage: dict[str, int],
+        failure_category: str,
+        validation_issues: list[str],
+        provider_failure_type: str | None,
+        generation_attempts: int,
+        transient_retries: int = 0,
+    ) -> AnswerResponse | None:
+        """Last-resort answered tier: stitch top citation quotes verbatim.
+
+        Used only when the LLM tiers above all failed but retrieval found
+        citable sources. No model output is involved, so nothing can be
+        hallucinated; every sentence is a verbatim quote, hence supported
+        by construction. Disabled under fail_closed so production release
+        semantics stay strict. Returns None when there is nothing to
+        extract from, letting the caller fall through to unavailable.
+        """
+        if self.fail_closed or not citations or not selected:
+            return None
+        lang = _detect_language(query)
+        items: list[str] = []
+        claims: list[GroundedClaim] = []
+        for citation in citations[: self.max_citations]:
+            excerpt = _first_sentences(citation.quote)
+            if not excerpt:
+                continue
+            label = citation.short_title or citation.document_id
+            if citation.article:
+                label = f"{label}, {citation.article}"
+            # One "- " line per source: the chat renderer groups consecutive
+            # bullets into a single list and supports **bold** inline.
+            items.append(f"- **{label}** — {excerpt}")
+            claims.append(
+                GroundedClaim(
+                    text=excerpt,
+                    cited_chunk_ids=[citation.chunk_id],
+                    supported=True,
+                    support_score=1.0,
+                    support_detail="extractive_verbatim",
+                )
+            )
+        if not items:
+            return None
+        intro = EXTRACTIVE_INTRO_ID if lang == "id" else EXTRACTIVE_INTRO_EN
+        logger.warning(
+            "openrouter_generation_extractive_fallback failure_category=%s excerpts=%s",
+            failure_category,
+            len(items),
+        )
+        return AnswerResponse(
+            query=query,
+            answer=intro + "\n\n" + "\n".join(items),
+            citations=citations,
+            confidence=round(max(0.05, self._estimate_confidence(retrieval) * 0.5), 3),
+            related_documents=build_related_documents(selected),
+            refusal_reason=None,
+            clarification_question=None,
+            disclaimer=(DISCLAIMER_ID if lang == "id" else DISCLAIMER_EN),
+            prompt_version_id=self.prompt_template.prompt_version_id,
+            retrieved_chunk_ids=retrieved_chunk_ids,
+            warnings=list(
+                dict.fromkeys([*retrieval.warnings, EXTRACTIVE_FALLBACK_WARNING])
+            ),
+            debug={
+                "llm_provider": "openrouter",
+                "llm_model": self.model_name,
+                "verifier_model": self.verifier_model,
+                "fallback": "extractive",
+                "failure_category": failure_category,
+                "validation_issues": validation_issues,
+                "provider_failure_type": provider_failure_type,
+                "generation_attempts": generation_attempts,
+                "transient_retries": transient_retries,
+                "prompt_version_id": self.prompt_template.prompt_version_id,
+                "token_usage": token_usage,
+            },
+            claims=claims,
+            answer_status="answered",
         )
 
     def _temporarily_unavailable_response(
@@ -332,6 +637,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         validation_issues: list[str],
         provider_failure_type: str | None,
         generation_attempts: int,
+        transient_retries: int = 0,
     ) -> AnswerResponse:
         lang = _detect_language(query)
         logger.warning(
@@ -363,6 +669,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 "validation_issues": validation_issues,
                 "provider_failure_type": provider_failure_type,
                 "generation_attempts": generation_attempts,
+                "transient_retries": transient_retries,
                 "prompt_version_id": self.prompt_template.prompt_version_id,
                 "token_usage": token_usage,
             },
@@ -380,6 +687,30 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         history: tuple[HistoryTurn, ...] | list[HistoryTurn] | None = None,
     ) -> dict[str, Any]:
         lang = _detect_language(query)
+        # Filter out context chunks that contain embedded prompt-injection attempts.
+        context_guardrail = evaluate_context_guardrail(
+            [item.document for item in selected]
+        )
+        if context_guardrail.flagged_chunk_ids:
+            logger.warning(
+                "openrouter_context_injection_flagged chunk_ids=%s",
+                context_guardrail.flagged_chunk_ids,
+            )
+            selected = [
+                item
+                for item in selected
+                if item.document.chunk_id not in context_guardrail.flagged_chunk_ids
+            ]
+        # Redact PII from context chunks before LLM submission.
+        redacted_selected: list[RankedChunk] = []
+        for item in selected:
+            cleaned, was_redacted = redact_context_pii(item.document.text or "")
+            if was_redacted:
+                redacted_doc = replace(item.document, text=cleaned)
+                redacted_selected.append(replace(item, document=redacted_doc))
+            else:
+                redacted_selected.append(item)
+        selected = redacted_selected
         if lang == "id":
             lang_instruction = (
                 "Tulis answer dalam bahasa Indonesia. Mulai langsung dari inti jawaban tanpa "
@@ -400,14 +731,29 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 "amounts, time periods, and conditions so citations stay verifiable. No headings, "
                 "tables, code blocks, or source lists."
             )
+        budget = TokenBudget(
+            model_window=self.context_model_window,
+            reserved_output_tokens=self.context_reserved_output_tokens,
+            safety_margin_tokens=self.context_safety_margin_tokens,
+        )
+        rendered_prompt, token_usage = render_user_prompt_with_budget(
+            query,
+            retrieval,
+            selected=selected,
+            budget=budget,
+            max_chunk_chars=self.max_context_chunk_chars,
+            history=history,
+        )
         user_prompt = "\n\n".join(
             [
-                render_user_prompt(query, retrieval, selected=selected, history=history),
+                rendered_prompt,
                 "Return valid JSON only in this format:",
                 (
                     '{"answer":"...","cited_chunk_ids":["..."],'
                     '"claims":[{"text":"...","cited_chunk_ids":["..."]}]}'
                 ),
+                "Output raw JSON only. Do not wrap in markdown fences like ```json, "
+                "do not add explanations before or after the JSON.",
                 "cited_chunk_ids must use only these chunks: " + ", ".join(retrieved_chunk_ids),
                 (
                     f"{lang_instruction}\n"
@@ -421,7 +767,9 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                     "from answer verbatim, so a compound sentence would sink its "
                     "whole claim when only one detail is citable. Together the "
                     "claims must cover every legal assertion. Each claim must "
-                    "cite only chunks that support the entire sentence."
+                    "cite only chunks that support the entire sentence. State "
+                    "calculations with the source's literal numbers and formula "
+                    "(e.g. 6/12 x 1 month wage), never a bare computed result."
                 ),
                 (
                     "The previous response failed validation. Return a corrected complete "
@@ -440,27 +788,41 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             response_format={"type": "json_object"},
             temperature=0,
             max_tokens=self.max_tokens,
+            **self._request_options(),
         )
         content = completion.choices[0].message.content
+        finish_reason = getattr(completion.choices[0], "finish_reason", None)
         try:
-            payload = json.loads(content)
-        except (json.JSONDecodeError, TypeError) as exc:
-            raise AnswerValidationError("response is not valid JSON") from exc
+            payload = _parse_json_object(content)
+        except AnswerValidationError as exc:
+            logger.warning(
+                "openrouter_generation_invalid_json finish_reason=%s preview=%.500s",
+                finish_reason,
+                str(content or "")[:500],
+            )
+            raise AnswerValidationError(
+                str(exc),
+                candidate_answer=content if isinstance(content, str) else None,
+            ) from exc
         if not isinstance(payload, dict):
             raise AnswerValidationError("OpenRouter response JSON is not an object")
         usage = getattr(completion, "usage", None)
         payload["_token_usage"] = {
             "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
             "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
+            "budget_system_tokens": token_usage.get("system_tokens", 0),
+            "budget_context_tokens": token_usage.get("context_tokens", 0),
+            "budget_chunks_selected": token_usage.get("chunks_selected", 0),
         }
         return payload
 
     def _verify_claims(
         self,
+        query: str,
         claims: list[tuple[str, list[str]]],
         citations: list[Citation],
     ) -> tuple[list[GroundedClaim], dict[str, int]]:
-        deterministic = verify_claims_deterministically(claims, citations)
+        deterministic = verify_claims_deterministically(claims, citations, query=query)
         if self.verifier_provider != "openrouter":
             return deterministic, {}
         return self._call_claim_verifier(deterministic, citations)
@@ -506,8 +868,16 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             response_format={"type": "json_object"},
             temperature=0,
             max_tokens=600,
+            **self._request_options(),
         )
-        payload = json.loads(completion.choices[0].message.content)
+        try:
+            payload = _parse_json_object(completion.choices[0].message.content)
+        except AnswerValidationError:
+            logger.warning("openrouter_claim_verifier_invalid_json; using deterministic fallback")
+            return claims, {}
+        if not isinstance(payload, dict):
+            logger.warning("openrouter_claim_verifier_invalid_json; using deterministic fallback")
+            return claims, {}
         by_index = {
             int(item["index"]): item
             for item in payload.get("claims", [])
@@ -535,6 +905,18 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
         }
 
+    def _request_options(self) -> dict[str, Any]:
+        """Extra chat-completion options for the OpenRouter request.
+
+        `models` is OpenRouter's documented fallback mechanism: when the
+        primary model errors (rate limit, overload), the next listed model
+        is tried automatically. Omitted entirely when unconfigured so the
+        request shape stays unchanged.
+        """
+        if not self.fallback_models:
+            return {}
+        return {"extra_body": {"models": list(self.fallback_models)}}
+
     def _openrouter_client(self):
         if self._client is None:
             try:
@@ -550,9 +932,75 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         return self._client
 
 
+def _first_sentences(quote: str) -> str:
+    """First sentences of a quote, bounded for extractive answers."""
+    sentences = [
+        sentence.strip()
+        for sentence in _SENTENCE_SPLIT_RE.split((quote or "").strip())
+        if sentence.strip()
+    ]
+    excerpt = " ".join(sentences[:_EXTRACTIVE_MAX_SENTENCES]).strip()
+    if len(excerpt) > _EXTRACTIVE_MAX_CHARS:
+        excerpt = excerpt[:_EXTRACTIVE_MAX_CHARS].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+    return excerpt
+
+
 def _merge_token_usage(total: dict[str, int], addition: dict[str, Any]) -> None:
     for key in ("prompt_tokens", "completion_tokens"):
         total[key] += int(addition.get(key, 0) or 0)
+
+
+def _parse_json_object(content: Any) -> dict[str, Any]:
+    """Parse tolerant JSON for models that ignore `response_format` discipline.
+
+    Handles empty content, markdown fences (```json ... ```), and surrounding
+    prose by extracting the first balanced {...} object.
+    """
+    if content is None or (isinstance(content, str) and not content.strip()):
+        raise AnswerValidationError("response is empty")
+    if not isinstance(content, str):
+        raise AnswerValidationError("response is not valid JSON")
+    text = content.strip()
+    # Strip a single markdown fence if the whole payload is wrapped.
+    fence_match = re.match(
+        r"^```(?:json|JSON)?\s*\n?(.*?)\n?\s*```$", text, re.DOTALL
+    )
+    if fence_match:
+        text = fence_match.group(1).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # Fall back to first balanced {...} to tolerate leading/trailing prose.
+    start = text.find("{")
+    if start < 0:
+        raise AnswerValidationError("response is not valid JSON")
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                candidate = text[start : index + 1]
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    break
+    raise AnswerValidationError("response is not valid JSON")
 
 
 def _claims_from_payload(

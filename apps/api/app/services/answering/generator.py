@@ -209,8 +209,19 @@ def _detect_language(query: str) -> str:
 
 
 class AnswerGenerator:
-    def __init__(self, max_citations: int = 4) -> None:
+    def __init__(
+        self,
+        max_citations: int = 4,
+        max_context_chunk_chars: int = 2000,
+        context_model_window: int = 12_000,
+        context_reserved_output_tokens: int = 3_000,
+        context_safety_margin_tokens: int = 200,
+    ) -> None:
         self.max_citations = max_citations
+        self.max_context_chunk_chars = max_context_chunk_chars
+        self.context_model_window = context_model_window
+        self.context_reserved_output_tokens = context_reserved_output_tokens
+        self.context_safety_margin_tokens = context_safety_margin_tokens
         self.prompt_template = default_prompt_template()
 
     def generate(
@@ -290,7 +301,7 @@ class AnswerGenerator:
                 for part in [citation.short_title, citation.article, citation.paragraph]
                 if part
             )
-            quote = compact_text(citation.quote, 220).rstrip(" .")
+            quote = compact_text(citation.quote, self.max_context_chunk_chars // 2).rstrip(" .")
             grounded_sentences.append(f"{quote}. ({legal_ref})" if legal_ref else f"{quote}.")
 
         if lang == "id":
@@ -321,7 +332,12 @@ class AnswerGenerator:
     def _needs_clarification(self, query: str, retrieval: RetrievalResponse) -> bool:
         tokens = _TOKEN_RE.findall(query.lower())
         has_topic = bool(retrieval.query.detected_topics)
-        has_intent = bool(retrieval.query.detected_intents)
+        # detect_intents() falls back to ["general_question"], which signals
+        # *no* recognized intent — treating it as an intent keeps the branch
+        # below permanently dead.
+        has_intent = any(
+            intent != "general_question" for intent in retrieval.query.detected_intents
+        )
         _id_tokens = {"hak", "saya", "aturan", "gimana", "bagaimana"}
         _en_tokens = {"rights", "my", "rule", "how"}
         query_tokens = set(tokens)

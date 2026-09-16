@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 
 from app.services.answering.schemas import Citation, GroundedClaim
 
@@ -75,11 +76,6 @@ _NUMBER_WORDS = {
     "seratus": "100",
     "seribu": "1000",
     "setengah": "0.5",
-    "sehari": "1",
-    "semalam": "1",
-    "seminggu": "1",
-    "sebulan": "1",
-    "setahun": "1",
 }
 _NUMBER_WORD_PATTERN = re.compile(
     "|".join(
@@ -101,17 +97,65 @@ _MATERIAL_QUALIFIERS = {
 }
 
 
+# Citation identifier fields whose numbers are source references, not factual
+# assertions: the model is expected to name the cited rule inline
+# ("... (UU 6/2023 Pasal 154A huruf b)"), so those digits must not fail the
+# numbers-subset gate even when the quoted passage omits them. Page numbers
+# and scores are excluded: a bare page digit in prose is not a citation.
+_METADATA_NUMBER_FIELDS = (
+    "document_id",
+    "document_title",
+    "short_title",
+    "chapter",
+    "section",
+    "article",
+    "paragraph",
+)
+
+
+def _metadata_numbers(citation: Citation) -> set[str]:
+    numbers: set[str] = set()
+    for field_name in _METADATA_NUMBER_FIELDS:
+        value = getattr(citation, field_name, None)
+        if value:
+            numbers.update(_numbers(str(value)))
+    return numbers
+
+
 def verify_claims_deterministically(
     claims: list[tuple[str, list[str]]],
     citations: list[Citation],
+    *,
+    query: str | None = None,
 ) -> list[GroundedClaim]:
+    """Score each claim against its cited quotes.
+
+    Numbers already present in the user query are user-supplied facts, not
+    model inventions, so they never fail the numbers-subset gate. The same
+    holds for numbers from the cited citations' own identifiers (document
+    ID, title, article): a claim naming its source inline
+    ("... (UU 6/2023 Pasal 154A)") references verifiable metadata, it does
+    not invent a quantity. Computed results (e.g. "setengah" from 6/12)
+    must still appear in the evidence or be rephrased using the source's
+    literal numbers.
+    """
+    query_numbers = _numbers(query) if query else set()
     citation_by_chunk = {citation.chunk_id: citation for citation in citations}
+    metadata_by_chunk = {
+        chunk_id: _metadata_numbers(citation)
+        for chunk_id, citation in citation_by_chunk.items()
+    }
     verified: list[GroundedClaim] = []
     for text, chunk_ids in claims:
         valid_ids = [chunk_id for chunk_id in chunk_ids if chunk_id in citation_by_chunk]
-        support_score, numbers_supported, qualifiers_supported = _score_claim(
+        metadata_numbers = set().union(
+            *(metadata_by_chunk[item] for item in valid_ids)
+        )
+        evaluation = _evaluate_claim_text(
             text,
             " ".join(citation_by_chunk[item].quote for item in valid_ids),
+            query_numbers=query_numbers,
+            metadata_numbers=metadata_numbers,
         )
         chosen_ids = valid_ids
 
@@ -120,53 +164,44 @@ def verify_claims_deterministically(
         # claim deterministically instead of rejecting a factually grounded answer.
         if not _is_supported(
             chosen_ids,
-            support_score,
-            numbers_supported,
-            qualifiers_supported,
+            evaluation.support_score,
+            evaluation.numbers_ok,
+            evaluation.qualifiers_ok,
         ):
             for citation in citations:
-                candidate_score, candidate_numbers, candidate_qualifiers = _score_claim(
+                candidate = _evaluate_claim_text(
                     text,
                     citation.quote,
+                    query_numbers=query_numbers,
+                    metadata_numbers=metadata_by_chunk[citation.chunk_id],
                 )
                 if (
-                    candidate_score >= 0.65
-                    and candidate_score > support_score
-                    and candidate_numbers
-                    and candidate_qualifiers
+                    candidate.support_score >= 0.65
+                    and candidate.support_score > evaluation.support_score
+                    and candidate.numbers_ok
+                    and candidate.qualifiers_ok
                 ):
                     chosen_ids = [citation.chunk_id]
-                    support_score = candidate_score
-                    numbers_supported = candidate_numbers
-                    qualifiers_supported = candidate_qualifiers
+                    evaluation = candidate
 
+        supported = _is_supported(
+            chosen_ids,
+            evaluation.support_score,
+            evaluation.numbers_ok,
+            evaluation.qualifiers_ok,
+        )
         verified.append(
             GroundedClaim(
                 text=text,
                 cited_chunk_ids=chosen_ids,
-                supported=_is_supported(
-                    chosen_ids,
-                    support_score,
-                    numbers_supported,
-                    qualifiers_supported,
+                supported=supported,
+                support_score=round(evaluation.support_score, 4),
+                support_detail=_format_support_detail(
+                    chosen_ids, evaluation, supported
                 ),
-                support_score=round(support_score, 4),
             )
         )
     return verified
-
-
-def _score_claim(claim: str, evidence: str) -> tuple[float, bool, bool]:
-    claim_tokens = _content_tokens(claim)
-    evidence_tokens = _content_tokens(evidence)
-    support_score = (
-        len(claim_tokens.intersection(evidence_tokens)) / len(claim_tokens) if claim_tokens else 0.0
-    )
-    return (
-        support_score,
-        _numbers(claim).issubset(_numbers(evidence)),
-        claim_tokens.intersection(_MATERIAL_QUALIFIERS).issubset(evidence_tokens),
-    )
 
 
 def _is_supported(
@@ -181,6 +216,65 @@ def _is_supported(
     # overlap bar rejects factually correct claims that paraphrase the source
     # ("berhak menerima" vs "wajib memberikan").
     return bool(chunk_ids and numbers_supported and qualifiers_supported and support_score >= 0.35)
+
+
+@dataclass(frozen=True)
+class _ClaimEvaluation:
+    support_score: float
+    numbers_ok: bool
+    qualifiers_ok: bool
+    missing_numbers: frozenset[str] = field(default_factory=frozenset)
+    missing_qualifiers: frozenset[str] = field(default_factory=frozenset)
+
+
+def _evaluate_claim_text(
+    claim: str,
+    evidence: str,
+    *,
+    query_numbers: frozenset[str] | set[str] = frozenset(),
+    metadata_numbers: frozenset[str] | set[str] = frozenset(),
+) -> _ClaimEvaluation:
+    claim_tokens = _content_tokens(claim)
+    evidence_tokens = _content_tokens(evidence)
+    support_score = (
+        len(claim_tokens.intersection(evidence_tokens)) / len(claim_tokens)
+        if claim_tokens
+        else 0.0
+    )
+    allowed_numbers = _numbers(evidence) | set(query_numbers) | set(metadata_numbers)
+    missing_numbers = frozenset(_numbers(claim) - allowed_numbers)
+    missing_qualifiers = frozenset(
+        claim_tokens.intersection(_MATERIAL_QUALIFIERS) - evidence_tokens
+    )
+    return _ClaimEvaluation(
+        support_score=support_score,
+        numbers_ok=not missing_numbers,
+        qualifiers_ok=not missing_qualifiers,
+        missing_numbers=missing_numbers,
+        missing_qualifiers=missing_qualifiers,
+    )
+
+
+def _format_support_detail(
+    chunk_ids: list[str],
+    evaluation: _ClaimEvaluation,
+    supported: bool,
+) -> str:
+    """Compact gate breakdown for logs and repair feedback."""
+    if not chunk_ids:
+        return "no_cited_chunk"
+    if supported:
+        return f"overlap={evaluation.support_score:.2f}; gates_ok"
+    reasons = [f"overlap={evaluation.support_score:.2f}"]
+    if evaluation.support_score < 0.35:
+        reasons.append("overlap_below_0.35")
+    if not evaluation.numbers_ok:
+        missing = ",".join(sorted(evaluation.missing_numbers))
+        reasons.append(f"numbers_missing={{{missing}}}")
+    if not evaluation.qualifiers_ok:
+        missing = ",".join(sorted(evaluation.missing_qualifiers))
+        reasons.append(f"qualifiers_missing={{{missing}}}")
+    return "; ".join(reasons)
 
 
 def claim_coverage_score(answer: str, claims: list[GroundedClaim]) -> float:

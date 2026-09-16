@@ -13,11 +13,21 @@ _EXPLICIT_FOLLOW_UP_PATTERN = re.compile(
     r"what about|how about|and what|then)\b",
     re.IGNORECASE,
 )
-_REFERENTIAL_TERM_PATTERN = re.compile(
-    r"\b(denda|sanksi|bayar|pembayaran|hitung|perhitungan|hak|kewajiban|syarat|"
-    r"aturan|pasal|kompensasi|manfaat|prosedur|batas|status)(nya)\b|"
-    r"\b(hal (?:ini|itu|tersebut)|yang (?:ini|itu|tersebut|sama)|"
-    r"the penalty|the sanction|the payment|that payment|their rights?|"
+# Referential follow-ups are detected by shape, not by vocabulary. Indonesian
+# marks given information with the enclitic -nya (ketentuannya, dendanya,
+# konsekuensinya, ...) or a demonstrative (ini/itu/tersebut), so any noun
+# works without maintaining a stem allowlist. Only monomorphemic lookalikes
+# that are never referential are excluded (hanya = "only", tanya-family =
+# the verb "to ask").
+_NYA_WORD_PATTERN = re.compile(r"\b([a-z]+nya|nya)\b", re.IGNORECASE)
+_NYA_NON_REFERENTIAL_WORDS = frozenset(
+    {"hanya", "tanya", "bertanya", "ditanya", "menanya"}
+)
+_DEMONSTRATIVE_PATTERN = re.compile(
+    r"\b(ini|itu|tersebut)\b|"
+    r"\bhal (?:ini|itu|tersebut)\b|"
+    r"\byang (?:ini|itu|tersebut|sama|mana)\b|"
+    r"\b(the penalty|the sanction|the payment|that payment|their rights?|"
     r"its rules?|what about it|how about that)\b",
     re.IGNORECASE,
 )
@@ -158,8 +168,23 @@ def _turns_are_coherent(older: _EligibleTurn, newer: _EligibleTurn) -> bool:
     return bool(set(older.document_ids).intersection(newer.document_ids))
 
 
+def _has_referential_signal(question: str) -> bool:
+    """True when the question visibly points at prior context.
+
+    Accepts any -nya suffixed word (minus a tiny exclusion set) and any
+    demonstrative, so new nouns like "ketentuannya" or "konsekuensinya"
+    work with no vocabulary maintenance.
+    """
+    if _DEMONSTRATIVE_PATTERN.search(question):
+        return True
+    for match in _NYA_WORD_PATTERN.finditer(question):
+        if match.group(1).lower() not in _NYA_NON_REFERENTIAL_WORDS:
+            return True
+    return False
+
+
 def _activation_reason(question: str) -> str | None:
-    if _REFERENTIAL_TERM_PATTERN.search(question):
+    if _has_referential_signal(question):
         return "referential_term"
     if len(question.split()) <= 8 and _ELLIPTICAL_FOLLOW_UP_PATTERN.search(question):
         return "elliptical_follow_up"

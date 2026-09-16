@@ -41,7 +41,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useSettings } from "@/features/settings";
 import type { ConversationSummary } from "@/features/chat/types";
 
-
 type ChatWorkspaceShellProps = {
   children: ReactNode;
   conversations: ConversationSummary[];
@@ -161,7 +160,7 @@ export function ChatWorkspaceShell({
     return pinOwner && ids ? { owner: pinOwner, ids } : null;
   });
   const pinsReady = !pinOwner || pinState?.owner === pinOwner;
-  const pinnedConversationIds = pinState?.owner === pinOwner ? pinState?.ids ?? [] : [];
+  const pinnedConversationIds = pinState?.owner === pinOwner ? (pinState?.ids ?? []) : [];
   const pinRevision = useRef(0);
   const pinLifetime = useRef<{ active: boolean } | null>(null);
   useEffect(() => {
@@ -169,10 +168,13 @@ export function ChatWorkspaceShell({
     const lifetime = { active: true };
     pinLifetime.current = lifetime;
     const revision = ++pinRevision.current;
-    void accountPins(pinOwner).then(ids => {
-      if (lifetime.active && revision === pinRevision.current) setPinState({ owner: pinOwner, ids });
+    void accountPins(pinOwner).then((ids) => {
+      if (lifetime.active && revision === pinRevision.current)
+        setPinState({ owner: pinOwner, ids });
     });
-    return () => { lifetime.active = false; };
+    return () => {
+      lifetime.active = false;
+    };
   }, [pinOwner]);
   const [pinnedExpanded, setPinnedExpanded] = useState(true);
   const [chatsExpanded, setChatsExpanded] = useState(true);
@@ -192,14 +194,18 @@ export function ChatWorkspaceShell({
     (conversation) => !pinnedConversationIds.includes(conversation.conversation_id)
   );
 
-  const togglePinned = useCallback((conversationId: string) => {
-    const lifetime = pinLifetime.current;
-    if (!pinOwner || !lifetime?.active) return;
-    const revision = ++pinRevision.current;
-    void accountPins(pinOwner, conversationId).then(ids => {
-      if (lifetime.active && revision === pinRevision.current) setPinState({ owner: pinOwner, ids });
-    });
-  }, [pinOwner]);
+  const togglePinned = useCallback(
+    (conversationId: string) => {
+      const lifetime = pinLifetime.current;
+      if (!pinOwner || !lifetime?.active) return;
+      const revision = ++pinRevision.current;
+      void accountPins(pinOwner, conversationId).then((ids) => {
+        if (lifetime.active && revision === pinRevision.current)
+          setPinState({ owner: pinOwner, ids });
+      });
+    },
+    [pinOwner]
+  );
 
   const isActive = useCallback(
     (href: string) => {
@@ -870,9 +876,19 @@ export function ChatWorkspaceShell({
 
   const pendingSidebar = (
     <div className="flex h-full flex-col gap-6 p-4" aria-hidden="true">
-      <div className="flex h-10 items-center gap-3"><Skeleton className="size-8" /><Skeleton className="h-4 w-28" /></div>
-      <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
-      <div className="space-y-4"><Skeleton className="h-3 w-16" /><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-4/5" /></div>
+      <div className="flex h-10 items-center gap-3">
+        <Skeleton className="size-8" />
+        <Skeleton className="h-4 w-28" />
+      </div>
+      <div className="space-y-3">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+      <div className="space-y-4">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-8 w-4/5" />
+      </div>
       <Skeleton className="mt-auto h-12 w-full" />
     </div>
   );
@@ -885,13 +901,19 @@ export function ChatWorkspaceShell({
       className={[
         "grid h-svh w-full overflow-hidden bg-arsip text-tinta max-[760px]:block max-[760px]:h-svh",
         shellColumns,
-        !sessionReady ? "session-pending-shell" : shownSession ? "authenticated-shell" : "guest-shell",
+        !sessionReady
+          ? "session-pending-shell"
+          : shownSession
+            ? "authenticated-shell"
+            : "guest-shell",
       ].join(" ")}
     >
       <ChatSidebar
         expanded={sidebarExpanded}
         expandedContent={sessionReady ? sidebarBody : pendingSidebar}
-        collapsedContent={sessionReady ? collapsedRail : <Skeleton className="mx-auto mt-4 size-9" />}
+        collapsedContent={
+          sessionReady ? collapsedRail : <Skeleton className="mx-auto mt-4 size-9" />
+        }
       />
       <div className="relative flex min-h-0 min-w-0 flex-col bg-white max-[760px]:h-full">
         <header
@@ -960,7 +982,9 @@ export function ChatWorkspaceShell({
                 {translate("header.signup")}
               </button>
             </div>
-          ) : <Skeleton className="size-9 justify-self-end rounded-full" aria-hidden="true" />}
+          ) : (
+            <Skeleton className="size-9 justify-self-end rounded-full" aria-hidden="true" />
+          )}
         </header>
         {shownSession && profileMenuOpen ? profileMenu : null}
         <main className="chat-workspace-surface min-h-0 flex-1 overflow-hidden bg-white max-[760px]:h-full">
@@ -1018,7 +1042,14 @@ export function ChatWorkspaceShell({
           onNewConversation();
         }}
       />
-      {profileOpen && session ? <ProfileModal key={session.user.user_id} user={session.user} onClose={() => setProfileOpen(false)} onReturnFocus={() => profileTriggerRef.current?.focus()} /> : null}
+      {profileOpen && session ? (
+        <ProfileModal
+          key={session.user.user_id}
+          user={session.user}
+          onClose={() => setProfileOpen(false)}
+          onReturnFocus={() => profileTriggerRef.current?.focus()}
+        />
+      ) : null}
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );

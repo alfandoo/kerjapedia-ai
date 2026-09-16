@@ -4,7 +4,9 @@ import asyncio
 import hashlib
 import json
 import logging
+import random
 import re
+import threading
 import time
 from dataclasses import asdict, dataclass, replace
 from datetime import timedelta
@@ -50,9 +52,13 @@ from app.services.retrieval.governance import load_retrieval_governance
 from app.services.retrieval.store import load_artifact_documents_snapshot
 from app.services.telemetry import (
     observe_rag_completion,
+    observe_request_latency,
     observe_stage,
     record_outcome,
     record_provider_error,
+    record_ragas_eval,
+    record_ragas_faithfulness,
+    record_user_behavior,
     trace_stage,
 )
 
@@ -621,11 +627,14 @@ def _server_rag_trace(guardrail, memory, retrieval, answer) -> dict:
             }
             for item in retrieval_items[:8]
         ],
+        "timing": retrieval.timing if retrieval else {},
+        "context_metrics": retrieval.context_metrics if retrieval else {},
         "verification": [
             {
                 "cited_chunk_ids": claim.cited_chunk_ids,
                 "supported": claim.supported,
                 "support_score": claim.support_score,
+                "support_detail": claim.support_detail,
             }
             for claim in answer.claims
         ],
@@ -637,6 +646,84 @@ def _server_rag_trace(guardrail, memory, retrieval, answer) -> dict:
         },
         "token_usage": answer.debug.get("token_usage", {}),
     }
+
+
+_RAGAS_CONTEXT_CHUNKS = 8
+_RAGAS_CONTEXT_CHARS = 1500
+
+
+def _ragas_contexts(retrieval) -> list[str]:
+    if retrieval is None:
+        return []
+    contexts: list[str] = []
+    for item in (retrieval.results or [])[:_RAGAS_CONTEXT_CHUNKS]:
+        text = (getattr(item.document, "text", "") or "").strip()
+        if text:
+            contexts.append(text[:_RAGAS_CONTEXT_CHARS])
+    return contexts
+
+
+def _run_ragas_online_eval(question: str, answer_text: str, contexts: list[str]) -> None:
+    try:
+        from app.services.evaluation.ragas_metrics import (
+            build_ragas_faithfulness,
+            score_ragas_faithfulness,
+        )
+
+        scorer = build_ragas_faithfulness(settings)
+        score = score_ragas_faithfulness(
+            scorer,
+            question=question,
+            response=answer_text,
+            contexts=contexts,
+        )
+        record_ragas_faithfulness(score)
+        record_ragas_eval("success")
+    except Exception:
+        record_ragas_eval("failed")
+        logger.exception("ragas_online_eval_failed")
+
+
+def _maybe_sample_ragas_online(question: str, answer, retrieval) -> None:
+    if not settings.ragas_enabled:
+        return
+    try:
+        rate = float(settings.ragas_sample_rate)
+    except (TypeError, ValueError):
+        return
+    if rate <= 0 or random.random() >= min(rate, 1.0):
+        return
+    if getattr(answer, "answer_status", None) != "answered":
+        return
+    answer_text = (getattr(answer, "answer", "") or "").strip()
+    if not answer_text:
+        return
+    contexts = _ragas_contexts(retrieval)
+    if not contexts:
+        return
+    thread = threading.Thread(
+        target=_run_ragas_online_eval,
+        args=(question, answer_text, contexts),
+        daemon=True,
+    )
+    thread.start()
+
+
+def _observe_request_completion(question: str, memory, answer, retrieval, latency_ms: int) -> None:
+    try:
+        topics = tuple(getattr(memory, "context_topics", ()) or ())
+        topic = str(topics[0]) if topics else "unknown"
+        record_user_behavior(topic, bool(getattr(memory, "used", False)))
+    except Exception:
+        logger.debug("observability_user_behavior_failed", exc_info=True)
+    try:
+        observe_request_latency(latency_ms / 1000.0)
+    except Exception:
+        logger.debug("observability_request_latency_failed", exc_info=True)
+    try:
+        _maybe_sample_ragas_online(question, answer, retrieval)
+    except Exception:
+        logger.debug("observability_ragas_sampling_failed", exc_info=True)
 
 
 def _log_rag_completion(answer, latency_ms: int) -> None:
@@ -757,6 +844,7 @@ def ask_question(
     latency_ms = int((time.perf_counter() - started_at) * 1000)
     record_outcome(answer.answer_status)
     observe_rag_completion(answer, retrieval)
+    _observe_request_completion(payload.question, memory, answer, retrieval, latency_ms)
     _log_rag_completion(answer, latency_ms)
     completed = AskResponse(
         conversation_id=conversation.conversation_id,
@@ -945,6 +1033,7 @@ def ask_question_stream(
         latency_ms = int((time.perf_counter() - started_at) * 1000)
         record_outcome(answer.answer_status)
         observe_rag_completion(answer, retrieval)
+        _observe_request_completion(payload.question, memory, answer, retrieval, latency_ms)
         _log_rag_completion(answer, latency_ms)
         final_response = {
             "conversation_id": conversation.conversation_id,

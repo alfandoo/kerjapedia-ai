@@ -17,28 +17,40 @@ export function useConversationHistory() {
   const [busy, setHistoryLoading] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
-  const retryHistory = useCallback(() => setRevision(value => value + 1), []);
-  const setConversations = useCallback((update: SetStateAction<ConversationSummary[]>) => {
-    setHistory(previous => {
-      const current = previous.owner === owner ? previous.items : [];
-      const next = { owner, items: typeof update === "function" ? update(current) : update, confirmed: true };
-      cached = next;
-      return next;
-    });
-  }, [owner]);
+  const retryHistory = useCallback(() => setRevision((value) => value + 1), []);
+  const setConversations = useCallback(
+    (update: SetStateAction<ConversationSummary[]>) => {
+      setHistory((previous) => {
+        const current = previous.owner === owner ? previous.items : [];
+        const next = {
+          owner,
+          items: typeof update === "function" ? update(current) : update,
+          confirmed: true,
+        };
+        cached = next;
+        return next;
+      });
+    },
+    [owner]
+  );
 
   useEffect(() => {
-    if (!owner) { cached = null; return; }
+    if (!owner) {
+      cached = null;
+      return;
+    }
     if (cached?.owner !== owner) cached = null;
     const controller = new AbortController();
     // Keep the last confirmed list visible while revalidating on navigation.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFailure(null);
-    void fetchConversations(controller.signal).then(items => {
-      if (!controller.signal.aborted) setConversations(items);
-    }).catch(() => {
-      if (!controller.signal.aborted) setFailure(owner);
-    });
+    void fetchConversations(controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setConversations(items);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setFailure(owner);
+      });
     return () => controller.abort();
   }, [owner, revision, setConversations]);
 

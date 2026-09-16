@@ -88,6 +88,8 @@ def _document(
         size_bytes=len(content),
         sha256=digest,
         verification_status="verified",
+        source_verification_status="verified",
+        legal_review_status="verified",
     )
     manifest = root / "metadata.json"
     manifest.write_text(

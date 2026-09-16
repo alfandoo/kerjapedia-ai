@@ -6,13 +6,7 @@ type IconProps = ComponentProps<"svg"> & {
   strokeWidth?: number | string;
 };
 
-export function Icon({
-  className,
-  size = 18,
-  strokeWidth = 1.8,
-  children,
-  ...props
-}: IconProps) {
+export function Icon({ className, size = 18, strokeWidth = 1.8, children, ...props }: IconProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

@@ -20,5 +20,3 @@ export const fallbackCitation: Citation = {
   retrieval_score: 0.82,
   rerank_score: 0.88,
 };
-
-const sampleDate = "2026-07-15T08:30:00Z";

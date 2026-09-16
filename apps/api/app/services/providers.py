@@ -88,6 +88,13 @@ def pinecone_store_from_settings(
         settings.retrieval_diversity_lambda,
         settings.retrieval_hybrid_alpha,
         allow_unpublished if allow_unpublished is not None else settings.rag_allow_unpublished,
+        settings.retrieval_semantic_limit,
+        settings.retrieval_cross_encoder_top_n,
+        settings.retrieval_cross_encoder_blend_weight,
+        settings.retrieval_mmr_max_per_document,
+        settings.retrieval_mmr_max_per_article,
+        settings.retrieval_expansion_max,
+        settings.retrieval_expansion_score_decay,
         tuple(
             sorted(
                 (
@@ -121,6 +128,13 @@ def pinecone_store_from_settings(
             allow_unpublished if allow_unpublished is not None else settings.rag_allow_unpublished
         ),
         relationship_index=relationship_index,
+        semantic_limit=settings.retrieval_semantic_limit,
+        cross_encoder_top_n=settings.retrieval_cross_encoder_top_n,
+        cross_encoder_blend_weight=settings.retrieval_cross_encoder_blend_weight,
+        mmr_max_per_document=settings.retrieval_mmr_max_per_document,
+        mmr_max_per_article=settings.retrieval_mmr_max_per_article,
+        expansion_max=settings.retrieval_expansion_max,
+        expansion_score_decay=settings.retrieval_expansion_score_decay,
     )
     if embedding_provider is None:
         with _provider_lock:
@@ -145,6 +159,13 @@ def answer_generator_from_settings(
         settings.claim_verifier_provider,
         settings.claim_verifier_model,
         settings.rag_fail_closed,
+        settings.openrouter_fallback_models,
+        settings.openrouter_transient_max_retries,
+        settings.openrouter_transient_backoff_seconds,
+        settings.max_citations,
+        settings.max_context_chunk_chars,
+        settings.context_model_window,
+        settings.context_reserved_output_tokens,
     )
     with _provider_lock:
         cached = _answer_cache.get(key)
@@ -162,9 +183,23 @@ def answer_generator_from_settings(
             verifier_provider=settings.claim_verifier_provider,
             verifier_model=settings.claim_verifier_model,
             fail_closed=settings.rag_fail_closed,
+            transient_max_retries=settings.openrouter_transient_max_retries,
+            transient_backoff_seconds=settings.openrouter_transient_backoff_seconds,
+            fallback_models=tuple(settings.openrouter_fallback_model_list),
+            max_citations=settings.max_citations,
+            max_context_chunk_chars=settings.max_context_chunk_chars,
+            context_model_window=settings.context_model_window,
+            context_reserved_output_tokens=settings.context_reserved_output_tokens,
+            context_safety_margin_tokens=settings.context_safety_margin_tokens,
         )
     elif llm_provider == "local":
-        generator = AnswerGenerator()
+        generator = AnswerGenerator(
+            max_citations=settings.max_citations,
+            max_context_chunk_chars=settings.max_context_chunk_chars,
+            context_model_window=settings.context_model_window,
+            context_reserved_output_tokens=settings.context_reserved_output_tokens,
+            context_safety_margin_tokens=settings.context_safety_margin_tokens,
+        )
     else:
         raise ValueError(f"Unsupported LLM provider: {llm_provider}")
     with _provider_lock:

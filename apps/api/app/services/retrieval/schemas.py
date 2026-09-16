@@ -69,3 +69,5 @@ class RetrievalResponse:
     index_release_id: str | None = None
     index_namespace: str | None = None
     active_release_id: str | None = None
+    timing: dict[str, float] = field(default_factory=dict)
+    context_metrics: dict[str, int] = field(default_factory=dict)

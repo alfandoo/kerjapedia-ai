@@ -70,7 +70,7 @@ def test_answer_generation_returns_structured_citations() -> None:
     assert response.citations[0].article == "Pasal 15"
     assert response.confidence > 0
     assert response.related_documents[0].short_title == "PP 35/2021"
-    assert response.prompt_version_id == "kerjapedia-grounded-answer-v6"
+    assert response.prompt_version_id == "kerjapedia-grounded-answer-v7"
     assert "\n-" not in response.answer
     assert "cit_001" not in response.answer
     assert "PP 35/2021" in response.answer
@@ -333,6 +333,139 @@ def test_claim_support_threshold_accepts_true_paraphrase() -> None:
     assert _is_supported(["chunk-1"], 0.90, False, True) is False
     assert _is_supported(["chunk-1"], 0.90, True, False) is False
     assert _is_supported([], 0.90, True, True) is False
+
+
+def _thr_formula_citation() -> Citation:
+    return Citation(
+        citation_id="cit_001",
+        chunk_id="chunk-1",
+        document_id="PERMENAKER-6-2016",
+        document_title="Permenaker 6/2016",
+        short_title="Permenaker 6/2016",
+        legal_status="active",
+        chapter=None,
+        section=None,
+        article="Pasal 3",
+        paragraph="Ayat (1)",
+        page_start=3,
+        page_end=3,
+        quote=(
+            "Pekerja dengan masa kerja 12 (dua belas) bulan atau lebih "
+            "diberikan 1 (satu) bulan upah; masa kerja kurang dari 12 bulan "
+            "diberikan proporsional: masa kerja x 1 bulan upah dibagi 12."
+        ),
+        source_url="https://peraturan.bpk.go.id/",
+        local_file=None,
+        retrieval_score=0.9,
+        rerank_score=0.9,
+    )
+
+
+def test_claim_verifier_excuses_query_numbers_but_flags_computed_result() -> None:
+    claim = (
+        "Untuk masa kerja 6 bulan, THR yang diterima adalah setengah bulan upah."
+    )
+    with_query = verify_claims_deterministically(
+        [(claim, ["chunk-1"])],
+        [_thr_formula_citation()],
+        query="kalau 6 bulan kerja, berapa thr yang diterima?",
+    )[0]
+
+    assert with_query.supported is False
+    assert "numbers_missing={0.5}" in with_query.support_detail
+    assert ",6" not in with_query.support_detail
+    assert "6," not in with_query.support_detail
+
+    without_query = verify_claims_deterministically(
+        [(claim, ["chunk-1"])],
+        [_thr_formula_citation()],
+    )[0]
+
+    # "6" is excused via the cited PERMENAKER-6-2016 identifier even without
+    # a query echo; only the computed "setengah" stays flagged.
+    assert without_query.supported is False
+    assert "numbers_missing={0.5}" in without_query.support_detail
+    assert ",6" not in without_query.support_detail
+    assert "6," not in without_query.support_detail
+
+
+def test_claim_verifier_accepts_formula_with_literal_source_numbers() -> None:
+    claims = verify_claims_deterministically(
+        [
+            (
+                "THR dihitung proporsional: 6/12 x 1 bulan upah sesuai masa kerja.",
+                ["chunk-1"],
+            )
+        ],
+        [_thr_formula_citation()],
+        query="kalau 6 bulan kerja, berapa thr yang diterima?",
+    )
+
+    assert claims[0].supported is True
+    assert claims[0].support_detail.endswith("gates_ok")
+
+
+def _uu_154a_citation() -> Citation:
+    return Citation(
+        citation_id="cit_154a",
+        chunk_id="chunk-154a",
+        document_id="UU-6-2023-47c5b9a46eebba4f75b0c13e",
+        document_title="Undang-Undang Nomor 6 Tahun 2023",
+        short_title="UU 6/2023",
+        legal_status="active",
+        chapter=None,
+        section=None,
+        article="Pasal 154A",
+        paragraph="huruf b",
+        page_start=40,
+        page_end=40,
+        quote=(
+            "PHK karena efisiensi hanya dapat dilakukan jika perusahaan mengalami "
+            "kerugian atau untuk mencegah kerugian."
+        ),
+        source_url="https://peraturan.bpk.go.id/",
+        local_file=None,
+        retrieval_score=0.9,
+        rerank_score=0.9,
+    )
+
+
+def test_claim_verifier_excuses_citation_identifier_numbers() -> None:
+    # Regression: the model names its source inline
+    # ("... (UU-6-2023-... Pasal 154A huruf b)") while the quoted passage
+    # omits the identifier digits. Those reference metadata, not inventions.
+    claims = verify_claims_deterministically(
+        [
+            (
+                "PHK karena efisiensi hanya dapat dilakukan jika perusahaan "
+                "mengalami kerugian atau untuk mencegah kerugian "
+                "(UU-6-2023-47c5b9a46eebba4f75b0c13e Pasal 154A huruf b).",
+                ["chunk-154a"],
+            )
+        ],
+        [_uu_154a_citation()],
+        query="Apa syarat PHK karena efisiensi perusahaan?",
+    )
+
+    assert claims[0].supported is True
+    assert claims[0].support_detail.endswith("gates_ok")
+
+
+def test_claim_verifier_still_flags_numbers_absent_from_evidence_and_metadata() -> None:
+    claims = verify_claims_deterministically(
+        [
+            (
+                "PHK karena efisiensi wajib disertai pesangon 5 bulan upah "
+                "(UU-6-2023 Pasal 154A huruf b).",
+                ["chunk-154a"],
+            )
+        ],
+        [_uu_154a_citation()],
+        query="Apa syarat PHK karena efisiensi perusahaan?",
+    )
+
+    assert claims[0].supported is False
+    assert "numbers_missing={5}" in claims[0].support_detail
 
 
 def test_claim_coverage_detects_omitted_answer_claims() -> None:

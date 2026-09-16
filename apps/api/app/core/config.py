@@ -55,16 +55,33 @@ class Settings(BaseSettings):
     # dotproduct Pinecone index (sparse queries fall back to dense-only).
     retrieval_diversity_lambda: float = 0.7
     retrieval_hybrid_alpha: float | None = None
+    retrieval_semantic_limit: int = 100
+    retrieval_cross_encoder_top_n: int = 50
+    retrieval_cross_encoder_blend_weight: float = 0.75
+    retrieval_mmr_max_per_document: int = 3
+    retrieval_mmr_max_per_article: int = 2
+    retrieval_expansion_max: int = 4
+    retrieval_expansion_score_decay: float = 0.85
+    # Context construction knobs
+    max_citations: int = 4
+    max_context_chunk_chars: int = 2000
+    context_model_window: int = 12_000
+    context_reserved_output_tokens: int = 3_000
+    context_safety_margin_tokens: int = 200
     redis_url: str = "redis://127.0.0.1:6379/0"
     celery_enabled: bool = False
     telemetry_enabled: bool = True
     otel_exporter_otlp_endpoint: str = ""
     rag_trace_retention_days: int = 30
     ragas_enabled: bool = False
+    ragas_sample_rate: float = 0.05
     openrouter_api_key: str | None = None
     openrouter_model: str = "openrouter/free"
     openrouter_timeout_seconds: float = 60.0
     openrouter_max_retries: int = 2
+    openrouter_fallback_models: str = ""
+    openrouter_transient_max_retries: int = 2
+    openrouter_transient_backoff_seconds: float = 2.0
     # Measured 2026-09: with ~2.5k-token grounded prompts, gpt-oss-120b exhausts
     # 1200 completion tokens (finish_reason=length, empty content) before
     # finishing the answer+claims JSON. 3000 completes reliably.
@@ -92,6 +109,14 @@ class Settings(BaseSettings):
     def allowed_cors_origins(self) -> list[str]:
         return [
             origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
+        ]
+
+    @property
+    def openrouter_fallback_model_list(self) -> list[str]:
+        return [
+            model.strip()
+            for model in self.openrouter_fallback_models.split(",")
+            if model.strip()
         ]
 
     @model_validator(mode="after")

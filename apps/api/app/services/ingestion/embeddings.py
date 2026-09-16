@@ -57,10 +57,70 @@ class EmbeddingBatchError(RuntimeError):
 
 
 _SPARSE_TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
+# Stopwords carry no legal signal yet would consume L2 mass in the sparse
+# channel (native BGE sparse downweights them via learned weights; the hash
+# fallback must drop them explicitly). Short tokens stay: two-letter legal
+# abbreviations ("pp", "uu", "jp", "k3") and digits ("Pasal 15") are
+# first-class sparse terms; only single characters are noise.
+_SPARSE_STOPWORDS = frozenset(
+    {
+        "adalah",
+        "atau",
+        "dan",
+        "dari",
+        "dengan",
+        "di",
+        "ini",
+        "itu",
+        "ke",
+        "pada",
+        "yang",
+        "untuk",
+        "baik",
+        "bila",
+        "karena",
+        "maupun",
+        "sebagaimana",
+        "sebesar",
+        "serta",
+        "apakah",
+        "apa",
+        "bagaimana",
+        "berapa",
+        "kapan",
+        "siapa",
+        "mengapa",
+        "kenapa",
+        "atas",
+        "dalam",
+        "oleh",
+        "sebagai",
+        "sudah",
+        "telah",
+        "bahwa",
+        "antara",
+        "hingga",
+        "sampai",
+        "saat",
+        "ketika",
+        "juga",
+        "setiap",
+        "the",
+        "and",
+        "or",
+        "of",
+        "to",
+        "in",
+    }
+)
 
 
 def lexical_sparse_vector(text: str) -> dict[int, float]:
-    counts = Counter(_SPARSE_TOKEN_RE.findall(text.lower()))
+    counts = Counter(
+        token
+        for token in _SPARSE_TOKEN_RE.findall(text.lower())
+        if len(token) > 1 and token not in _SPARSE_STOPWORDS
+    )
     weighted: dict[int, float] = {}
     for token, count in counts.items():
         index = int.from_bytes(
@@ -72,6 +132,7 @@ def lexical_sparse_vector(text: str) -> dict[int, float]:
 
 
 def embed_hybrid(provider: EmbeddingProvider, texts: list[str]) -> HybridEmbeddingBatch:
+    """Embed passages (indexing side): no query instruction is applied."""
     method = getattr(provider, "embed_hybrid", None)
     if callable(method):
         return method(texts)
@@ -79,6 +140,30 @@ def embed_hybrid(provider: EmbeddingProvider, texts: list[str]) -> HybridEmbeddi
         dense=provider.embed(texts),
         sparse=[lexical_sparse_vector(text) for text in texts],
     )
+
+
+def embed_queries_hybrid(
+    provider: EmbeddingProvider, texts: list[str]
+) -> HybridEmbeddingBatch:
+    """Embed queries (retrieval side): providers apply their query operating
+    point when they have one (BGE-M3's retrieval instruction); providers
+    without one fall back to passage-equivalent embeddings."""
+    method = getattr(provider, "embed_queries_hybrid", None)
+    if callable(method):
+        return method(texts)
+    return embed_hybrid(provider, texts)
+
+
+def bge_native_sparse_available() -> bool:
+    """Whether BGE-M3 native sparse vectors can be produced here.
+
+    importlib-based so diagnostics never pay the torch import cost. Build
+    provenance already records the FlagEmbedding package version via
+    runtime_provenance(); "unavailable" there means hash fallback was used.
+    """
+    from importlib.util import find_spec
+
+    return find_spec("FlagEmbedding") is not None
 
 
 def embed_hybrid_batched(
@@ -217,6 +302,13 @@ class HashEmbeddingProvider:
         return vectors
 
 
+# BGE-M3's trained query operating point: queries carry this instruction
+# while passages are encoded plain. Both sides previously used the bare
+# encode() path, which is self-consistent but leaves retrieval quality
+# below the model's trained asymmetric regime.
+BGE_M3_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
+
+
 class BGEM3EmbeddingProvider:
     def __init__(
         self,
@@ -257,6 +349,18 @@ class BGEM3EmbeddingProvider:
         return vectors
 
     def embed_hybrid(self, texts: list[str]) -> HybridEmbeddingBatch:
+        """Embed passages: encode_corpus with no passage instruction, which
+        is exactly the bare encode() behavior used historically — indexed
+        vectors stay comparable, no re-embedding required."""
+        return self._encode_native(texts, queries=False)
+
+    def embed_queries_hybrid(self, texts: list[str]) -> HybridEmbeddingBatch:
+        """Embed queries: encode_queries applies the trained BGE-M3 query
+        instruction (plus the 512-token query cap). This is the intended
+        asymmetric regime: instructed queries against plain passages."""
+        return self._encode_native(texts, queries=True)
+
+    def _encode_native(self, texts: list[str], *, queries: bool) -> HybridEmbeddingBatch:
         if self._hybrid_model is None:
             try:
                 from FlagEmbedding import BGEM3FlagModel
@@ -276,8 +380,10 @@ class BGEM3EmbeddingProvider:
                 batch_size=self.batch_size,
                 passage_max_length=550,
                 query_max_length=512,
+                query_instruction_for_retrieval=BGE_M3_QUERY_INSTRUCTION,
             )
-        encoded = self._hybrid_model.encode(
+        encode = self._hybrid_model.encode_queries if queries else self._hybrid_model.encode_corpus
+        encoded = encode(
             texts,
             return_dense=True,
             return_sparse=True,

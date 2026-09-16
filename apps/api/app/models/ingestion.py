@@ -245,7 +245,10 @@ class ChunkEmbedding(Base):
         ForeignKey("chunks.chunk_id"), primary_key=True
     )
     embedding_model: Mapped[str] = mapped_column(String(120), nullable=False)
-    embedding: Mapped[list[float]] = mapped_column(JSONB, nullable=False)
+    # External embedding imports keep the immutable vector payload in its
+    # accepted artifact and Pinecone.  The relational row records provenance
+    # without duplicating 1,024 floats per chunk.
+    embedding: Mapped[list[float] | None] = mapped_column(JSONB)
     build_id: Mapped[str | None] = mapped_column(
         ForeignKey("ingestion_builds.build_id")
     )
@@ -254,6 +257,10 @@ class ChunkEmbedding(Base):
     vector_norm: Mapped[float | None] = mapped_column(Float)
     sparse_embedding: Mapped[dict[str, float] | None] = mapped_column(JSONB)
     retrieval_text_sha256: Mapped[str | None] = mapped_column(String(64))
+    embedding_artifact_sha256: Mapped[str | None] = mapped_column(String(64))
+    import_status: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="generated"
+    )
 
 
 class IngestionJob(Base):

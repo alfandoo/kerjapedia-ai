@@ -26,7 +26,9 @@
       "file_name": "permenaker-no-1-tahun-2025.pdf",
       "size_bytes": 555709,
       "sha256": "21b8b22a40dbbcb155749d961eec9a99147877793548b7321eee2b5b559d6444",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PP-37-2021",
@@ -48,7 +50,9 @@
       "file_name": "PP Nomor 37 Tahun 2021.pdf",
       "size_bytes": 350289,
       "sha256": "bb607c11e392b26c81ee0eaf50b1ee0d9698b6be849cf0e961fe197923d2f9aa",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PP-6-2025",
@@ -70,7 +74,9 @@
       "file_name": "PP Nomor 6 Tahun 2025.pdf",
       "size_bytes": 1069289,
       "sha256": "17bef486455195c995c0421c4db0a8d01b26aa9c46026c29f27675e766009c9c",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "UU-24-2011",
@@ -91,7 +97,9 @@
       "file_name": "UU 24 Tahun 2011.pdf",
       "size_bytes": 296718,
       "sha256": "650b86991e55dbf1ada27294676c451dca85c09d8f9352754d5cb59505680f57",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PERMENAKER-7-2026",
@@ -114,7 +122,9 @@
       "file_name": "2026pmnaker007.pdf",
       "size_bytes": 266860,
       "sha256": "08f6cf8a70ceb7b63014e04fe7f6e087edd3049865a6822e9509ab226baa4fbb",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PP-34-2021",
@@ -135,7 +145,9 @@
       "file_name": "PP Nomor 34 Tahun 2021.pdf",
       "size_bytes": 3212328,
       "sha256": "6d829b03be160133556df086128b596f3cca2081944ce0ed3e34118172a4a86e",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PP-35-2021",
@@ -159,7 +171,9 @@
       "file_name": "PP Nomor 35 Tahun 2021.pdf",
       "size_bytes": 2516999,
       "sha256": "d1f40e0c2fe3410631b71241ca98ca071a2c87be5af3c412a8aae24223b7ec20",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "UU-13-2003",
@@ -179,7 +193,9 @@
       "file_name": "UU Nomor 13 Tahun 2003.pdf",
       "size_bytes": 297503,
       "sha256": "0d3868d19082be34c875a376729998b4d948cac745b1e613d90e6f257d5bf273",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "UU-6-2023",
@@ -203,7 +219,9 @@
       "file_name": "UU Nomor 6 Tahun 2023.pdf",
       "size_bytes": 85354383,
       "sha256": "de73c84f11d4e721a4c0e66cadadac7f698941ec8adff5934e70f32dc885fdae",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "UU-2-2004",
@@ -224,7 +242,9 @@
       "file_name": "UU Nomor 2 Tahun 2004.pdf",
       "size_bytes": 393405,
       "sha256": "f4668a56e9e027fde5c363e8626cc957d866ff30ea445a5c80f2d82d29a6c605",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "UU-21-2000",
@@ -245,7 +265,9 @@
       "file_name": "UU Nomor 21 Tahun 2000.pdf",
       "size_bytes": 95662,
       "sha256": "3dd9e5856cf9b4107b9db5d67f8c15018be27e883275e9eb6776aff8dc3dc4a8",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PERMENAKER-11-2023",
@@ -266,7 +288,9 @@
       "file_name": "Permenaker Nomor 11 Tahun 2023.pdf",
       "size_bytes": 357386,
       "sha256": "5d780ef509bcad535351bd32359ad38c5599825e1c7193b2ede2f566cbea341e",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PERMENAKER-13-2025",
@@ -287,7 +311,9 @@
       "file_name": "permenaker-no-13-tahun-2025.pdf",
       "size_bytes": 1177157,
       "sha256": "098bbc8b3c192c2047f72000cd84eddc64069c29f42c692a7eb19b780da49aca",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PP-50-2012",
@@ -309,7 +335,9 @@
       "file_name": "PP Nomor 50 Tahun 2012.pdf",
       "size_bytes": 481436,
       "sha256": "b0ceb98348e6ac1e17e04e71e33f943414fe228baf7ddabc93f6930a3ab4fe88",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "UU-1-1970",
@@ -330,7 +358,9 @@
       "file_name": "UU Nomor 1 Tahun 1970.pdf",
       "size_bytes": 68325,
       "sha256": "c4e6f81f2d8317a3725545952c7264950dc47cf393f5f3a21c9d451f05e448af",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PERMENAKER-6-2016",
@@ -351,7 +381,9 @@
       "file_name": "Kemnaker No. 6 Tahun 2016.pdf",
       "size_bytes": 652899,
       "sha256": "2525e04dce7d4a7ec7a4d90d7e1138fdba5c2770e7a198911b7badb0b93d2d53",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PP-36-2021",
@@ -372,7 +404,9 @@
       "file_name": "PP Nomor 36 Tahun 2021.pdf",
       "size_bytes": 2912650,
       "sha256": "fc5c7671cb02ed8715ad577d1e9a852995ef52143eb394f90a81b583381afc9b",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PP-49-2025",
@@ -393,7 +427,9 @@
       "file_name": "PP Nomor 49 Tahun 2025.pdf",
       "size_bytes": 1503137,
       "sha256": "9170d0e027d70fa516b522c766681cf1e2d45bda06aa4552e738a5573378c300",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     },
     {
       "document_id": "PP-51-2023",
@@ -414,7 +450,9 @@
       "file_name": "PP Nomor 51 Tahun 2023.pdf",
       "size_bytes": 2769139,
       "sha256": "44de8376b488f4cf0f910660c05ac6e6044282b4c7c23b4e0e0b0e0881d349b8",
-      "verification_status": "verified"
+      "verification_status": "verified",
+      "source_verification_status": "verified",
+      "legal_review_status": "verified"
     }
   ],
   "relationships": [

@@ -16,6 +16,7 @@ TOPIC_SLUG_MAP: dict[str, list[str]] = {
     "bpjs": ["bpjs", "jaminan_sosial_ketenagakerjaan"],
     "k3": ["k3"],
     "hubungan_industrial": ["hubungan_industrial"],
+    "waktu_kerja": ["waktu_kerja"],
 }
 
 _REGULATION_TYPE_PATTERN = re.compile(
@@ -94,6 +95,8 @@ def build_upload_document(
         size_bytes=size_bytes,
         sha256=sha256,
         verification_status="pending_detail_url",
+        source_verification_status="pending",
+        legal_review_status="pending",
     )
 
 

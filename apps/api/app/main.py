@@ -43,20 +43,29 @@ async def lifespan(_app: FastAPI):
         from app.db.session import assert_schema_current
 
         assert_schema_current()
+    if settings.app_env.lower() != "test" and settings.embedding_provider == "bge_m3":
+        # Warm both encoders at boot (torch import + ~2.3 GB model load +
+        # first HF snapshot): the first user query must not pay cold start.
+        # Production keeps failing fast below; elsewhere warn and continue.
+        from app.services.ingestion.embeddings import embed_hybrid, embed_queries_hybrid
+        from app.services.providers import embedding_provider_from_settings
+
+        try:
+            provider = embedding_provider_from_settings(settings)
+            embed_hybrid(provider, ["regulasi ketenagakerjaan"])
+            embed_queries_hybrid(provider, ["regulasi ketenagakerjaan"])
+            logger.info("embedding warmup completed")
+        except Exception as exc:
+            logger.warning("embedding warmup failed: %s", exc)
+            if settings.app_env.lower() == "production":
+                raise
     if settings.app_env.lower() == "production":
         from app.db.session import create_session
         from app.services.answering.prompts import PROMPT_VERSION_ID
-        from app.services.ingestion.embeddings import embed_hybrid
-        from app.services.providers import (
-            answer_generator_from_settings,
-            embedding_provider_from_settings,
-        )
+        from app.services.providers import answer_generator_from_settings
         from app.services.retrieval.governance import load_retrieval_governance
 
-        embed_hybrid(
-            embedding_provider_from_settings(settings),
-            ["regulasi ketenagakerjaan"],
-        )
+        # Embedding warmup already ran above (passage + query encoders).
         answer_generator_from_settings(settings)
 
         with create_session() as session:

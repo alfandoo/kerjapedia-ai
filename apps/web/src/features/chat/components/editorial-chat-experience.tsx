@@ -38,13 +38,21 @@ const STREAM_STATUS_KEYS: Record<string, TranslationKey> = {
 };
 
 export function EditorialChatExperience() {
-  const { conversations, setConversations, historyLoading, historyError, retryHistory, setHistoryLoading } = useConversationHistory();
+  const {
+    conversations,
+    setConversations,
+    historyLoading,
+    historyError,
+    retryHistory,
+    setHistoryLoading,
+  } = useConversationHistory();
   const { t: translate } = useSettings();
   const [question, setQuestion] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [citations, setCitations] = useState<Citation[]>([]);
   const [citationQuestion, setCitationQuestion] = useState("");
+  const [focusCitationId, setFocusCitationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
   const [isSourceDrawerOpen, setIsSourceDrawerOpen] = useState(false);
@@ -64,11 +72,12 @@ export function EditorialChatExperience() {
     setIsSourceSheetOpen(false);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, []);
-  const refreshHistory = useCallback(async (signal?: AbortSignal) => {
-    setConversations(await fetchConversations(signal));
-  }, [setConversations]);
-
-
+  const refreshHistory = useCallback(
+    async (signal?: AbortSignal) => {
+      setConversations(await fetchConversations(signal));
+    },
+    [setConversations]
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -113,10 +122,11 @@ export function EditorialChatExperience() {
     setIsLoading(false);
     setError("Respons dihentikan. Anda dapat melanjutkan dengan pertanyaan baru.");
   }
-  function showSources(answer: AnswerPayload) {
+  function showSources(answer: AnswerPayload, citationId?: string) {
     sourceTriggerRef.current = document.activeElement as HTMLElement | null;
     setCitations(answer.citations);
     setCitationQuestion(answer.query);
+    setFocusCitationId(citationId ?? null);
     setIsMobileSidebarOpen(false);
     if (window.matchMedia("(max-width: 760px)").matches) {
       setIsSourceSheetOpen(true);
@@ -149,6 +159,7 @@ export function EditorialChatExperience() {
       setMessages(nextMessages);
       setCitations(latest?.citations ?? []);
       setCitationQuestion(latest?.query ?? "");
+      setFocusCitationId(null);
       setIsSourceSheetOpen(false);
       setIsSourceDrawerOpen(false);
     } catch (err) {
@@ -163,6 +174,7 @@ export function EditorialChatExperience() {
     setMessages([]);
     setCitations([]);
     setCitationQuestion("");
+    setFocusCitationId(null);
     setError(null);
     setIsSourceSheetOpen(false);
     setIsSourceDrawerOpen(false);
@@ -288,7 +300,11 @@ export function EditorialChatExperience() {
 
   const sourcePanel =
     citations.length > 0 ? (
-      <SourcePanel citations={citations} question={citationQuestion} />
+      <SourcePanel
+        citations={citations}
+        question={citationQuestion}
+        focusCitationId={focusCitationId}
+      />
     ) : undefined;
 
   return (
@@ -415,7 +431,7 @@ export function EditorialChatExperience() {
         />
         {messages.length === 0 ? (
           <p className="relative z-[3] mx-auto mb-2 mt-[-6px] max-w-[680px] px-6 text-center text-xs leading-relaxed text-muted-foreground max-[760px]:px-[18px]">
-            {translate("footer.disclaimer")}{" "}{translate("footer.agreement")}{" "}
+            {translate("footer.disclaimer")} {translate("footer.agreement")}{" "}
             <Link
               href="/legal/terms"
               className="text-inherit underline underline-offset-4 transition-colors hover:text-javanese"
@@ -444,6 +460,7 @@ export function EditorialChatExperience() {
         open={isSourceSheetOpen}
         citations={citations}
         question={citationQuestion}
+        focusCitationId={focusCitationId}
         onClose={closeSourceSheet}
       />
     </ChatWorkspaceShell>

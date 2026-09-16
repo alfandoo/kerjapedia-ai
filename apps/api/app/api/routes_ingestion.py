@@ -25,7 +25,6 @@ from app.services.ingestion.builds import (
     make_build_identity,
     validate_candidate_runtime,
 )
-from app.services.ingestion.governance import is_canonical_official_source_url
 from app.services.ingestion.metadata import find_document
 from app.services.ingestion.pipeline import (
     document_version_from_checksum,
@@ -290,15 +289,8 @@ def create_ingestion_job(
             source_url=document.source_url,
             legal_status=document.legal_status,
             verification_status=document.verification_status,
-            source_verification_status=(
-                "verified"
-                if (
-                    document.verification_status == "verified"
-                    and is_canonical_official_source_url(document.source_url)
-                )
-                else "pending"
-            ),
-            legal_review_status="pending",
+            source_verification_status=document.source_verification_status,
+            legal_review_status=document.legal_review_status,
             publication_status="draft",
             ingestion_status="queued",
             is_current=False,

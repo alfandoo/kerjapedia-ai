@@ -183,6 +183,57 @@ export type EvaluationRunDetail = EvaluationRunSummary & {
   };
 };
 
+export type HistogramStats = {
+  count: number;
+  sum: number;
+  avg: number | null;
+  p50: number | null;
+  p95: number | null;
+  p99: number | null;
+};
+
+export type AdminMetrics = {
+  ragas_enabled: boolean;
+  ragas_sample_rate: number;
+  outcomes: Record<string, number>;
+  requests: {
+    total: number;
+    by_status: Record<string, number>;
+  };
+  stage_latency: Record<string, HistogramStats>;
+  request_latency: Partial<HistogramStats>;
+  tokens: {
+    prompt: number;
+    completion: number;
+    total: number;
+    by_model: Record<string, { prompt: number; completion: number }>;
+  };
+  claims: {
+    supported: number;
+    unsupported: number;
+    total: number;
+    support_rate: number | null;
+  };
+  provider_errors: {
+    total: number;
+    by_stage: Record<string, number>;
+  };
+  ragas: {
+    eval_total: Record<string, number>;
+    faithfulness: Partial<HistogramStats>;
+  };
+  behavior: {
+    total: number;
+    followups: number;
+    followup_ratio: number | null;
+    by_topic: Record<string, number>;
+  };
+  retrieved: {
+    total: number;
+    by_legal_status: Record<string, number>;
+  };
+};
+
 export type AdminSettings = {
   app_name: string;
   app_version: string;

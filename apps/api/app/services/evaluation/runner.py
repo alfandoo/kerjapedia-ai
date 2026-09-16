@@ -4,6 +4,7 @@ from dataclasses import asdict, replace
 
 from app.services.answering.generator import AnswerGenerator, _detect_language
 from app.services.evaluation.metrics import (
+    answer_correctness,
     citation_correctness,
     faithfulness,
     ndcg_at_k,
@@ -106,6 +107,11 @@ def run_experiment(
                     else None
                 ),
                 faithfulness=faithfulness(answer) if answerable else None,
+                answer_correctness=(
+                    answer_correctness(answer, question.expected_answer)
+                    if answerable
+                    else None
+                ),
                 ragas_faithfulness=None,
                 recall_at_10=(
                     recall_at_k(
@@ -400,6 +406,7 @@ def _aggregate(
         mean_reciprocal_rank=_average(item.reciprocal_rank for item in answerable),
         citation_correctness=_average(item.citation_correctness for item in answerable),
         faithfulness=_average(item.faithfulness for item in answerable),
+        answer_correctness=_average(item.answer_correctness for item in answerable),
         ragas_faithfulness=_average(item.ragas_faithfulness for item in answerable),
         refusal_accuracy=_average(1.0 if item.refusal_correct else 0.0 for item in results),
         hard_negative_recall_at_5=_average(item.recall_at_5 for item in hard_negatives),
@@ -421,7 +428,7 @@ def _aggregate(
         ),
         refusal_recall=_safe_ratio(
             sum(
-                item.actual_refuse and not expected
+                not item.actual_refuse and expected
                 for item, expected in _refusal_pairs(results, questions)
             ),
             sum(question.should_refuse for question in questions),
@@ -586,6 +593,11 @@ def _evaluate_provider_questions(
                     else None
                 ),
                 faithfulness=faithfulness(answer) if answerable else None,
+                answer_correctness=(
+                    answer_correctness(answer, question.expected_answer)
+                    if answerable
+                    else None
+                ),
                 ragas_faithfulness=(
                     score_ragas_faithfulness(
                         ragas_scorer,

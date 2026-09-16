@@ -13,7 +13,7 @@ import re
 
 from app.services.rag.structuring.schemas import AliasTable, Marker
 
-_CHAPTER_RE = re.compile(r"^BAB\s+([IVXLCDM]+)\b", re.IGNORECASE)
+_CHAPTER_RE = re.compile(r"^BAB\s+([IVXLCDM]+[A-Z]?)\b", re.IGNORECASE)
 _SECTION_RE = re.compile(r"^Bagian\s+(.+)$", re.IGNORECASE)
 _SUBSECTION_RE = re.compile(r"^Paragraf\s+(.+)$", re.IGNORECASE)
 _PARAGRAPH_RE = re.compile(r"^\(([0-9]+)\)\s*(.*)$")
@@ -51,7 +51,7 @@ def normalize_marker_line(line: str, aliases: AliasTable) -> tuple[str, bool]:
     repaired = aliased
     for pattern, replacement in _GLUED_PATTERNS:
         repaired = pattern.sub(replacement, repaired)
-    chapter_match = re.match(r"^BAB([IVXLCDM]+)\b", repaired, re.IGNORECASE)
+    chapter_match = re.match(r"^BAB([IVXLCDM]+[A-Z]?)\b", repaired, re.IGNORECASE)
     if chapter_match:
         repaired = f"BAB {chapter_match.group(1).upper()}{repaired[chapter_match.end():]}"
     return repaired, repaired != collapsed

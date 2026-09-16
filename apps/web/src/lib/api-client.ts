@@ -1,6 +1,7 @@
-export const API_URL = typeof window === "undefined"
-  ? (process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000")
-  : "/api/backend";
+export const API_URL =
+  typeof window === "undefined"
+    ? (process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000")
+    : "/api/backend";
 
 export async function parseJsonResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {

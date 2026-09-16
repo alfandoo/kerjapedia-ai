@@ -181,7 +181,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                           setTheme(option.value);
                           appearanceButtonRef.current?.focus();
                           // State resets are part of opening the modal, while this effect also manages focus and scroll lock.
-                          // eslint-disable-next-line react-hooks/set-state-in-effect
                           setAppearanceOpen(false);
                         }}
                       >
@@ -205,7 +204,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   onClick={() => {
                     setLanguageOpen(!languageOpen);
                     // State resets are part of opening the modal, while this effect also manages focus and scroll lock.
-                    // eslint-disable-next-line react-hooks/set-state-in-effect
                     setAppearanceOpen(false);
                   }}
                 >

@@ -13,9 +13,8 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 export async function accountPins(owner: string, toggle?: string): Promise<string[]> {
-  const update = (ids: string[]) => toggle
-    ? ids.includes(toggle) ? ids.filter(id => id !== toggle) : [...ids, toggle]
-    : ids;
+  const update = (ids: string[]) =>
+    toggle ? (ids.includes(toggle) ? ids.filter((id) => id !== toggle) : [...ids, toggle]) : ids;
   try {
     const database = await openDatabase();
     return await new Promise<string[]>((resolve, reject) => {
@@ -24,12 +23,26 @@ export async function accountPins(owner: string, toggle?: string): Promise<strin
       const request = store.get(owner);
       let result: string[] = [];
       request.onsuccess = () => {
-        result = update(Array.isArray(request.result) ? request.result.filter((id: unknown): id is string => typeof id === "string") : []);
+        result = update(
+          Array.isArray(request.result)
+            ? request.result.filter((id: unknown): id is string => typeof id === "string")
+            : []
+        );
         if (toggle) store.put(result, owner);
       };
-      transaction.oncomplete = () => { database.close(); fallback.set(owner, result); resolve(result); };
-      transaction.onabort = () => { database.close(); reject(transaction.error); };
-      transaction.onerror = () => { database.close(); reject(transaction.error); };
+      transaction.oncomplete = () => {
+        database.close();
+        fallback.set(owner, result);
+        resolve(result);
+      };
+      transaction.onabort = () => {
+        database.close();
+        reject(transaction.error);
+      };
+      transaction.onerror = () => {
+        database.close();
+        reject(transaction.error);
+      };
     });
   } catch {
     // Browsers that disallow IndexedDB retain pins only for this page session.

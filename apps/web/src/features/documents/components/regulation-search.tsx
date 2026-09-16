@@ -252,7 +252,11 @@ export function RegulationSearch() {
         </div>
       ) : null}
 
-      <div aria-label={translate("search.listAria")} aria-busy={loading} className="overflow-x-auto">
+      <div
+        aria-label={translate("search.listAria")}
+        aria-busy={loading}
+        className="overflow-x-auto"
+      >
         {loading ? (
           <div className="overflow-x-auto rounded-xl border border-border bg-card">
             <div className="flex items-center gap-4 border-b border-border bg-muted px-4 py-3">
@@ -282,7 +286,9 @@ export function RegulationSearch() {
 
         {!loading && filtered.length === 0 ? (
           <div className="py-16 text-center">
-            <h2 className="text-lg font-semibold text-foreground">{translate("search.emptyTitle")}</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              {translate("search.emptyTitle")}
+            </h2>
             <p className="mt-2 text-sm text-muted-foreground">
               {translate("search.emptyDescription")}
             </p>
@@ -351,7 +357,9 @@ export function RegulationSearch() {
                     <td className="px-4 py-4 align-middle">
                       <span
                         className={`inline-flex items-center gap-2 whitespace-nowrap text-[11px] ${
-                          document.legal_status === "active" ? "text-forest" : "text-muted-foreground"
+                          document.legal_status === "active"
+                            ? "text-forest"
+                            : "text-muted-foreground"
                         }`}
                       >
                         <i
@@ -395,7 +403,10 @@ export function RegulationSearch() {
           <div className="mt-5 flex items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">
               {translate("search.fromTo")
-                .replace("{start}", String(Math.min((safePage - 1) * PAGE_SIZE + 1, filtered.length)))
+                .replace(
+                  "{start}",
+                  String(Math.min((safePage - 1) * PAGE_SIZE + 1, filtered.length))
+                )
                 .replace("{end}", String(Math.min(safePage * PAGE_SIZE, filtered.length)))
                 .replace("{total}", String(filtered.length))}
             </span>

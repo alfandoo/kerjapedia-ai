@@ -23,6 +23,8 @@ _WHITESPACE_RE = re.compile(r"[ \t\f\v]+")
 _SPACE_BEFORE_PUNCTUATION_RE = re.compile(r"[ \t]+([,.;:])")
 _SPACE_AFTER_PUNCTUATION_RE = re.compile(r"([,;:])(?=[A-Za-zÀ-ÖØ-öø-ÿ])")
 _SPACE_AROUND_SLASH_RE = re.compile(r"(?<=\w)[ \t]*/[ \t]*(?=\w)")
+_DEHYPHEN_RE = re.compile(r"(\w)-\n(\w)")
+_DUPLICATE_SENTENCE_RE = re.compile(r"(^|[.!?]\s+)(.+?)([.!?]\s|\.[\"'\s]|$)")
 _LEGAL_MARKER_RE = re.compile(
     r"^\s*(?:"
     r"BAB\s+[IVXLCDM]+\b|"
@@ -84,7 +86,16 @@ def _clean_page(
         repeated_margins=repeated_margins,
         margin_lines=margin_lines,
     )
-    cleaned_text, text_stats = _reflow_lines(retained_lines)
+    reflowed_text, text_stats = _reflow_lines(retained_lines)
+
+    # Apply dehyphenation after reflow (hyphen may span across joined lines)
+    dehyphenated_text, dehyphen_count = _dehyphenate_text(reflowed_text)
+    text_stats["dehyphenated_words"] = dehyphen_count
+
+    # Remove duplicate sentences
+    deduped_text, dedup_count = _remove_duplicate_sentences(dehyphenated_text)
+    text_stats["removed_duplicate_sentences"] = dedup_count
+
     changes = {
         **character_stats,
         **text_stats,
@@ -97,10 +108,10 @@ def _clean_page(
         "schema_version": "cleaning-v1",
         "raw_characters": len(page.raw_text),
         "input_cleaned_characters": len(page.cleaned_text),
-        "cleaned_characters": len(cleaned_text),
+        "cleaned_characters": len(deduped_text),
         "raw_sha256": _sha256(page.raw_text),
-        "cleaned_sha256": _sha256(cleaned_text),
-        "changed": cleaned_text != page.cleaned_text,
+        "cleaned_sha256": _sha256(deduped_text),
+        "changed": deduped_text != page.cleaned_text,
         "changes": changes,
         "removed_margin_lines": removals,
     }
@@ -120,7 +131,7 @@ def _clean_page(
     )
     return replace(
         page,
-        cleaned_text=cleaned_text,
+        cleaned_text=deduped_text,
         diagnostics=(*page.diagnostics, diagnostic),
         metadata=metadata,
     )
@@ -272,6 +283,45 @@ def _is_standalone_page_number(line: str) -> bool:
 def _margin_signature(line: str) -> str:
     normalized = " ".join(line.casefold().split())
     return re.sub(r"\d+", "#", normalized)
+
+
+def _dehyphenate_text(text: str) -> tuple[str, int]:
+    """Join words split by hyphen at line breaks.
+
+    Handles:
+    - Soft hyphens: "pe\u00adkerja" → "pekerja"
+    - Hard hyphens: "pe-\nkerja" → "pekerja"
+    - Slash breaks: "dan/atau" → "dan/atau" (preserved)
+    """
+    count = 0
+    prev = None
+    while prev != text:
+        prev = text
+        text, n = _DEHYPHEN_RE.subn(r"\1\2", text)
+        count += n
+    return text, count
+
+
+def _remove_duplicate_sentences(text: str) -> tuple[str, int]:
+    """Remove exact duplicate sentences within a text block.
+
+    Preserves order of first occurrence. Only deduplicates sentences that
+    are character-for-character identical (after whitespace normalization).
+    """
+    seen: set[str] = set()
+    result: list[str] = []
+    removed = 0
+    for match in _DUPLICATE_SENTENCE_RE.finditer(text):
+        sentence = match.group(2).strip()
+        normalized = " ".join(sentence.split())
+        if normalized in seen:
+            removed += 1
+            continue
+        seen.add(normalized)
+        result.append(match.group(0))
+    if removed == 0:
+        return text, 0
+    return "".join(result), removed
 
 
 def _sha256(text: str) -> str:

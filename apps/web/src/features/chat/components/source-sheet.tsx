@@ -10,10 +10,17 @@ type SourceSheetProps = {
   open: boolean;
   citations: Citation[];
   question: string;
+  focusCitationId?: string | null;
   onClose: () => void;
 };
 
-export function SourceSheet({ open, citations, question, onClose }: SourceSheetProps) {
+export function SourceSheet({
+  open,
+  citations,
+  question,
+  focusCitationId = null,
+  onClose,
+}: SourceSheetProps) {
   const { t: translate } = useSettings();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
@@ -90,7 +97,7 @@ export function SourceSheet({ open, citations, question, onClose }: SourceSheetP
             ×
           </button>
         </div>
-        <SourcePanel citations={citations} question={question} />
+        <SourcePanel citations={citations} question={question} focusCitationId={focusCitationId} />
       </section>
     </div>
   );

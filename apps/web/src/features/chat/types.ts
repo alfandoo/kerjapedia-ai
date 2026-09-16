@@ -26,10 +26,17 @@ export type RelatedDocument = {
   source_url: string;
 };
 
+export type AnswerClaim = {
+  text: string;
+  cited_chunk_ids: string[];
+  supported?: boolean;
+};
+
 export type AnswerPayload = {
   query: string;
   answer: string;
   citations: Citation[];
+  claims?: AnswerClaim[];
   confidence: number;
   related_documents: RelatedDocument[];
   refusal_reason: string | null;

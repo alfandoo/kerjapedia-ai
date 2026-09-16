@@ -29,10 +29,7 @@ const MESSAGE_TO_KEY: Array<[string, TranslationKey]> = [
 
 /** Lowercase/exact variant used for fuzzy matching when the backend prefix
  * (e.g. "Pendaftaran gagal: …") is attached by an older client path. */
-export function translateAuthError(
-  translate: Translate,
-  rawMessage: string
-): string {
+export function translateAuthError(translate: Translate, rawMessage: string): string {
   const clean = rawMessage.trim();
   for (const [message, key] of MESSAGE_TO_KEY) {
     if (clean === message || clean.endsWith(message)) {

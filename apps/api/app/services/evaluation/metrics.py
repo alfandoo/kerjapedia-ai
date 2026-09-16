@@ -33,6 +33,26 @@ def recall_at_k(expected_ids: Iterable[str], retrieved_ids: list[str], k: int = 
     return round(len(expected.intersection(retrieved_ids[:k])) / len(expected), 6)
 
 
+def precision_at_k(expected_ids: Iterable[str], retrieved_ids: list[str], k: int = 5) -> float:
+    """Precision@K: proportion of retrieved documents that are relevant."""
+    expected = set(expected_ids)
+    if not expected:
+        return 0.0
+    retrieved_top_k = retrieved_ids[:k]
+    if not retrieved_top_k:
+        return 0.0
+    return round(len(expected.intersection(retrieved_top_k)) / len(retrieved_top_k), 6)
+
+
+def hit_rate(expected_ids: Iterable[str], retrieved_ids: list[str], k: int = 5) -> float:
+    """Hit Rate: 1 if at least one relevant document is in top-K, else 0."""
+    expected = set(expected_ids)
+    if not expected:
+        return 0.0
+    retrieved_top_k = retrieved_ids[:k]
+    return 1.0 if expected.intersection(retrieved_top_k) else 0.0
+
+
 def reciprocal_rank(expected_ids: Iterable[str], retrieved_ids: list[str]) -> float:
     expected = set(expected_ids)
     for index, document_id in enumerate(retrieved_ids, start=1):
@@ -103,6 +123,21 @@ def unsupported_claim_rate(answer: AnswerResponse) -> float:
         return 1.0 if answer.answer and not answer.refusal_reason else 0.0
     unsupported = sum(not claim.supported for claim in answer.claims)
     return round(unsupported / len(answer.claims), 6)
+
+
+def answer_correctness(answer: AnswerResponse, expected_answer: str) -> float:
+    """Token overlap between generated answer and expected answer.
+
+    Uses Jaccard similarity of content tokens (stopwords removed) as a
+    lightweight correctness signal.  Returns 0.0 when either side is empty.
+    """
+    answer_tokens = _content_tokens(answer.answer)
+    expected_tokens = _content_tokens(expected_answer)
+    if not answer_tokens or not expected_tokens:
+        return 0.0
+    intersection = answer_tokens & expected_tokens
+    union = answer_tokens | expected_tokens
+    return round(len(intersection) / len(union), 6)
 
 
 def _content_tokens(value: str) -> set[str]:

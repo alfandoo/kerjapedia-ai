@@ -12,10 +12,7 @@ interface GoogleAccountsId {
     context?: string;
   }) => void;
   prompt: (options?: { one_tap?: boolean }) => void;
-  renderButton: (
-    parent: HTMLElement,
-    options?: Record<string, unknown>
-  ) => void;
+  renderButton: (parent: HTMLElement, options?: Record<string, unknown>) => void;
   disableAutoSelect: () => void;
   cancel: () => void;
 }

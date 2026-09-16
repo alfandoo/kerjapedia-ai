@@ -54,11 +54,12 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: apps/api/requirements-dev.txt
       - run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends ghostscript qpdf tesseract-ocr tesseract-ocr-eng tesseract-ocr-ind unpaper
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -r requirements.txt
+      - run: python -m pip install -r requirements-dev.txt
       - run: python -m ruff check app tests
       - run: python -m alembic upgrade head
       - run: python -m alembic downgrade 20260807_0003

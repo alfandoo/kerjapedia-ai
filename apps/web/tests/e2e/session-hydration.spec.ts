@@ -19,9 +19,14 @@ function monitorRuntimeErrors(page: Page): string[] {
 }
 
 async function preloadAdminSession(page: Page) {
-  await page.route("**/api/backend/auth/session", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(adminSession) }));
+  await page.route("**/api/backend/auth/session", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(adminSession),
+    })
+  );
 }
-
 
 test("stored session hydrates the chat shell without mismatch", async ({ page }) => {
   const runtimeErrors = monitorRuntimeErrors(page);

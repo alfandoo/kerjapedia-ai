@@ -3,6 +3,7 @@ export { AdminDashboardPage } from "./components/admin-dashboard-page";
 export { AdminEvaluation } from "./components/admin-evaluation";
 export { AdminFeedback } from "./components/admin-feedback";
 export { AdminIngestion } from "./components/admin-ingestion";
+export { AdminObservability } from "./components/admin-observability";
 export { AdminRetrieval } from "./components/admin-retrieval";
 export { AdminSettings } from "./components/admin-settings";
 export { AdminShell } from "./components/admin-shell";

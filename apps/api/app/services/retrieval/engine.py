@@ -75,7 +75,12 @@ class RetrievalEngine:
             if matches_filters(document, understanding.filters)
         ]
 
-        query_vector = self.embedding_provider.embed([" ".join(understanding.rewritten_queries)])[0]
+        # One embedding per rewrite, fused by max — mirroring the production
+        # Pinecone path. A single joined embedding dilutes distinctive
+        # rewrites (the "uang kompensasi" expansion drowns in generic
+        # phrasing), which also makes offline eval understate production
+        # semantic quality.
+        query_vectors = self.embedding_provider.embed(list(understanding.rewritten_queries))
 
         lexical_scores = {
             document.chunk_id: max(
@@ -85,7 +90,10 @@ class RetrievalEngine:
             for document in candidates
         }
         semantic_scores = {
-            document.chunk_id: cosine_similarity(query_vector, document.embedding)
+            document.chunk_id: max(
+                cosine_similarity(query_vector, document.embedding)
+                for query_vector in query_vectors
+            )
             for document in candidates
         }
 

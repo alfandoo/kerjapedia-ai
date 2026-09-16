@@ -171,7 +171,8 @@ const id = {
   "auth.otpExpired": "Kode verifikasi telah kedaluwarsa. Silakan kirim ulang.",
   "auth.otpTooMany": "Terlalu banyak percobaan. Silakan kirim ulang kode.",
   "auth.otpInvalidSession": "Sesi pendaftaran tidak valid. Silakan daftar ulang.",
-  "auth.errorSessionCreate": "Akun berhasil dibuat, namun sesi belum dapat dibuat. Silakan masuk kembali.",
+  "auth.errorSessionCreate":
+    "Akun berhasil dibuat, namun sesi belum dapat dibuat. Silakan masuk kembali.",
   "auth.errorNoPending": "Belum ada pendaftaran untuk email ini.",
   "auth.googleOnlyTitle": "Masuk dengan Google",
   "auth.googleOnlyDescription":
@@ -219,6 +220,7 @@ const id = {
   "answer.conversationLabel": "Percakapan",
   "answer.thinking": "Berpikir…",
   "answer.officialSources": "sumber resmi",
+  "answer.openCitation": "Buka sumber",
   "answer.editMessage": "Edit pesan",
   "answer.copyMessage": "Salin pesan",
   "answer.copyAnswer": "Salin jawaban",
@@ -250,6 +252,8 @@ const id = {
   "answer.warningSuperseded":
     "Sebagian sumber telah diubah atau diganti oleh peraturan yang lebih baru.",
   "answer.warningRevoked": "Sumber dicabut atau digantikan oleh peraturan yang lebih baru.",
+  "answer.warningDegradedExtractive":
+    "Jawaban disusun otomatis dari kutipan sumber — baca sumber resmi untuk detail lengkap.",
   // Sources
   "source.title": "Sumber",
   "source.panelLabel": "Daftar sumber resmi",

@@ -21,18 +21,36 @@ GUARDRAIL_REFUSAL_EN = (
 )
 
 _INJECTION_PATTERNS = (
-    re.compile(r"\babaikan (semua )?instruksi (sebelumnya|di atas)\b", re.IGNORECASE),
-    re.compile(r"\bignore (all )?(previous|prior) instructions?\b", re.IGNORECASE),
     re.compile(
-        r"\b(ungkap|tampilkan|cetak).{0,24}\b(system prompt|developer message)\b",
+        r"\babaikan (semua )?(instruksi|aturan|perintah)( sebelumnya| di atas| ini)?\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\blupakan (semua )?(instruksi|aturan|perintah)\b", re.IGNORECASE),
+    re.compile(
+        r"\bignore (all )?(previous|prior|your|the) (instructions?|rules?)\b",
+        re.IGNORECASE,
+    ),
+    # Roleplay framing is anchored to sentence start addressing the assistant
+    # ("kamu sekarang adalah ...") so legitimate prose like "perusahaan
+    # bertindak sebagai pemberi kerja" never matches.
+    re.compile(
+        r"^\s*(kamu|anda|kau|you)\s+(sekarang\s+)?(adalah|bertindak)\s+sebagai\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(ungkap|tampilkan|cetak|bocorkan|beberkan|bongkar|spill|leak|reveal)"
+        r".{0,24}\b(system prompt|developer message)\b",
         re.IGNORECASE,
     ),
     re.compile(
         r"\b(api[- ]?key|access token|password|credential).{0,20}"
-        r"\b(ungkap|tampilkan|beri)\b",
+        r"\b(ungkap|tampilkan|beri|bocorkan|spill|leak)\b",
         re.IGNORECASE,
     ),
-    re.compile(r"\b(jailbreak|do anything now|developer mode)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(jailbreak|do anything now|developer mode|act as|roleplay)\b",
+        re.IGNORECASE,
+    ),
 )
 
 # Homoglyphs abused to dodge keyword matching (Cyrillic/Greek lookalikes).
@@ -60,6 +78,43 @@ _SECRET_PATTERNS = (
     ),
 )
 _ECHO_NGRAM = 8
+
+# PII patterns that should be redacted from context chunks before LLM submission.
+# NIK = Nomor Induk Kependudukan (Indonesian 16-digit national ID).
+_NIK_RE = re.compile(r"\b\d{16}\b")
+_PHONE_RE = re.compile(r"\b(?:\+62|62|0)8[1-9][\d\s-]{7,12}\b")
+_NPWP_RE = re.compile(r"\b\d{2}\.\d{3}\.\d{3}\.\d{1}-\d{3}\.\d{3}\b")
+
+# Prompt-injection patterns that may appear inside retrieved document chunks
+# (e.g., adversarial text embedded in regulation PDFs).
+_CONTEXT_INJECTION_PATTERNS = (
+    re.compile(
+        r"\b(ignore|disregard|override|replace)\b.{0,30}\b(system|instructions?|rules?|prompt)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(you are|act as|pretend to be|roleplay as)\b"
+        r".{0,20}\b(a |an |the )?(assistant|ai|bot|model)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(ungkap|tampilkan|bocorkan|beberkan|spill|leak|reveal)\b.{0,24}\b"
+        r"(system prompt|developer message|konfigurasi|instruksi)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(api[- ]?key|access token|password|credential|secret)\b.{0,20}"
+        r"\b(ungkap|tampilkan|beri|bocorkan|spill|leak|reveal|send|return|print)\b",
+        re.IGNORECASE,
+    ),
+)
+
+
+@dataclass(frozen=True)
+class ContextGuardrailDecision:
+    allowed: bool
+    flagged_chunk_ids: list[str] = ()
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -104,6 +159,34 @@ def evaluate_input_guardrail(query: str) -> GuardrailDecision:
     return GuardrailDecision(allowed=True)
 
 
+def evaluate_context_guardrail(
+    chunks: list,
+) -> ContextGuardrailDecision:
+    """Scan retrieved context chunks for embedded prompt-injection attempts.
+
+    Returns a decision with any flagged chunk IDs so the caller can exclude
+    them from the LLM prompt without discarding the entire retrieval result.
+    """
+    flagged: list[str] = []
+    for chunk in chunks:
+        text = getattr(chunk, "text", "") or ""
+        if not text:
+            continue
+        normalized = normalize_for_detection(text)
+        for pattern in _CONTEXT_INJECTION_PATTERNS:
+            if pattern.search(normalized):
+                chunk_id = getattr(chunk, "chunk_id", "unknown")
+                flagged.append(chunk_id)
+                break
+    if flagged:
+        return ContextGuardrailDecision(
+            allowed=False,
+            flagged_chunk_ids=flagged,
+            reason="context_injection_detected",
+        )
+    return ContextGuardrailDecision(allowed=True)
+
+
 def build_guardrail_refusal(query: str, reason: str) -> AnswerResponse:
     lang = _detect_language(query)
     disclaimer = DISCLAIMER_ID if lang == "id" else DISCLAIMER_EN
@@ -143,6 +226,19 @@ def redact_secrets(text: str) -> tuple[str, bool]:
     redacted = False
     for pattern in _SECRET_PATTERNS:
         text, count = pattern.subn("[redacted]", text)
+        redacted = redacted or count > 0
+    return text, redacted
+
+
+def redact_context_pii(text: str) -> tuple[str, bool]:
+    """Redact PII from context chunks before sending to LLM.
+
+    Handles Indonesian NIK (16-digit national ID), phone numbers, and NPWP
+    (tax ID). Returns (cleaned_text, was_redacted).
+    """
+    redacted = False
+    for pattern in (_NIK_RE, _PHONE_RE, _NPWP_RE):
+        text, count = pattern.subn("[PII]", text)
         redacted = redacted or count > 0
     return text, redacted
 

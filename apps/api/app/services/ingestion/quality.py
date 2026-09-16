@@ -14,7 +14,7 @@ from app.services.ingestion.schemas import (
 )
 
 HEADING_ONLY_RE = re.compile(
-    r"^\s*(?:BAB\s+[IVXLCDM]+|Bagian\s+\S+(?:\s+\S+){0,3}|"
+    r"^\s*(?:BAB\s+[IVXLCDM]+[A-Z]?|Bagian\s+\S+(?:\s+\S+){0,3}|"
     r"Paragraf\s+\S+(?:\s+\S+){0,3}|Pasal\s+\d+[A-Z]?)\s*$",
     re.IGNORECASE,
 )

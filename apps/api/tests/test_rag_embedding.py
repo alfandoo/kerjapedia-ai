@@ -1,3 +1,6 @@
+from app.services.ingestion.embeddings import (
+    lexical_sparse_vector as live_lexical_sparse_vector,
+)
 from app.services.rag.embedding import (
     HashEmbeddingProvider,
     check_vector,
@@ -130,3 +133,24 @@ def test_lexical_sparse_is_deterministic_and_normalized() -> None:
 
     assert first == second
     assert abs(math.sqrt(sum(v * v for v in first.values())) - 1.0) < 1e-9
+
+
+def test_lexical_sparse_drops_stopwords_but_keeps_legal_tokens() -> None:
+    import hashlib
+    import math
+
+    def index(token: str) -> int:
+        return int.from_bytes(hashlib.sha256(token.encode("utf-8")).digest()[:4], "big")
+
+    def check_stopwords(vector: dict[int, float]) -> None:
+        for stopword in ("apakah", "dan", "dari", "atas"):
+            assert index(stopword) not in vector
+        for token in ("pekerja", "pesangon", "thr", "pp", "15"):
+            assert index(token) in vector
+        assert abs(math.sqrt(sum(v * v for v in vector.values())) - 1.0) < 1e-9
+
+    text = "Apakah pekerja berhak atas pesangon dan THR dari PP 15?"
+    # The live ingestion path and the parallel rag/embedding twin must agree
+    # exactly: sparse index spaces have to match.
+    check_stopwords(live_lexical_sparse_vector(text))
+    check_stopwords(lexical_sparse_vector(text))

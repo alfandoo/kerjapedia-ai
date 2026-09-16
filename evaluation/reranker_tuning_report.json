@@ -1,0 +1,195 @@
+{
+  "dataset": "F:\\Alfando\\Portofolio\\KerjaPediaAI\\evaluation\\golden_questions.json",
+  "question_count": 130,
+  "top_k": 5,
+  "weight_sweep": [
+    {
+      "name": "baseline",
+      "weights": {
+        "fusion": 0.45,
+        "lexical": 0.2,
+        "semantic": 0.2,
+        "overlap": 0.15,
+        "topic_boost": 0.2,
+        "article_boost": 0.25,
+        "context_boost_doc": 0.08,
+        "context_boost_article": 0.02,
+        "status_penalty_revoked": 0.2,
+        "status_penalty_unverified": 0.05
+      },
+      "evaluated": 120,
+      "recall_at_5": 0.4083,
+      "recall_at_10": 0.4083,
+      "mean_reciprocal_rank": 0.3114,
+      "ndcg_at_10": 0.3102
+    },
+    {
+      "name": "fusion_heavy",
+      "weights": {
+        "fusion": 0.6,
+        "lexical": 0.15,
+        "semantic": 0.15,
+        "overlap": 0.1,
+        "topic_boost": 0.2,
+        "article_boost": 0.25,
+        "context_boost_doc": 0.08,
+        "context_boost_article": 0.02,
+        "status_penalty_revoked": 0.2,
+        "status_penalty_unverified": 0.05
+      },
+      "evaluated": 120,
+      "recall_at_5": 0.4083,
+      "recall_at_10": 0.4083,
+      "mean_reciprocal_rank": 0.3114,
+      "ndcg_at_10": 0.3102
+    },
+    {
+      "name": "overlap_heavy",
+      "weights": {
+        "fusion": 0.35,
+        "lexical": 0.2,
+        "semantic": 0.2,
+        "overlap": 0.25,
+        "topic_boost": 0.2,
+        "article_boost": 0.25,
+        "context_boost_doc": 0.08,
+        "context_boost_article": 0.02,
+        "status_penalty_revoked": 0.2,
+        "status_penalty_unverified": 0.05
+      },
+      "evaluated": 120,
+      "recall_at_5": 0.4083,
+      "recall_at_10": 0.4083,
+      "mean_reciprocal_rank": 0.3114,
+      "ndcg_at_10": 0.3102
+    },
+    {
+      "name": "balanced",
+      "weights": {
+        "fusion": 0.3,
+        "lexical": 0.25,
+        "semantic": 0.25,
+        "overlap": 0.2,
+        "topic_boost": 0.2,
+        "article_boost": 0.25,
+        "context_boost_doc": 0.08,
+        "context_boost_article": 0.02,
+        "status_penalty_revoked": 0.2,
+        "status_penalty_unverified": 0.05
+      },
+      "evaluated": 120,
+      "recall_at_5": 0.4083,
+      "recall_at_10": 0.4083,
+      "mean_reciprocal_rank": 0.3114,
+      "ndcg_at_10": 0.3102
+    },
+    {
+      "name": "topic_boosted",
+      "weights": {
+        "fusion": 0.4,
+        "lexical": 0.2,
+        "semantic": 0.2,
+        "overlap": 0.15,
+        "topic_boost": 0.4,
+        "article_boost": 0.25,
+        "context_boost_doc": 0.08,
+        "context_boost_article": 0.02,
+        "status_penalty_revoked": 0.2,
+        "status_penalty_unverified": 0.05
+      },
+      "evaluated": 120,
+      "recall_at_5": 0.4083,
+      "recall_at_10": 0.4083,
+      "mean_reciprocal_rank": 0.3114,
+      "ndcg_at_10": 0.3102
+    },
+    {
+      "name": "article_boosted",
+      "weights": {
+        "fusion": 0.4,
+        "lexical": 0.2,
+        "semantic": 0.2,
+        "overlap": 0.15,
+        "topic_boost": 0.2,
+        "article_boost": 0.4,
+        "context_boost_doc": 0.08,
+        "context_boost_article": 0.02,
+        "status_penalty_revoked": 0.2,
+        "status_penalty_unverified": 0.05
+      },
+      "evaluated": 120,
+      "recall_at_5": 0.4083,
+      "recall_at_10": 0.4083,
+      "mean_reciprocal_rank": 0.3114,
+      "ndcg_at_10": 0.3102
+    },
+    {
+      "name": "lexical_heavy",
+      "weights": {
+        "fusion": 0.35,
+        "lexical": 0.35,
+        "semantic": 0.15,
+        "overlap": 0.15,
+        "topic_boost": 0.2,
+        "article_boost": 0.25,
+        "context_boost_doc": 0.08,
+        "context_boost_article": 0.02,
+        "status_penalty_revoked": 0.2,
+        "status_penalty_unverified": 0.05
+      },
+      "evaluated": 120,
+      "recall_at_5": 0.4083,
+      "recall_at_10": 0.4083,
+      "mean_reciprocal_rank": 0.31,
+      "ndcg_at_10": 0.3096
+    },
+    {
+      "name": "semantic_heavy",
+      "weights": {
+        "fusion": 0.35,
+        "lexical": 0.15,
+        "semantic": 0.35,
+        "overlap": 0.15,
+        "topic_boost": 0.2,
+        "article_boost": 0.25,
+        "context_boost_doc": 0.08,
+        "context_boost_article": 0.02,
+        "status_penalty_revoked": 0.2,
+        "status_penalty_unverified": 0.05
+      },
+      "evaluated": 120,
+      "recall_at_5": 0.4083,
+      "recall_at_10": 0.4083,
+      "mean_reciprocal_rank": 0.3042,
+      "ndcg_at_10": 0.3089
+    }
+  ],
+  "lambda_sweep": [
+    {
+      "diversity_lambda": 0.3,
+      "evaluated": 120,
+      "recall_at_k": 0.4083,
+      "mean_reciprocal_rank": 0.3114
+    },
+    {
+      "diversity_lambda": 0.5,
+      "evaluated": 120,
+      "recall_at_k": 0.4083,
+      "mean_reciprocal_rank": 0.3114
+    },
+    {
+      "diversity_lambda": 0.7,
+      "evaluated": 120,
+      "recall_at_k": 0.4083,
+      "mean_reciprocal_rank": 0.3114
+    },
+    {
+      "diversity_lambda": 0.9,
+      "evaluated": 120,
+      "recall_at_k": 0.4083,
+      "mean_reciprocal_rank": 0.3114
+    }
+  ],
+  "best_weight_config": "baseline",
+  "best_lambda": 0.3
+}

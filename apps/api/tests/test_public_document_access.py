@@ -46,6 +46,8 @@ def env(monkeypatch, tmp_path):
         len(data),
         sha256(data).hexdigest(),
         "verified",
+        "verified",
+        "verified",
     )
     access = SimpleNamespace(eligible_versions={"test": 1}, eligible_builds={"test-v1": "approved"})
     row = SimpleNamespace(

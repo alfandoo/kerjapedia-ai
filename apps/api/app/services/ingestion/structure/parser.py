@@ -8,7 +8,7 @@ from dataclasses import dataclass, field, replace
 
 from app.services.ingestion.domain import LegalSection, Page
 
-_BAB_RE = re.compile(r"^BAB\s*([IVXLCDM]+)(?:\s+(.+))?$", re.IGNORECASE)
+_BAB_RE = re.compile(r"^BAB\s*([IVXLCDM]+[A-Z]?)(?:\s+(.+))?$", re.IGNORECASE)
 _BAGIAN_RE = re.compile(
     r"^Bagian\s+(Kesatu|Ke(?:dua|tiga|empat|lima|enam|tujuh|delapan|"
     r"sembilan|sepuluh|sebelas|dua belas)|[0-9]+)(?:\s+(.+))?$",

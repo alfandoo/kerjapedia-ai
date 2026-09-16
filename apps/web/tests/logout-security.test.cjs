@@ -10,22 +10,39 @@ function harness(responses) {
   let cleared = false;
   const calls = [];
   const source = fs.readFileSync(path.join(__dirname, "../src/features/auth/api.ts"), "utf8");
-  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+  const code = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText;
   const exports = {};
   vm.runInNewContext(code, {
-    exports, Headers, Event: class {},
+    exports,
+    Headers,
+    Event: class {},
     require(name) {
       if (name.includes("api-client")) return { API_URL: "https://offline.invalid" };
-      if (name === "./session") return {
-        getStoredSession: () => session,
-        loadStoredSession: async () => {},
-        setStoredSession: (next) => { session = next; },
-        clearStoredSession: () => { cleared = true; session = null; },
-        SESSION_STORAGE_KEY: "session",
-      };
+      if (name === "./session")
+        return {
+          getStoredSession: () => session,
+          loadStoredSession: async () => {},
+          setStoredSession: (next) => {
+            session = next;
+          },
+          clearStoredSession: () => {
+            cleared = true;
+            session = null;
+          },
+          SESSION_STORAGE_KEY: "session",
+        };
       throw Error("Unexpected module " + name);
     },
-    window: { localStorage: { setItem: (_, value) => { session = JSON.parse(value); } }, dispatchEvent() {} },
+    window: {
+      localStorage: {
+        setItem: (_, value) => {
+          session = JSON.parse(value);
+        },
+      },
+      dispatchEvent() {},
+    },
     fetch: async (url, options) => {
       calls.push({ url, options });
       const response = responses.shift();

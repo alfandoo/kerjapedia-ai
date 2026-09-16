@@ -18,7 +18,12 @@ const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
       return route.continue();
     });
     await context.addInitScript(() => {
-      for (const name of ["localStorage", "sessionStorage"]) Object.defineProperty(window, name, { get() { throw new Error("Web Storage forbidden"); } });
+      for (const name of ["localStorage", "sessionStorage"])
+        Object.defineProperty(window, name, {
+          get() {
+            throw new Error("Web Storage forbidden");
+          },
+        });
     });
     const page = await context.newPage();
     const errors = [];

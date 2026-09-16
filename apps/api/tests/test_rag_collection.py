@@ -166,6 +166,16 @@ def test_unverified_topics_stay_out_of_retrieval_signals() -> None:
     assert retrieval_topics(verified) == ["pkwt"]
 
 
+def test_waktu_kerja_is_a_first_class_verified_topic() -> None:
+    suggested = suggest_topics("UU tentang Waktu Kerja, Lembur, dan Cuti Tahunan")
+
+    assert {assignment.topic for assignment in suggested} >= {"waktu_kerja"}
+
+    document = sample_document(topics=tuple(suggested))
+    verified = verify_topics(document, ["waktu_kerja"], reviewer="reviewer-1")
+    assert retrieval_topics(verified) == ["waktu_kerja"]
+
+
 def test_unknown_topic_is_refused() -> None:
     document = sample_document()
 

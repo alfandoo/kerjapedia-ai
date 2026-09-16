@@ -23,11 +23,27 @@ const citation = {
 };
 
 async function useAuthenticatedSession(page: Page) {
-  await page.route("**/api/backend/auth/session", route => route.fulfill({
-    status: 200, contentType: "application/json",
-    body: JSON.stringify({ user: { user_id: "user_e2e", email: "user@example.com", name: "Pengguna E2E", roles: ["user"] } }),
-  }));
-  await page.route("**/api/backend/auth/logout", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "ok" }) }));
+  await page.route("**/api/backend/auth/session", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user: {
+          user_id: "user_e2e",
+          email: "user@example.com",
+          name: "Pengguna E2E",
+          roles: ["user"],
+        },
+      }),
+    })
+  );
+  await page.route("**/api/backend/auth/logout", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "ok" }),
+    })
+  );
 }
 
 async function mockChat(
@@ -43,6 +59,17 @@ async function mockChat(
       ? refusalAnswer
       : "Pekerja PKWT berhak memperoleh uang kompensasi. Hak tersebut berlaku ketika hubungan kerja berakhir sesuai ketentuan yang berlaku. Besaran kompensasi dihitung berdasarkan masa kerja pekerja. Dasar dan rincian hukumnya dapat diperiksa melalui sumber resmi yang disertakan pada jawaban ini.",
     citations: refusal ? [] : [citation],
+    claims: refusal
+      ? []
+      : [
+          {
+            text: "Pekerja PKWT berhak memperoleh uang kompensasi.",
+            cited_chunk_ids: [citation.chunk_id],
+            supported: true,
+            support_score: 0.95,
+            support_detail: "exact",
+          },
+        ],
     confidence: refusal ? 0 : 0.95,
     related_documents: [],
     refusal_reason: refusalReason,
@@ -222,6 +249,33 @@ test("user receives a sourced answer", async ({ page }, testInfo) => {
     path: desktopScreenshot,
     contentType: "image/png",
   });
+});
+
+test("inline citation pill opens the focused source", async ({ page }) => {
+  const runtimeErrors = monitorRuntimeErrors(page);
+  await page.setViewportSize({ width: 1584, height: 960 });
+  await useAuthenticatedSession(page);
+  await mockChat(page);
+  await page.goto("/");
+  await expect(page).toHaveTitle("KerjaPedia AI");
+  await expect(
+    page.getByText(/Build Error|Runtime Error|Application error|Unhandled Runtime Error/i)
+  ).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Apa yang ingin Anda pahami?" })).toBeVisible();
+  await expect(page.locator(".authenticated-shell")).toBeVisible();
+  await page.getByLabel("Ketik pertanyaan Anda").fill("Apakah pekerja PKWT memperoleh kompensasi?");
+  await page.getByLabel("Ketik pertanyaan Anda").press("Enter");
+
+  await expect(
+    page.locator("main p", { hasText: "Pekerja PKWT berhak memperoleh uang kompensasi." })
+  ).toBeVisible();
+  const pill = page.getByRole("button", { name: "Buka sumber: PP 35/2021" });
+  await expect(pill).toBeVisible();
+  await pill.click();
+  const focusedCitation = page.locator("#citation-cit_001");
+  await expect(focusedCitation).toBeVisible();
+  await expect(focusedCitation.getByText(citation.quote)).toBeVisible();
+  expect(runtimeErrors).toEqual([]);
 });
 
 test("desktop sidebar collapses and persists", async ({ page }, testInfo) => {

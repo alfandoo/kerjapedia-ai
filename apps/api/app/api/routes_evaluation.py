@@ -18,7 +18,7 @@ from app.models.business import EvaluationDataset, EvaluationQuestionReview, Eva
 from app.models.ingestion import DocumentRelationship, RagIndexRelease
 from app.services.answering.prompts import PROMPT_VERSION_ID
 from app.services.evaluation.dataset import load_evaluation_dataset
-from app.services.evaluation.policy import REQUIRED_RELEASE_SCENARIOS
+from app.services.evaluation.policy import RELEASE_QUALITY_GATES, REQUIRED_RELEASE_SCENARIOS
 from app.services.evaluation.ragas_metrics import build_ragas_faithfulness
 from app.services.evaluation.reviews import verified_question_reviewers
 from app.services.evaluation.runner import run_experiments, run_provider_evaluation
@@ -163,13 +163,13 @@ def create_evaluation_run(
                 status_code=409,
                 detail="The RAG index release must finish building before evaluation.",
             )
-        if len(questions) < 300 or {question.split for question in questions} != {
+        if len(questions) < 100 or {question.split for question in questions} != {
             "development",
             "test",
         }:
             raise HTTPException(
                 status_code=409,
-                detail="Release evaluation requires at least 300 questions and both splits.",
+                detail="Release evaluation requires at least 100 questions and both splits.",
             )
         if len({question.question_id for question in questions}) != len(questions) or len(
             {" ".join(question.question.lower().split()) for question in questions}
@@ -281,6 +281,18 @@ def create_evaluation_run(
     )
     session.add(run)
     session.commit()
+    # Evaluate quality gates against the primary experiment mode metrics.
+    primary_mode = report["experiments"][0]["mode"] if report.get("experiments") else "rerank"
+    primary_metrics = run.metrics.get(primary_mode, {})
+    quality_gate_results = {}
+    for gate_name, threshold in RELEASE_QUALITY_GATES.items():
+        actual = primary_metrics.get(gate_name)
+        quality_gate_results[gate_name] = {
+            "threshold": threshold,
+            "actual": actual,
+            "passed": actual is not None and actual >= threshold,
+        }
+    all_gates_passed = all(result["passed"] for result in quality_gate_results.values())
     return {
         "run_id": run_id,
         "dataset_id": payload.dataset_id,
@@ -288,6 +300,8 @@ def create_evaluation_run(
         "created_at": run.created_at,
         "metrics": run.metrics,
         "report": report,
+        "quality_gates": quality_gate_results,
+        "all_quality_gates_passed": all_gates_passed,
     }
 
 

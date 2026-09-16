@@ -25,7 +25,11 @@ export async function searchDocuments(
   if (filters.year) params.set("year", String(filters.year));
   if (filters.legal_status) params.set("legal_status", filters.legal_status);
   const query = params.toString();
-  const response = await fetchWithAuthRetry(`${API_URL}/documents${query ? `?${query}` : ""}`, {}, signal);
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/documents${query ? `?${query}` : ""}`,
+    {},
+    signal
+  );
   const documents = await parseJsonResponse<DocumentSummary[]>(response);
   return documents.map((document) => ({
     ...document,

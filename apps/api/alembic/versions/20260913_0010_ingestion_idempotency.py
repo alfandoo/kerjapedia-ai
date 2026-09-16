@@ -24,6 +24,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    _consolidate_inert_duplicate_source_versions()
     _assert_no_duplicate_source_hashes()
     op.add_column("ingestion_builds", sa.Column("metadata_hash", sa.String(64)))
     _backfill_metadata_hashes()
@@ -154,6 +155,88 @@ def _assert_no_duplicate_source_hashes() -> None:
             "Cannot enforce canonical source identity while duplicate document "
             f"version hashes exist: {summary}. Resolve them explicitly; this "
             "migration will not delete legal records automatically."
+        )
+
+
+def _consolidate_inert_duplicate_source_versions() -> None:
+    """Preserve audits while removing only provably inert legacy duplicates."""
+    connection = op.get_bind()
+    duplicate_groups = connection.execute(
+        sa.text(
+            """
+            SELECT sha256
+            FROM document_versions
+            GROUP BY sha256
+            HAVING COUNT(*) > 1
+            ORDER BY sha256
+            """
+        )
+    ).scalars()
+
+    unresolved: list[str] = []
+    for sha256 in duplicate_groups:
+        rows = connection.execute(
+            sa.text(
+                """
+                SELECT version_id, document_id, is_current
+                FROM document_versions
+                WHERE sha256 = :sha256
+                ORDER BY is_current DESC, version_id
+                """
+            ),
+            {"sha256": sha256},
+        ).mappings().all()
+        canonical_rows = [row for row in rows if row["is_current"]]
+        if len(canonical_rows) != 1 or any(
+            row["document_id"] != canonical_rows[0]["document_id"] for row in rows
+        ):
+            unresolved.append(str(sha256))
+            continue
+
+        canonical_version_id = str(canonical_rows[0]["version_id"])
+        for duplicate in rows:
+            duplicate_version_id = str(duplicate["version_id"])
+            if duplicate_version_id == canonical_version_id:
+                continue
+            references = connection.execute(
+                sa.text(
+                    """
+                    SELECT
+                        (SELECT COUNT(*) FROM ingestion_builds WHERE version_id = :version_id)
+                        + (SELECT COUNT(*) FROM chunks WHERE version_id = :version_id)
+                        + (SELECT COUNT(*) FROM ingestion_jobs WHERE version_id = :version_id)
+                    AS reference_count
+                    """
+                ),
+                {"version_id": duplicate_version_id},
+            ).scalar_one()
+            if references:
+                unresolved.append(str(sha256))
+                break
+            connection.execute(
+                sa.text(
+                    """
+                    UPDATE document_verification_audits
+                    SET version_id = :canonical_version_id
+                    WHERE version_id = :duplicate_version_id
+                    """
+                ),
+                {
+                    "canonical_version_id": canonical_version_id,
+                    "duplicate_version_id": duplicate_version_id,
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "DELETE FROM document_versions WHERE version_id = :version_id"
+                ),
+                {"version_id": duplicate_version_id},
+            )
+
+    if unresolved:
+        raise RuntimeError(
+            "Cannot enforce canonical source identity while non-inert duplicate "
+            "source versions exist: " + ", ".join(sorted(set(unresolved)))
         )
 
 

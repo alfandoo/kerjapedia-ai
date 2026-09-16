@@ -16,6 +16,16 @@ from app.services.providers import pinecone_store_from_settings
 router = APIRouter(tags=["system"])
 
 
+def _embedding_sparse_flavour() -> str:
+    try:
+        from app.services.ingestion.embeddings import bge_native_sparse_available
+    except ImportError:
+        return "unknown"
+    if settings.embedding_provider != "bge_m3":
+        return "not_applicable"
+    return "native" if bge_native_sparse_available() else "hash_fallback"
+
+
 @router.get("/health", response_model=HealthResponse)
 def health_check() -> HealthResponse:
     # Liveness must not depend on network services. Dependency probes belong to
@@ -117,6 +127,7 @@ def system_diagnostics(_: AdminUser, response: HeaderResponse) -> dict:
             "vector_store": settings.vector_store,
             "embedding_provider": settings.embedding_provider,
             "embedding_model": settings.embedding_model,
+            "embedding_sparse_flavour": _embedding_sparse_flavour(),
             "llm_provider": settings.llm_provider,
             "openrouter_model": (
                 settings.openrouter_model if settings.llm_provider == "openrouter" else None

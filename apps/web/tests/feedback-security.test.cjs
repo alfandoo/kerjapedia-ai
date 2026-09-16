@@ -9,14 +9,20 @@ function harness(session, ok = true) {
   const calls = [];
   const auth = {
     getStoredSession: () => session,
-    fetchWithAuthRetry: async (url, options) => { calls.push({ url, options }); return { ok }; },
+    fetchWithAuthRetry: async (url, options) => {
+      calls.push({ url, options });
+      return { ok };
+    },
   };
   let headers;
   function load(filename) {
     const exports = {};
     const source = fs.readFileSync(path.join(__dirname, "../src/features/chat/", filename), "utf8");
-    const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
-    vm.runInNewContext(code, { exports,
+    const code = ts.transpileModule(source, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS },
+    }).outputText;
+    vm.runInNewContext(code, {
+      exports,
       window: { localStorage: { getItem: () => "11111111-1111-4111-8111-111111111111" } },
       require(name) {
         if (name === "@/features/auth") return auth;
@@ -45,5 +51,8 @@ test("guest feedback leaves identity resolution to the BFF", async () => {
 });
 test("rejected feedback is reported to the caller", async () => {
   const h = harness(null, false);
-  await assert.rejects(h.api.submitFeedback({ question: "Question", rating: "helpful" }), /belum dapat disimpan/);
+  await assert.rejects(
+    h.api.submitFeedback({ question: "Question", rating: "helpful" }),
+    /belum dapat disimpan/
+  );
 });

@@ -1,6 +1,11 @@
 import { API_URL, parseJsonResponse } from "@/lib/api-client";
 import type { UserSession } from "./types";
-import { clearStoredSession, getStoredSession, setStoredSession, loadStoredSession } from "./session";
+import {
+  clearStoredSession,
+  getStoredSession,
+  setStoredSession,
+  loadStoredSession,
+} from "./session";
 
 let refreshInFlight: Promise<UserSession | null> | null = null;
 const csrfHeaders = { "Content-Type": "application/json", "X-KerjaPedia-CSRF": "1" };
@@ -8,7 +13,10 @@ async function authenticate(action: string, input: object): Promise<UserSession 
   // Finish initial cookie probing before a login can replace the session.
   await loadStoredSession();
   const response = await fetch(`${API_URL}/auth/${action}`, {
-    method: "POST", credentials: "same-origin", headers: csrfHeaders, body: JSON.stringify(input),
+    method: "POST",
+    credentials: "same-origin",
+    headers: csrfHeaders,
+    body: JSON.stringify(input),
   });
   if (response.status === 202) return null; // email confirmation required
   const session = await parseJsonResponse<UserSession>(response);
@@ -27,7 +35,11 @@ export async function getLoginMethods(email: string): Promise<{
 }> {
   const url = `${API_URL}/auth/login-methods?email=${encodeURIComponent(email.trim())}`;
   const response = await fetch(url, { credentials: "same-origin" });
-  return await parseJsonResponse<{ email_exists: boolean; has_password: boolean; providers: string[] }>(response);
+  return await parseJsonResponse<{
+    email_exists: boolean;
+    has_password: boolean;
+    providers: string[];
+  }>(response);
 }
 export async function register(
   name: string,
@@ -42,10 +54,7 @@ export async function googleLogin(idToken: string): Promise<UserSession> {
   if (!session) throw new Error("Autentikasi Google gagal.");
   return session;
 }
-export async function verifyEmailOtp(
-  email: string,
-  token: string
-): Promise<UserSession> {
+export async function verifyEmailOtp(email: string, token: string): Promise<UserSession> {
   const session = await authenticate("verify-email-otp", { email, token });
   if (!session) throw new Error("Kode verifikasi salah.");
   return session;
@@ -53,30 +62,43 @@ export async function verifyEmailOtp(
 export async function resendEmailOtp(email: string): Promise<void> {
   await loadStoredSession();
   const response = await fetch(`${API_URL}/auth/resend-otp`, {
-    method: "POST", credentials: "same-origin", headers: csrfHeaders, body: JSON.stringify({ email }),
+    method: "POST",
+    credentials: "same-origin",
+    headers: csrfHeaders,
+    body: JSON.stringify({ email }),
   });
   if (!response.ok) throw new Error("Kode verifikasi belum dapat dikirim ulang.");
 }
 async function performSessionRefresh(): Promise<UserSession | null> {
   const response = await fetch(`${API_URL}/auth/refresh`, {
-    method: "POST", credentials: "same-origin", headers: csrfHeaders,
+    method: "POST",
+    credentials: "same-origin",
+    headers: csrfHeaders,
   });
   if (!response.ok) {
     if ([400, 401, 403].includes(response.status)) clearStoredSession();
     return null;
   }
-  const session = await response.json() as UserSession;
+  const session = (await response.json()) as UserSession;
   setStoredSession(session);
   return session;
 }
 function refreshStoredSession(): Promise<UserSession | null> {
-  if (!refreshInFlight) refreshInFlight = performSessionRefresh().finally(() => { refreshInFlight = null; });
+  if (!refreshInFlight)
+    refreshInFlight = performSessionRefresh().finally(() => {
+      refreshInFlight = null;
+    });
   return refreshInFlight;
 }
-export async function fetchWithAuthRetry(url: string, options: RequestInit, signal?: AbortSignal): Promise<Response> {
+export async function fetchWithAuthRetry(
+  url: string,
+  options: RequestInit,
+  signal?: AbortSignal
+): Promise<Response> {
   const headers = new Headers(options.headers);
   headers.delete("Authorization");
-  if (!["GET", "HEAD"].includes((options.method ?? "GET").toUpperCase())) headers.set("X-KerjaPedia-CSRF", "1");
+  if (!["GET", "HEAD"].includes((options.method ?? "GET").toUpperCase()))
+    headers.set("X-KerjaPedia-CSRF", "1");
   const init = { ...options, headers, signal, credentials: "same-origin" as const };
   const response = await fetch(url, init);
   if (response.status !== 401) return response;
@@ -100,7 +122,9 @@ export async function updateProfile(name: string): Promise<void> {
   const owner = getStoredSession()?.user.user_id;
   if (!owner) throw new Error("No active session");
   const response = await fetchWithAuthRetry(`${API_URL}/auth/profile`, {
-    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
   });
   const next = await parseJsonResponse<UserSession>(response);
   if (getStoredSession()?.user.user_id !== owner) throw new Error("Session changed");

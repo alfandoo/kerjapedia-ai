@@ -43,6 +43,26 @@ if Histogram is not None:
         "Retrieved source versions and legal status.",
         ["document_version", "legal_status", "index_release"],
     )
+    RAGAS_FAITHFULNESS = Histogram(
+        "kerjapedia_ragas_faithfulness_score",
+        "RAGAS faithfulness score from online evaluation.",
+        buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+    )
+    RAGAS_EVAL_TOTAL = Counter(
+        "kerjapedia_ragas_eval_total",
+        "RAGAS online evaluation attempts.",
+        ["status"],
+    )
+    RAG_USER_BEHAVIOR = Counter(
+        "kerjapedia_rag_user_behavior_total",
+        "User behavior signals per request.",
+        ["topic", "is_followup"],
+    )
+    RAG_REQUEST_LATENCY = Histogram(
+        "kerjapedia_rag_request_seconds",
+        "End-to-end request latency.",
+        buckets=[0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 15.0, 30.0],
+    )
 else:
     RAG_STAGE_LATENCY = None
     RAG_OUTCOMES = None
@@ -51,6 +71,33 @@ else:
     RAG_TOKEN_USAGE = None
     RAG_CLAIM_VERIFICATION = None
     RAG_RETRIEVED_VERSIONS = None
+    RAGAS_FAITHFULNESS = None
+    RAGAS_EVAL_TOTAL = None
+    RAG_USER_BEHAVIOR = None
+    RAG_REQUEST_LATENCY = None
+
+
+def record_ragas_faithfulness(score: float) -> None:
+    if RAGAS_FAITHFULNESS is not None:
+        RAGAS_FAITHFULNESS.observe(score)
+
+
+def record_ragas_eval(status: str) -> None:
+    if RAGAS_EVAL_TOTAL is not None:
+        RAGAS_EVAL_TOTAL.labels(status=status).inc()
+
+
+def record_user_behavior(topic: str, is_followup: bool) -> None:
+    if RAG_USER_BEHAVIOR is not None:
+        RAG_USER_BEHAVIOR.labels(
+            topic=topic or "unknown",
+            is_followup=str(is_followup).lower(),
+        ).inc()
+
+
+def observe_request_latency(elapsed_seconds: float) -> None:
+    if RAG_REQUEST_LATENCY is not None:
+        RAG_REQUEST_LATENCY.observe(elapsed_seconds)
 
 
 def observe_stage(stage: str, provider: str, elapsed_seconds: float) -> None:

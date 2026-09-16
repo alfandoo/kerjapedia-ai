@@ -9,11 +9,24 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 
-import { login, register, googleLogin, verifyEmailOtp, resendEmailOtp, getLoginMethods } from "@/features/auth";
+import {
+  login,
+  register,
+  googleLogin,
+  verifyEmailOtp,
+  resendEmailOtp,
+  getLoginMethods,
+} from "@/features/auth";
 import { useSettings } from "@/features/settings";
 import type { UserSession } from "@/features/auth/types";
 import type { TranslationKey } from "@/lib/translations";
-import { passwordStrength, passwordAcceptable, isValidEmail, type PasswordPolicyIssue, type PasswordStrength } from "../password-policy";
+import {
+  passwordStrength,
+  passwordAcceptable,
+  isValidEmail,
+  type PasswordPolicyIssue,
+  type PasswordStrength,
+} from "../password-policy";
 import { translateAuthError } from "../error-messages";
 
 type AuthModalProps = {
@@ -96,14 +109,14 @@ function PasswordMeter({
   translate: (key: TranslationKey) => string;
 }) {
   const levelLabel =
-    level === "strong" ? translate("auth.strong") : level === "fair" ? translate("auth.fair") : translate("auth.weak");
+    level === "strong"
+      ? translate("auth.strong")
+      : level === "fair"
+        ? translate("auth.fair")
+        : translate("auth.weak");
   const filled = level === "strong" ? 3 : level === "fair" ? 2 : 1;
   const barColor =
-    level === "strong"
-      ? "bg-forest"
-      : level === "fair"
-        ? "bg-[#d9a03c]"
-        : "bg-destructive";
+    level === "strong" ? "bg-forest" : level === "fair" ? "bg-[#d9a03c]" : "bg-destructive";
   return (
     <div className="mt-2.5">
       <div className="flex items-center gap-1.5">
@@ -115,15 +128,23 @@ function PasswordMeter({
             />
           ))}
         </div>
-        <span className={`w-[64px] text-right text-[11px] font-semibold ${level === "strong" ? "text-forest" : level === "fair" ? "text-[#b9892c]" : "text-destructive"}`}>
+        <span
+          className={`w-[64px] text-right text-[11px] font-semibold ${level === "strong" ? "text-forest" : level === "fair" ? "text-[#b9892c]" : "text-destructive"}`}
+        >
           {levelLabel}
         </span>
       </div>
       {issues.length > 0 ? (
         <ul className="mt-2 grid gap-1">
           {issues.map((issue) => (
-            <li key={issue} className="flex items-start gap-1.5 text-[11px] leading-snug text-muted-foreground">
-              <span className="mt-[5px] size-1 shrink-0 rounded-full bg-destructive" aria-hidden="true" />
+            <li
+              key={issue}
+              className="flex items-start gap-1.5 text-[11px] leading-snug text-muted-foreground"
+            >
+              <span
+                className="mt-[5px] size-1 shrink-0 rounded-full bg-destructive"
+                aria-hidden="true"
+              />
               {translate(PASSWORD_ISSUE_KEY[issue])}
             </li>
           ))}
@@ -286,7 +307,12 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
       setPassword("");
       setPasswordVisible(false);
     } catch (reason) {
-      setError(translateAuthError(translate, (reason as Error).message || translate("auth.errorRegisterFailed")));
+      setError(
+        translateAuthError(
+          translate,
+          (reason as Error).message || translate("auth.errorRegisterFailed")
+        )
+      );
     } finally {
       setSubmitting(false);
     }
@@ -316,7 +342,9 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
       setOtp("");
       setPasswordVisible(false);
     } catch (reason) {
-      setOtpError(translateAuthError(translate, (reason as Error).message || translate("auth.otpInvalid")));
+      setOtpError(
+        translateAuthError(translate, (reason as Error).message || translate("auth.otpInvalid"))
+      );
       setOtp("");
       window.setTimeout(() => otpRef.current?.focus(), 0);
     } finally {
@@ -351,7 +379,9 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
       setPassword("");
       setPasswordVisible(false);
     } catch (reason) {
-      setError(translateAuthError(translate, (reason as Error).message || translate("auth.errorGoogle")));
+      setError(
+        translateAuthError(translate, (reason as Error).message || translate("auth.errorGoogle"))
+      );
     } finally {
       setSubmitting(false);
       setGoogleLoading(false);
@@ -440,10 +470,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
 
   if (!open) return null;
 
-  const passwordCheck =
-    mode === "signup"
-      ? passwordStrength(password, { email })
-      : null;
+  const passwordCheck = mode === "signup" ? passwordStrength(password, { email }) : null;
   const passwordOk = mode === "signup" ? passwordAcceptable(password, { email }) : true;
 
   const emailValid = isValidEmail(email.trim());
@@ -542,22 +569,22 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                 {providers
                   .filter((provider) => provider.key !== "google")
                   .map((provider) => (
-                  <button
-                    key={provider.key}
-                    type="button"
-                    disabled
-                    aria-disabled="true"
-                    className="grid min-h-[54px] grid-cols-[28px_minmax(0,1fr)_78px] items-center rounded-full border border-[#e5e5e5] bg-[#f7f7f8] px-[14px] text-sm font-semibold text-[#676767] transition disabled:cursor-not-allowed max-[760px]:grid-cols-[26px_minmax(0,1fr)_70px] max-[760px]:px-2.5 max-[760px]:text-xs"
-                  >
-                    <span className="grid size-[22px] place-items-center text-[#111713]">
-                      {provider.icon}
-                    </span>
-                    <span className="justify-self-center">{provider.label}</span>
-                    <small className="text-[9px] font-bold uppercase tracking-[0.03em] text-[#758078] max-[760px]:text-[8px]">
-                      {translate("auth.comingSoon")}
-                    </small>
-                  </button>
-                ))}
+                    <button
+                      key={provider.key}
+                      type="button"
+                      disabled
+                      aria-disabled="true"
+                      className="grid min-h-[54px] grid-cols-[28px_minmax(0,1fr)_78px] items-center rounded-full border border-[#e5e5e5] bg-[#f7f7f8] px-[14px] text-sm font-semibold text-[#676767] transition disabled:cursor-not-allowed max-[760px]:grid-cols-[26px_minmax(0,1fr)_70px] max-[760px]:px-2.5 max-[760px]:text-xs"
+                    >
+                      <span className="grid size-[22px] place-items-center text-[#111713]">
+                        {provider.icon}
+                      </span>
+                      <span className="justify-self-center">{provider.label}</span>
+                      <small className="text-[9px] font-bold uppercase tracking-[0.03em] text-[#758078] max-[760px]:text-[8px]">
+                        {translate("auth.comingSoon")}
+                      </small>
+                    </button>
+                  ))}
               </div>
 
               <div
@@ -569,8 +596,12 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
             </>
           ) : null}
 
-          <form className="grid gap-3" onSubmit={step === "verify" ? handleVerifyOtp : handleSubmit} noValidate>
-{step === "verify" ? (
+          <form
+            className="grid gap-3"
+            onSubmit={step === "verify" ? handleVerifyOtp : handleSubmit}
+            noValidate
+          >
+            {step === "verify" ? (
               <>
                 <p className="text-sm font-medium leading-relaxed text-foreground">
                   {translate("auth.otpTitle").replace("{email}", email)}
@@ -578,7 +609,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                 <p id="auth-otp-hint" className="text-[11px] leading-[1.55] text-muted-foreground">
                   {translate("auth.otpHint")}
                 </p>
-<input
+                <input
                   ref={otpRef}
                   id="auth-modal-otp"
                   name="otp"
@@ -619,11 +650,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                     <span>{otpError}</span>
                   </div>
                 ) : null}
-                <button
-                  className={submitClass}
-                  type="submit"
-                  disabled={otpSubmitting || resending}
-                >
+                <button className={submitClass} type="submit" disabled={otpSubmitting || resending}>
                   {otpSubmitting ? translate("auth.otpVerifyLoading") : translate("auth.otpVerify")}
                 </button>
                 <div className="flex items-center justify-center gap-1.5 text-[12px] text-muted-foreground">
@@ -686,7 +713,10 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                   className={`${inputClass} ${emailTouched ? "border-destructive focus:border-destructive focus:ring-destructive/10" : ""}`}
                 />
                 {emailTouched ? (
-                  <p id="auth-email-error" className="mt-1 text-[11px] leading-[1.45] text-destructive">
+                  <p
+                    id="auth-email-error"
+                    className="mt-1 text-[11px] leading-[1.45] text-destructive"
+                  >
                     {translate("auth.emailInvalid")}
                   </p>
                 ) : null}
@@ -694,7 +724,9 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                 !loginMethods.has_password &&
                 loginMethods.providers.includes("google") ? (
                   <div className="rounded-xl border border-border bg-muted/40 px-3.5 py-3 text-[12px] leading-relaxed text-muted-foreground">
-                    <p className="font-medium text-foreground">{translate("auth.googleOnlyTitle")}</p>
+                    <p className="font-medium text-foreground">
+                      {translate("auth.googleOnlyTitle")}
+                    </p>
                     <p className="mt-1">{translate("auth.googleOnlyDescription")}</p>
                   </div>
                 ) : (
@@ -768,11 +800,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                     </p>
                   )
                 ) : null}
-                <button
-                  className={submitClass}
-                  type="submit"
-                  disabled={submitting || !passwordOk}
-                >
+                <button className={submitClass} type="submit" disabled={submitting || !passwordOk}>
                   {submitting ? (
                     <>
                       <svg
@@ -784,9 +812,11 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                       </svg>
                       {mode === "signup" ? translate("auth.creating") : translate("auth.checking")}
                     </>
-                  ) : mode === "signup"
-                    ? translate("auth.createAccount")
-                    : translate("auth.login")}
+                  ) : mode === "signup" ? (
+                    translate("auth.createAccount")
+                  ) : (
+                    translate("auth.login")
+                  )}
                 </button>
               </>
             )}

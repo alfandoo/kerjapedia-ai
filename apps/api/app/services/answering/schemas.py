@@ -39,6 +39,7 @@ class GroundedClaim:
     cited_chunk_ids: list[str]
     supported: bool
     support_score: float
+    support_detail: str = ""
 
 
 @dataclass(frozen=True)

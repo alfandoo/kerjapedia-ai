@@ -205,13 +205,10 @@ export function ProfileModal({ user, onClose, onReturnFocus }: Props) {
               >
                 {t("profile.deleteCancel")}
               </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={busy}
-                onClick={removeAccount}
-              >
-                {deleting ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : null}
+              <Button type="button" variant="destructive" disabled={busy} onClick={removeAccount}>
+                {deleting ? (
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                ) : null}
                 {deleting ? t("profile.deleting") : t("profile.deleteConfirm")}
               </Button>
             </div>

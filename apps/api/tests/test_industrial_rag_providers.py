@@ -15,6 +15,7 @@ from app.main import app
 from app.services.answering.openrouter_generator import (
     OpenRouterAnswerGenerator,
     _clean_answer_text,
+    _is_transient_provider_error,
 )
 from app.services.answering.schemas import HistoryTurn
 from app.services.ingestion.embeddings import BGEM3EmbeddingProvider
@@ -52,6 +53,8 @@ def sample_document() -> DocumentMetadata:
         size_bytes=100,
         sha256="a" * 64,
         verification_status="verified",
+        source_verification_status="verified",
+        legal_review_status="verified",
     )
 
 
@@ -130,6 +133,66 @@ def test_bge_m3_hybrid_fails_closed_without_native_sparse_in_production(
 
     with pytest.raises(RuntimeError, match="FlagEmbedding is required"):
         provider.embed_hybrid(["kapan THR dibayar"])
+
+
+def test_bge_m3_routes_queries_through_query_instruction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.ingestion.embeddings import BGE_M3_QUERY_INSTRUCTION
+
+    calls: list[tuple[str, list[str]]] = []
+    captured_kwargs: dict = {}
+
+    class FakeNativeModel:
+        def __init__(self, *args, **kwargs) -> None:
+            captured_kwargs.update(kwargs)
+
+        def encode_queries(self, texts, **kwargs):
+            calls.append(("queries", list(texts)))
+            return {"dense_vecs": [[1.0] + [0.0] * 1023], "lexical_weights": [{1: 0.5}]}
+
+        def encode_corpus(self, texts, **kwargs):
+            calls.append(("corpus", list(texts)))
+            return {
+                "dense_vecs": [[0.0, 1.0] + [0.0] * 1022],
+                "lexical_weights": [{2: 0.5}],
+            }
+
+    fake_module = types.ModuleType("FlagEmbedding")
+    fake_module.BGEM3FlagModel = FakeNativeModel
+    monkeypatch.setitem(sys.modules, "FlagEmbedding", fake_module)
+    provider = BGEM3EmbeddingProvider()
+
+    query_batch = provider.embed_queries_hybrid(["kapan THR dibayar"])
+    passage_batch = provider.embed_hybrid(["kapan THR dibayar"])
+
+    assert (
+        captured_kwargs["query_instruction_for_retrieval"] == BGE_M3_QUERY_INSTRUCTION
+    )
+    assert [kind for kind, _ in calls] == ["queries", "corpus"]
+    assert query_batch.dense != passage_batch.dense
+    assert query_batch.sparse[0] == {1: 0.5}
+    assert passage_batch.sparse[0] == {2: 0.5}
+
+
+def test_embed_queries_hybrid_falls_back_without_native_method() -> None:
+    from app.services.ingestion.embeddings import embed_hybrid, embed_queries_hybrid
+
+    provider = StaticEmbeddingProvider()
+
+    assert embed_queries_hybrid(provider, ["kapan THR dibayar"]) == embed_hybrid(
+        provider, ["kapan THR dibayar"]
+    )
+
+
+def test_bge_native_sparse_available_reflects_installation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.ingestion.embeddings import bge_native_sparse_available
+
+    assert isinstance(bge_native_sparse_available(), bool)
+    monkeypatch.setattr("importlib.util.find_spec", lambda name: None)
+    assert bge_native_sparse_available() is False
 
 
 def test_pinecone_upsert_builds_flat_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -216,6 +279,148 @@ def test_pinecone_search_returns_ranked_retrieval_response() -> None:
     # Single-candidate semantic scores min-max normalize to 1.0 so the
     # reranker sees a query-independent scale.
     assert response.results[0].semantic_score == 1.0
+
+
+class _HashFallbackProvider(StaticEmbeddingProvider):
+    sparse_fallback_used = True
+
+
+def _accepting_index():
+    class AcceptingIndex:
+        def query(self, **kwargs):
+            assert kwargs["sparse_vector"]["indices"]
+            return SimpleNamespace(
+                matches=[
+                    SimpleNamespace(
+                        id="chunk-1",
+                        score=0.91,
+                        metadata={
+                            "chunk_id": "chunk-1",
+                            "document_id": "PP-35-2021",
+                            "text": "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
+                            "article": "Pasal 15",
+                            "paragraph": "Ayat (1)",
+                            "page_start": 12,
+                            "page_end": 12,
+                            "token_count": 8,
+                            "topics": ["pkwt"],
+                            "legal_status": "active",
+                            "source_url": "https://peraturan.bpk.go.id/",
+                            "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
+                            "short_title": "PP 35/2021",
+                            "regulation_type": "PP",
+                            "year": 2021,
+                        },
+                    )
+                ]
+            )
+
+    return AcceptingIndex()
+
+
+def test_pinecone_search_rejects_hash_sparse_on_hybrid_index_when_fail_closed() -> None:
+    store = PineconeRetrievalStore(
+        PineconeConfig(api_key="test-key"),
+        _HashFallbackProvider(),
+        fail_closed=True,
+    )
+    store._index = _accepting_index()
+
+    with pytest.raises(RuntimeError, match="native BGE-M3 sparse"):
+        store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
+
+
+def test_pinecone_search_warns_on_hash_sparse_when_fail_open() -> None:
+    store = PineconeRetrievalStore(
+        PineconeConfig(api_key="test-key"),
+        _HashFallbackProvider(),
+    )
+    store._index = _accepting_index()
+
+    response = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
+
+    assert not response.should_refuse
+    assert "native_sparse_embedding_unavailable" in response.warnings
+
+
+def test_update_document_metadata_preserves_vectors() -> None:
+    updated: list[dict] = []
+
+    class MetadataIndex:
+        def query(self, **kwargs):
+            assert kwargs["filter"] == {"document_id": {"$eq": "PP-35-2021"}}
+            assert kwargs["top_k"] == 10000
+            return SimpleNamespace(
+                matches=[SimpleNamespace(id="chunk-1"), SimpleNamespace(id="chunk-2")]
+            )
+
+        def update(self, **kwargs):
+            updated.append(kwargs)
+
+    store = PineconeRetrievalStore(
+        PineconeConfig(api_key="test-key"),
+        StaticEmbeddingProvider(),
+    )
+    store._index = MetadataIndex()
+
+    count = store.update_document_metadata(
+        "PP-35-2021", {"source_verification_status": "verified"}
+    )
+
+    assert count == 2
+    assert updated == [
+        {
+            "id": "chunk-1",
+            "set_metadata": {"source_verification_status": "verified"},
+            "namespace": "production",
+        },
+        {
+            "id": "chunk-2",
+            "set_metadata": {"source_verification_status": "verified"},
+            "namespace": "production",
+        },
+    ]
+
+
+def test_update_document_metadata_rejects_nested_values() -> None:
+    store = PineconeRetrievalStore(
+        PineconeConfig(api_key="test-key"),
+        StaticEmbeddingProvider(),
+    )
+
+    with pytest.raises(ValueError, match="must stay flat"):
+        store.update_document_metadata("PP-35-2021", {"nested": {"a": 1}})
+
+
+def test_sparse_rejection_is_cached_per_namespace() -> None:
+    calls: list[dict] = []
+
+    class RejectingIndex:
+        def query(self, **kwargs):
+            calls.append(kwargs)
+            if "sparse_vector" in kwargs:
+                raise RuntimeError(
+                    "[400] Index configuration does not support sparse values."
+                )
+            return SimpleNamespace(matches=[])
+
+    store = PineconeRetrievalStore(
+        PineconeConfig(api_key="test-key"),
+        StaticEmbeddingProvider(),
+        fail_closed=False,
+    )
+    store._index = RejectingIndex()
+
+    first = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
+    second = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
+
+    assert first.should_refuse and second.should_refuse
+    assert "pinecone_index_requires_dotproduct" in first.warnings
+    assert "pinecone_index_requires_dotproduct" in second.warnings
+    # First search: 1 failed sparse attempt + dense retries per rewrite;
+    # second search skips sparse entirely (3 rewrites -> 3 dense calls).
+    assert len(calls) == 4 + 3
+    assert "sparse_vector" not in calls[-1]
 
 
 def test_pinecone_search_fuses_candidates_across_rewritten_queries() -> None:
@@ -688,6 +893,161 @@ def test_openrouter_generator_retries_structured_output_bad_request_once() -> No
     assert client.calls == 2
 
 
+def _transient_error(name: str, status_code: int) -> Exception:
+    error_type = type(name, (Exception,), {"status_code": status_code})
+    return error_type(f"upstream HTTP {status_code}")
+
+
+def _valid_pkwt_payload() -> dict:
+    return {
+        "answer": "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15.",
+        "cited_chunk_ids": ["chunk-1"],
+        "claims": [
+            {
+                "text": "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15.",
+                "cited_chunk_ids": ["chunk-1"],
+            }
+        ],
+    }
+
+
+def test_is_transient_provider_error_classifies_status_codes() -> None:
+    assert _is_transient_provider_error(_transient_error("RateLimitError", 429)) is True
+    assert _is_transient_provider_error(_transient_error("UpstreamError", 502)) is True
+    assert _is_transient_provider_error(_transient_error("OverloadedError", 503)) is True
+    assert _is_transient_provider_error(_transient_error("TimeoutError", 408)) is True
+    assert _is_transient_provider_error(_transient_error("BadRequestError", 400)) is False
+    assert _is_transient_provider_error(RuntimeError("boom")) is False
+
+
+def test_openrouter_generator_retries_transient_rate_limit() -> None:
+    client = FakeOpenRouterClient(
+        [
+            _transient_error("RateLimitError", 429),
+            _valid_pkwt_payload(),
+        ]
+    )
+    generator = OpenRouterAnswerGenerator(
+        api_key="test-key",
+        transient_backoff_seconds=0,
+    )
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "answered"
+    assert client.calls == 2
+    assert answer.debug["transient_retries"] == 1
+    assert answer.debug["generation_attempts"] == 2
+
+
+def test_openrouter_generator_backs_off_between_transient_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleeps: list[float] = []
+    monkeypatch.setattr("time.sleep", sleeps.append)
+    client = FakeOpenRouterClient(
+        [
+            _transient_error("RateLimitError", 429),
+            _transient_error("UpstreamError", 502),
+            _valid_pkwt_payload(),
+        ]
+    )
+    generator = OpenRouterAnswerGenerator(
+        api_key="test-key",
+        transient_backoff_seconds=2.0,
+    )
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "answered"
+    assert client.calls == 3
+    assert sleeps == [2.0, 4.0]
+    assert answer.debug["transient_retries"] == 2
+
+
+def test_openrouter_generator_gives_up_after_transient_budget() -> None:
+    client = FakeOpenRouterClient(
+        [
+            _transient_error("RateLimitError", 429),
+            _transient_error("UpstreamError", 502),
+            _transient_error("OverloadedError", 503),
+        ]
+    )
+    generator = OpenRouterAnswerGenerator(
+        api_key="test-key",
+        fail_closed=True,
+        transient_max_retries=2,
+        transient_backoff_seconds=0,
+    )
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "temporarily_unavailable"
+    assert answer.debug["failure_category"] == "provider_failure"
+    assert answer.debug["transient_retries"] == 2
+    assert client.calls == 3
+
+
+def test_openrouter_generator_does_not_retry_permanent_errors() -> None:
+    client = FakeOpenRouterClient(RuntimeError("provider unavailable"))
+    generator = OpenRouterAnswerGenerator(
+        api_key="test-key",
+        fail_closed=True,
+        transient_backoff_seconds=0,
+    )
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "temporarily_unavailable"
+    assert client.calls == 1
+    assert answer.debug["transient_retries"] == 0
+
+
+def test_openrouter_generator_sends_configured_fallback_models() -> None:
+    fallbacks = ("google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free")
+    client = FakeOpenRouterClient(_valid_pkwt_payload())
+    generator = OpenRouterAnswerGenerator(api_key="test-key", fallback_models=fallbacks)
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "answered"
+    assert client.requests[0]["extra_body"] == {"models": list(fallbacks)}
+
+
+def test_openrouter_generator_omits_fallback_models_when_unconfigured() -> None:
+    client = FakeOpenRouterClient(_valid_pkwt_payload())
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "answered"
+    assert "extra_body" not in client.requests[0]
+
+
 def test_openrouter_generator_keeps_verified_primary_claim_when_repair_fails() -> None:
     bad_request_error = type("BadRequestError", (Exception,), {})
     main_claim = "Pekerja PKWT berhak memperoleh uang kompensasi berdasarkan Pasal 15."
@@ -746,6 +1106,195 @@ def test_openrouter_generator_fails_closed_without_exposing_raw_chunks() -> None
     assert client.calls == 2
 
 
+def test_openrouter_generator_salvages_answer_with_missing_claims() -> None:
+    payload = {
+        "answer": "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15.",
+        "cited_chunk_ids": ["chunk-1"],
+        "claims": [],
+    }
+    client = FakeOpenRouterClient([payload, payload])
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "answered"
+    assert "answer_repaired_by_sentence_salvage" in answer.warnings
+    assert "Maaf, jawaban terverifikasi" not in answer.answer
+    assert "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15." in answer.answer
+    assert answer.claims and all(claim.supported for claim in answer.claims)
+    assert answer.debug["repair"] == "sentence_salvage"
+
+
+def test_openrouter_generator_salvages_prose_without_json() -> None:
+    prose = (
+        "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15. "
+        "Langit berwarna hijau."
+    )
+    client = FakeOpenRouterClient([prose, prose])
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "answered"
+    assert "answer_repaired_by_sentence_salvage" in answer.warnings
+    assert "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15." in answer.answer
+    assert "Langit berwarna hijau" not in answer.answer
+
+
+def test_openrouter_generator_salvage_declines_unsupported_lead() -> None:
+    prose = (
+        "Langit berwarna hijau. "
+        "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15."
+    )
+    client = FakeOpenRouterClient([prose, prose])
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "answered"
+    assert answer.debug.get("fallback") == "extractive"
+    assert "answer_repaired_by_sentence_salvage" not in answer.warnings
+
+
+def test_openrouter_generator_salvage_applies_under_fail_closed() -> None:
+    payload = {
+        "answer": "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15.",
+        "cited_chunk_ids": ["chunk-1"],
+        "claims": [],
+    }
+    client = FakeOpenRouterClient([payload, payload])
+    generator = OpenRouterAnswerGenerator(api_key="test-key", fail_closed=True)
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "answered"
+    assert "answer_repaired_by_sentence_salvage" in answer.warnings
+
+
+def _empty_retrieval(question: str):
+    from app.services.retrieval.query import understand_query
+    from app.services.retrieval.schemas import RetrievalResponse
+
+    return RetrievalResponse(
+        query=understand_query(question),
+        results=[],
+        warnings=[],
+        should_refuse=False,
+        refusal_reason=None,
+    )
+
+
+def test_openrouter_generator_requests_clarification_for_vague_question() -> None:
+    # Longer than three tokens, no topic, no recognized intent: exercises the
+    # branch that used to be dead because ["general_question"] is truthy.
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+
+    answer = generator.generate(
+        "Tolong sampaikan aturan mainnya buat saya.",
+        _empty_retrieval("Tolong sampaikan aturan mainnya buat saya."),
+    )
+
+    assert answer.answer_status == "clarification"
+    assert answer.clarification_question
+
+
+def test_openrouter_generator_skips_clarification_for_topical_question() -> None:
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+
+    assert (
+        generator._needs_clarification(
+            "Apakah pekerja PKWT memperoleh kompensasi?",
+            _empty_retrieval("Apakah pekerja PKWT memperoleh kompensasi?"),
+        )
+        is False
+    )
+
+
+def test_openrouter_generator_falls_back_to_extractive_answer() -> None:
+    client = FakeOpenRouterClient(["not-json", "still-not-json"])
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "answered"
+    assert "Maaf, jawaban terverifikasi" not in answer.answer
+    assert "answer_degraded_extractive" in answer.warnings
+    assert [citation.chunk_id for citation in answer.citations] == ["chunk-1"]
+    assert answer.claims
+    assert all(claim.supported for claim in answer.claims)
+    assert all(claim.support_detail == "extractive_verbatim" for claim in answer.claims)
+    assert "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi." in answer.answer
+    assert "- **PP 35/2021, Pasal 15** — " in answer.answer
+    assert answer.debug["fallback"] == "extractive"
+    assert answer.debug["failure_category"] == "validation_failure"
+
+
+def test_openrouter_generator_extractive_fallback_on_provider_failure() -> None:
+    client = FakeOpenRouterClient(RuntimeError("provider unavailable"))
+    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "answered"
+    assert "answer_degraded_extractive" in answer.warnings
+    assert [citation.chunk_id for citation in answer.citations] == ["chunk-1"]
+    assert answer.debug["failure_category"] == "provider_failure"
+
+
+def test_openrouter_generator_extractive_respects_fail_closed() -> None:
+    client = FakeOpenRouterClient(RuntimeError("provider unavailable"))
+    generator = OpenRouterAnswerGenerator(api_key="test-key", fail_closed=True)
+    generator._client = client
+
+    answer = generator.generate(
+        "Apakah pekerja PKWT memperoleh kompensasi?",
+        retrieval_response(),
+    )
+
+    assert answer.answer_status == "temporarily_unavailable"
+    assert "answer_degraded_extractive" not in answer.warnings
+
+
+def test_first_sentences_bounds_extractive_excerpts() -> None:
+    from app.services.answering.openrouter_generator import _first_sentences
+
+    quote = (
+        "Kalimat pertama yang didukung. Kalimat kedua yang didukung. "
+        "Kalimat ketiga yang seharusnya terpotong."
+    )
+    excerpt = _first_sentences(quote)
+    assert "Kalimat pertama" in excerpt
+    assert "Kalimat kedua" in excerpt
+    assert "Kalimat ketiga" not in excerpt
+
+    long_quote = "Kata " * 500
+    assert len(_first_sentences(long_quote)) <= 601
+
+
 @pytest.mark.parametrize(
     ("query", "expected"),
     [
@@ -754,7 +1303,7 @@ def test_openrouter_generator_fails_closed_without_exposing_raw_chunks() -> None
     ],
 )
 def test_openrouter_provider_failure_is_localized(query: str, expected: str) -> None:
-    generator = OpenRouterAnswerGenerator(api_key="test-key")
+    generator = OpenRouterAnswerGenerator(api_key="test-key", fail_closed=True)
     generator._client = FakeOpenRouterClient(RuntimeError("provider unavailable"))
 
     answer = generator.generate(query, retrieval_response())
