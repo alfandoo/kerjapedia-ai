@@ -87,7 +87,7 @@ services:
       - key: APP_URL
         sync: false
       - key: CORS_ORIGINS
-        value: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,https://kerjapedia-ai.vercel.app"
+        value: "https://kerjapedia-ai.vercel.app"
 
       # SMTP
       - key: SMTP_HOST
