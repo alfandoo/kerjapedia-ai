@@ -8,6 +8,7 @@ from app.services.answering.generator import AnswerGenerator
 from app.services.answering.openrouter_generator import OpenRouterAnswerGenerator
 from app.services.ingestion.embeddings import EmbeddingProvider, build_embedding_provider
 from app.services.retrieval.pinecone_store import PineconeConfig, PineconeRetrievalStore
+from app.services.retrieval.upstash_vector_store import UpstashVectorConfig, UpstashVectorStore
 from app.services.retrieval.relationships import RelationshipIndex
 
 _provider_lock = Lock()
@@ -143,6 +144,75 @@ def pinecone_store_from_settings(
             if cached is not None:
                 return cached
             _pinecone_cache[key] = store
+    return store
+
+
+_upstash_cache: dict[tuple, UpstashVectorStore] = {}
+
+
+def upstash_vector_store_from_settings(
+    settings: Settings,
+    *,
+    relationship_index: RelationshipIndex | None = None,
+    allow_unpublished: bool | None = None,
+) -> UpstashVectorStore:
+    if not settings.upstash_vector_url or not settings.upstash_vector_token:
+        raise RuntimeError("UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN are required.")
+    if not settings.openai_api_key:
+        raise RuntimeError("OPENAI_API_KEY is required for text-embedding-3-small.")
+
+    key = (
+        settings.upstash_vector_url,
+        settings.upstash_vector_dimension,
+        settings.upstash_vector_namespace,
+        settings.reranker_provider,
+        settings.reranker_model,
+        settings.retrieval_diversity_lambda,
+        allow_unpublished if allow_unpublished is not None else settings.rag_allow_unpublished,
+        tuple(
+            sorted(
+                (k, tuple(v))
+                for k, v in (
+                    relationship_index.superseded_by if relationship_index else {}
+                ).items()
+            )
+        ),
+    )
+    with _provider_lock:
+        cached = _upstash_cache.get(key)
+        if cached is not None:
+            return cached
+
+    store = UpstashVectorStore(
+        config=UpstashVectorConfig(
+            url=settings.upstash_vector_url,
+            token=settings.upstash_vector_token,
+            dimension=settings.upstash_vector_dimension,
+            namespace=settings.upstash_vector_namespace,
+        ),
+        openai_api_key=settings.openai_api_key,
+        reranker_provider=settings.reranker_provider,
+        reranker_model=settings.reranker_model,
+        fail_closed=settings.rag_fail_closed,
+        diversity_lambda=settings.retrieval_diversity_lambda,
+        hybrid_alpha=settings.retrieval_hybrid_alpha or 0.7,
+        allow_unpublished=(
+            allow_unpublished if allow_unpublished is not None else settings.rag_allow_unpublished
+        ),
+        relationship_index=relationship_index,
+        semantic_limit=settings.retrieval_semantic_limit,
+        cross_encoder_top_n=settings.retrieval_cross_encoder_top_n,
+        cross_encoder_blend_weight=settings.retrieval_cross_encoder_blend_weight,
+        mmr_max_per_document=settings.retrieval_mmr_max_per_document,
+        mmr_max_per_article=settings.retrieval_mmr_max_per_article,
+        expansion_max=settings.retrieval_expansion_max,
+        expansion_score_decay=settings.retrieval_expansion_score_decay,
+    )
+    with _provider_lock:
+        cached = _upstash_cache.get(key)
+        if cached is not None:
+            return cached
+        _upstash_cache[key] = store
     return store
 
 

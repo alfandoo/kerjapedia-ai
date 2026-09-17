@@ -43,7 +43,7 @@ services:
 
       # Vector Store
       - key: VECTOR_STORE
-        value: pinecone
+        value: upstash_vector
       - key: TOP_K
         value: "5"
       - key: PINECONE_API_KEY
@@ -56,6 +56,16 @@ services:
         value: aws
       - key: PINECONE_REGION
         value: us-east-1
+
+      # Upstash Vector
+      - key: UPSTASH_VECTOR_URL
+        value: "https://inviting-escargot-16130-us1-vector.upstash.io"
+      - key: UPSTASH_VECTOR_TOKEN
+        value: "ABsFMGludml0aW5nLWVzY2FyZ290LTE2MTMwLXVzMWFkbWluWW1SaU1tVmxNMlF0WVdZM015MDBOVEUyTFdFNU5UQXRNRGt4Wmpjd01USTVaVFV4"
+      - key: UPSTASH_VECTOR_DIMENSION
+        value: "1536"
+      - key: UPSTASH_VECTOR_NAMESPACE
+        value: production
 
       # Embedding
       - key: EMBEDDING_PROVIDER

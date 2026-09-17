@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     pinecone_upsert_batch_size: int = 100
     pinecone_write_timeout_seconds: float = 60.0
     pinecone_write_max_retries: int = 3
+    upstash_vector_url: str = ""
+    upstash_vector_token: str = ""
+    upstash_vector_dimension: int = 1536
+    upstash_vector_namespace: str = "production"
     ingestion_target_tokens: int = 350
     ingestion_max_tokens: int = 550
     ingestion_overlap_tokens: int = 60
@@ -155,25 +159,33 @@ class Settings(BaseSettings):
             )
         if self.llm_provider == "openrouter" and not self.openrouter_api_key:
             raise ValueError("OPENROUTER_API_KEY is required for the OpenRouter LLM provider.")
-        if self.vector_store != "pinecone":
-            raise ValueError("VECTOR_STORE must be pinecone in production.")
-        if self.pinecone_index_name != "kerjapedia":
+        if self.vector_store not in ("pinecone", "upstash_vector"):
+            raise ValueError("VECTOR_STORE must be pinecone or upstash_vector in production.")
+        if self.vector_store == "pinecone" and self.pinecone_index_name != "kerjapedia":
             raise ValueError(
                 "Production requires PINECONE_INDEX_NAME=kerjapedia."
             )
-        if (
+        if self.vector_store == "upstash_vector":
+            if not self.upstash_vector_url or not self.upstash_vector_token:
+                raise ValueError("UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN are required.")
+        if self.vector_store == "pinecone" and (
             self.embedding_provider not in ("bge_m3", "pinecone_inference")
             or self.embedding_model.lower() not in ("baai/bge-m3", "multilingual-e5-large")
         ):
             raise ValueError(
                 "Production requires EMBEDDING_PROVIDER=bge_m3 or pinecone_inference."
             )
-        if self.embedding_dimension != 1024:
+        if self.vector_store == "pinecone" and self.embedding_dimension != 1024:
             raise ValueError(
                 "Production BGE-M3 embeddings require EMBEDDING_DIMENSION=1024."
             )
+        if self.vector_store == "upstash_vector" and self.embedding_dimension != 1536:
+            raise ValueError(
+                "Production text-embedding-3-small requires EMBEDDING_DIMENSION=1536."
+            )
         if (
             self.embedding_provider != "pinecone_inference"
+            and self.vector_store == "pinecone"
             and self.embedding_model_revision in {"", "main", "unversioned"}
         ):
             raise ValueError("Production requires a pinned EMBEDDING_MODEL_REVISION.")

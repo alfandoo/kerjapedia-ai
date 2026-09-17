@@ -529,3 +529,92 @@ def _job_payload(
         "quality_report": build.quality_report if build else {},
         "review_status": build.review_status if build else "pending",
     }
+
+
+# ---------------------------------------------------------------------------
+# Re-embed endpoint: migrate chunks to Upstash Vector
+# ---------------------------------------------------------------------------
+
+@router.post("/reembed")
+def reembed_to_upstash(
+    _: AdminUser,
+    session: DbSession,
+) -> dict:
+    """Read all chunks from PostgreSQL and upsert to Upstash Vector.
+
+    Dense: text-embedding-3-small (1536d) via OpenAI
+    Sparse: BM25 lexical scoring
+    """
+    if not settings.upstash_vector_url or not settings.upstash_vector_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN must be set.",
+        )
+    if not settings.openai_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OPENAI_API_KEY is required for text-embedding-3-small embeddings.",
+        )
+
+    from app.models.ingestion import DocumentChunk
+    from app.services.retrieval.upstash_vector_store import UpstashVectorConfig, UpstashVectorStore
+
+    chunks = session.query(DocumentChunk).all()
+    if not chunks:
+        return {"status": "no_chunks", "upserted": 0}
+
+    upsert_chunks = []
+    for chunk in chunks:
+        doc = session.query(Document).filter_by(document_id=chunk.document_id).first()
+        topics = []
+        legal_status = "active"
+        source_url = ""
+        if doc:
+            doc_meta = doc.payload or {}
+            topics = doc_meta.get("topics", [])
+            legal_status = doc_meta.get("legal_status", "active")
+            source_url = doc_meta.get("source_url", "")
+
+        upsert_chunks.append({
+            "chunk_id": chunk.chunk_id,
+            "text": chunk.retrieval_text or chunk.text,
+            "metadata": {
+                "chunk_id": chunk.chunk_id,
+                "document_id": chunk.document_id,
+                "version_id": chunk.version_id,
+                "chapter": chunk.chapter or "",
+                "section": chunk.section or "",
+                "article": chunk.article or "",
+                "paragraph": chunk.paragraph or "",
+                "page_start": chunk.page_start or 0,
+                "page_end": chunk.page_end or 0,
+                "token_count": chunk.token_count or 0,
+                "text": (chunk.text or "")[:10000],
+                "retrieval_text": (chunk.retrieval_text or chunk.text or "")[:10000],
+                "topics": topics,
+                "legal_status": legal_status,
+                "source_url": source_url,
+                "embedding_model": "text-embedding-3-small",
+            },
+        })
+
+    config = UpstashVectorConfig(
+        url=settings.upstash_vector_url,
+        token=settings.upstash_vector_token,
+        dimension=settings.upstash_vector_dimension,
+        namespace=settings.upstash_vector_namespace,
+    )
+    store = UpstashVectorStore(
+        config=config,
+        openai_api_key=settings.openai_api_key,
+    )
+
+    upserted = store.upsert_chunks(upsert_chunks, batch_size=100)
+
+    return {
+        "status": "completed",
+        "total_chunks": len(chunks),
+        "upserted": upserted,
+        "embedding_model": "text-embedding-3-small",
+        "dimension": settings.upstash_vector_dimension,
+    }

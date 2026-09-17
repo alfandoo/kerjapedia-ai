@@ -274,6 +274,22 @@ def _retrieve(memory: MemoryContext, top_k: int, session: Session):
         }
         if settings.app_env.lower() == "production" and governance.active_models != expected_models:
             raise RuntimeError("The active RAG release model provenance does not match runtime.")
+    from app.services.providers import upstash_vector_store_from_settings
+
+    if settings.vector_store == "upstash_vector":
+        retrieval = upstash_vector_store_from_settings(
+            settings,
+            relationship_index=governance.relationship_index,
+            allow_unpublished=settings.rag_allow_unpublished,
+        ).search(
+            memory.original_question,
+            top_k=top_k,
+            retrieval_query=memory.retrieval_query,
+            context_topics=memory.context_topics,
+            context_document_ids=memory.context_document_ids,
+            context_articles=memory.context_articles,
+        )
+    else:
         retrieval = pinecone_store_from_settings(
             settings,
             namespace=governance.active_namespace,
