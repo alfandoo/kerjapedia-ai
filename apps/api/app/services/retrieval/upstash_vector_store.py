@@ -39,21 +39,21 @@ from app.services.retrieval.scoring import (
 class UpstashVectorConfig:
     url: str
     token: str
-    dimension: int = 1536
+    dimension: int = 1024
     namespace: str = "production"
+    pinecone_api_key: str = ""
 
 
 class UpstashVectorStore:
     """Retrieval store backed by Upstash Vector with hybrid dense+sparse search.
 
-    Dense embeddings: server-side via Upstash Vector /embed endpoint
+    Dense embeddings: Pinecone Inference API (multilingual-e5-large, 1024d)
     Sparse: BM25 lexical scoring
     """
 
     def __init__(
         self,
         config: UpstashVectorConfig,
-        embedding_model: str = "text-embedding-3-small",
         reranker_provider: str = "heuristic",
         reranker_model: str = "bge-reranker-v2-m3",
         fail_closed: bool = False,
@@ -73,7 +73,6 @@ class UpstashVectorStore:
         from upstash_vector import Index
 
         self.config = config
-        self.embedding_model = embedding_model
         self.reranker_provider = reranker_provider
         self.reranker_model = reranker_model
         self.fail_closed = fail_closed
@@ -91,32 +90,31 @@ class UpstashVectorStore:
         self.expansion_score_decay = expansion_score_decay
 
         self._index = Index(url=config.url, token=config.token)
+        self._pinecone_client = None
+        if config.pinecone_api_key:
+            import httpx
+            self._pinecone_client = httpx.Client(
+                base_url="https://api.pinecone.io",
+                headers={
+                    "Api-Key": config.pinecone_api_key,
+                    "X-Pinecone-Api-Version": "2026-04",
+                },
+                timeout=60.0,
+            )
 
-    def _embed_dense(self, texts: list[str]) -> list[list[float]]:
-        """Embed texts using Upstash Vector server-side /embed endpoint."""
-        import urllib.request
-        import json
-
-        payload = json.dumps({
-            "model": self.embedding_model,
-            "input": texts,
-        }).encode()
-
-        req = urllib.request.Request(
-            f"{self.config.url}/embed",
-            data=payload,
-            headers={
-                "Authorization": f"Bearer {self.config.token}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            result = json.loads(resp.read())
-
-        embeddings = result.get("data", [])
-        embeddings.sort(key=lambda x: x.get("index", 0))
-        return [e["embedding"] for e in embeddings]
+    def _embed_query(self, texts: list[str]) -> list[list[float]]:
+        """Embed query texts using Pinecone Inference API."""
+        if not self._pinecone_client:
+            raise RuntimeError("PINECONE_API_KEY is required for query embedding.")
+        payload = {
+            "model": "multilingual-e5-large",
+            "inputs": [{"text": t} for t in texts],
+            "parameters": {"input_type": "query", "truncate": "END"},
+        }
+        resp = self._pinecone_client.post("/embed", json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        return [item["values"] for item in data["data"]]
 
     @staticmethod
     def _bm25_sparse(text: str, k1: float = 1.5, b: float = 0.75) -> dict[int, float]:
@@ -139,35 +137,35 @@ class UpstashVectorStore:
 
         Each chunk dict must have:
         - chunk_id: str
-        - text: str (will be embedded)
+        - text: str (will be embedded by Pinecone Inference API)
         - metadata: dict
         """
-        from upstash_vector import Data, SparseVector
+        from upstash_vector import Vector
+        from upstash_vector.types import SparseVector
 
         upserted = 0
         for start in range(0, len(chunks), batch_size):
             batch = chunks[start : start + batch_size]
-            texts = [c["text"] for c in batch]
-            dense_vectors = self._embed_dense(texts)
 
-            data_list = []
+            texts = [c["text"] for c in batch]
+            dense_vectors = self._embed_query(texts)
+
+            vectors = []
             for i, chunk in enumerate(batch):
                 sparse_dict = self._bm25_sparse(chunk["text"])
-                sparse = SparseVector(
-                    indices=list(sparse_dict.keys()),
-                    values=list(sparse_dict.values()),
-                )
-                data_list.append(
-                    Data(
+                vectors.append(
+                    Vector(
                         id=chunk["chunk_id"],
                         vector=dense_vectors[i],
-                        sparse_vector=sparse,
-                        data=chunk["text"],
+                        sparse_vector=SparseVector(
+                            indices=list(sparse_dict.keys()),
+                            values=list(sparse_dict.values()),
+                        ),
                         metadata=chunk.get("metadata", {}),
                     )
                 )
 
-            self._index.upsert(vectors=data_list)
+            self._index.upsert(vectors=vectors)
             upserted += len(batch)
 
         return upserted
@@ -182,7 +180,7 @@ class UpstashVectorStore:
         """Query Upstash Vector with hybrid dense+sparse search."""
         from upstash_vector import SparseVector
 
-        dense_vector = self._embed_dense([query_text])[0]
+        dense_vector = self._embed_query([query_text])[0]
         sparse_dict = self._bm25_sparse(query_text)
         sparse = SparseVector(
             indices=list(sparse_dict.keys()),

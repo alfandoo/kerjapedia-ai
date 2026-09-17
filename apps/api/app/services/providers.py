@@ -187,6 +187,7 @@ def upstash_vector_store_from_settings(
             token=settings.upstash_vector_token,
             dimension=settings.upstash_vector_dimension,
             namespace=settings.upstash_vector_namespace,
+            pinecone_api_key=settings.pinecone_api_key or "",
         ),
         reranker_provider=settings.reranker_provider,
         reranker_model=settings.reranker_model,

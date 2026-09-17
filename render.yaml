@@ -59,11 +59,11 @@ services:
 
       # Upstash Vector
       - key: UPSTASH_VECTOR_URL
-        value: "https://inviting-escargot-16130-us1-vector.upstash.io"
+        value: "https://gorgeous-mustang-26578-us1-vector.upstash.io"
       - key: UPSTASH_VECTOR_TOKEN
-        value: "ABsFMGludml0aW5nLWVzY2FyZ290LTE2MTMwLXVzMWFkbWluWW1SaU1tVmxNMlF0WVdZM015MDBOVEUyTFdFNU5UQXRNRGt4Wmpjd01USTVaVFV4"
+        value: "ABoFMGdvcmdlb3VzLW11c3RhbmctMjY1NzgtdXMxYWRtaW5aVFkyWWpZMVltWXRabUpoWWkwMFpqYzBMV0poWlRrdFltRmxObUV3T1RrNU5qRTA="
       - key: UPSTASH_VECTOR_DIMENSION
-        value: "1536"
+        value: "1024"
       - key: UPSTASH_VECTOR_NAMESPACE
         value: production
 
