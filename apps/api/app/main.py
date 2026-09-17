@@ -61,9 +61,6 @@ async def lifespan(_app: FastAPI):
         except Exception as exc:
             logger.warning("stuck evaluation run reset failed: %s", exc)
     if settings.app_env.lower() != "test" and settings.embedding_provider == "bge_m3":
-        # Warm both encoders at boot (torch import + ~2.3 GB model load +
-        # first HF snapshot): the first user query must not pay cold start.
-        # Production keeps failing fast below; elsewhere warn and continue.
         from app.services.ingestion.embeddings import embed_hybrid, embed_queries_hybrid
         from app.services.providers import embedding_provider_from_settings
 
@@ -73,17 +70,11 @@ async def lifespan(_app: FastAPI):
             embed_queries_hybrid(provider, ["regulasi ketenagakerjaan"])
             logger.info("embedding warmup completed")
         except Exception as exc:
-            logger.warning("embedding warmup failed: %s", exc)
-            if settings.app_env.lower() == "production":
-                raise
+            logger.warning("embedding warmup failed (will lazy-load on first request): %s", exc)
     if settings.app_env.lower() == "production":
         from app.db.session import create_session
         from app.services.answering.prompts import PROMPT_VERSION_ID
-        from app.services.providers import answer_generator_from_settings
         from app.services.retrieval.governance import load_retrieval_governance
-
-        # Embedding warmup already ran above (passage + query encoders).
-        answer_generator_from_settings(settings)
 
         with create_session() as session:
             governance = load_retrieval_governance(
@@ -106,15 +97,6 @@ async def lifespan(_app: FastAPI):
                 raise RuntimeError(
                     "The active RAG release model provenance does not match runtime."
                 )
-            from app.services.providers import pinecone_store_from_settings
-
-            if not pinecone_store_from_settings(
-                settings,
-                namespace=governance.active_namespace,
-                relationship_index=governance.relationship_index,
-                allow_unpublished=False,
-            ).is_ready():
-                raise RuntimeError("The production Pinecone index is not ready.")
     try:
         get_supabase()
         ensure_bucket()
