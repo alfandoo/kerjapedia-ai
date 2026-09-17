@@ -27,6 +27,8 @@ RUN python -m pip install --upgrade pip && python -m pip install -r requirements
 COPY alembic.ini .
 COPY alembic ./alembic
 COPY app ./app
+COPY start.sh .
+RUN chmod +x start.sh
 
 USER kerjapedia
 EXPOSE 8000
@@ -34,4 +36,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"
 
-CMD ["python", "-m", "app.server"]
+CMD ["./start.sh"]
