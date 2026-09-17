@@ -471,11 +471,6 @@ def reembed_to_upstash(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN must be set.",
         )
-    if not settings.openai_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OPENAI_API_KEY is required for text-embedding-3-small embeddings.",
-        )
 
     from app.models.ingestion import DocumentChunk
     from app.services.retrieval.upstash_vector_store import UpstashVectorConfig, UpstashVectorStore
@@ -527,7 +522,6 @@ def reembed_to_upstash(
     )
     store = UpstashVectorStore(
         config=config,
-        openai_api_key=settings.openai_api_key,
     )
 
     upserted = store.upsert_chunks(upsert_chunks, batch_size=100)

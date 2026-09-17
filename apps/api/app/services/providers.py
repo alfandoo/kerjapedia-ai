@@ -158,8 +158,6 @@ def upstash_vector_store_from_settings(
 ) -> UpstashVectorStore:
     if not settings.upstash_vector_url or not settings.upstash_vector_token:
         raise RuntimeError("UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN are required.")
-    if not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY is required for text-embedding-3-small.")
 
     key = (
         settings.upstash_vector_url,
@@ -190,7 +188,6 @@ def upstash_vector_store_from_settings(
             dimension=settings.upstash_vector_dimension,
             namespace=settings.upstash_vector_namespace,
         ),
-        openai_api_key=settings.openai_api_key,
         reranker_provider=settings.reranker_provider,
         reranker_model=settings.reranker_model,
         fail_closed=settings.rag_fail_closed,

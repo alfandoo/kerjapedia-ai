@@ -46,14 +46,14 @@ class UpstashVectorConfig:
 class UpstashVectorStore:
     """Retrieval store backed by Upstash Vector with hybrid dense+sparse search.
 
-    Dense embeddings: text-embedding-3-small (1536d) via OpenAI
+    Dense embeddings: server-side via Upstash Vector /embed endpoint
     Sparse: BM25 lexical scoring
     """
 
     def __init__(
         self,
         config: UpstashVectorConfig,
-        openai_api_key: str,
+        embedding_model: str = "text-embedding-3-small",
         reranker_provider: str = "heuristic",
         reranker_model: str = "bge-reranker-v2-m3",
         fail_closed: bool = False,
@@ -73,6 +73,7 @@ class UpstashVectorStore:
         from upstash_vector import Index
 
         self.config = config
+        self.embedding_model = embedding_model
         self.reranker_provider = reranker_provider
         self.reranker_model = reranker_model
         self.fail_closed = fail_closed
@@ -90,24 +91,32 @@ class UpstashVectorStore:
         self.expansion_score_decay = expansion_score_decay
 
         self._index = Index(url=config.url, token=config.token)
-        self._openai_client = None
-        self._openai_api_key = openai_api_key
-
-    def _get_openai_client(self):
-        if self._openai_client is None:
-            from openai import OpenAI
-            self._openai_client = OpenAI(api_key=self._openai_api_key, timeout=60.0)
-        return self._openai_client
 
     def _embed_dense(self, texts: list[str]) -> list[list[float]]:
-        client = self._get_openai_client()
-        response = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=texts,
-            dimensions=self.config.dimension,
+        """Embed texts using Upstash Vector server-side /embed endpoint."""
+        import urllib.request
+        import json
+
+        payload = json.dumps({
+            "model": self.embedding_model,
+            "input": texts,
+        }).encode()
+
+        req = urllib.request.Request(
+            f"{self.config.url}/embed",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {self.config.token}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
         )
-        ordered = sorted(response.data, key=lambda item: int(item.index))
-        return [item.embedding for item in ordered]
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            result = json.loads(resp.read())
+
+        embeddings = result.get("data", [])
+        embeddings.sort(key=lambda x: x.get("index", 0))
+        return [e["embedding"] for e in embeddings]
 
     @staticmethod
     def _bm25_sparse(text: str, k1: float = 1.5, b: float = 0.75) -> dict[int, float]:
