@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "cd apps/web && npm install",
+  "buildCommand": "cd apps/web && npm run build",
+  "outputDirectory": "apps/web/.next",
+  "regions": ["sin1"],
+  "rewrites": [
+    {
+      "source": "/api/backend/:path*",
+      "destination": "/api/backend/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/backend/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,PUT,PATCH,DELETE,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Authorization,Content-Type,X-Request-ID" }
+      ]
+    }
+  ]
+}
