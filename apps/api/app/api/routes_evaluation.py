@@ -225,7 +225,7 @@ def create_evaluation_run(
             )
         if not (
             settings.vector_store == "pinecone"
-            and settings.embedding_provider == "bge_m3"
+            and settings.embedding_provider in ("bge_m3", "pinecone_inference")
             and settings.llm_provider == "openrouter"
             and settings.reranker_provider == "pinecone"
             and settings.claim_verifier_provider == "openrouter"

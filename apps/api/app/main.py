@@ -62,6 +62,8 @@ async def lifespan(_app: FastAPI):
             logger.warning("stuck evaluation run reset failed: %s", exc)
     if settings.app_env.lower() != "test" and settings.embedding_provider == "bge_m3":
         logger.info("BGE-M3 embedding will lazy-load on first request (saves startup RAM)")
+    if settings.app_env.lower() != "test" and settings.embedding_provider == "pinecone_inference":
+        logger.info("Using Pinecone Inference API for embeddings (no local model loaded)")
     if settings.app_env.lower() == "production":
         from app.db.session import create_session
         from app.services.answering.prompts import PROMPT_VERSION_ID

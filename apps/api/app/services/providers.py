@@ -47,6 +47,7 @@ def embedding_provider_from_settings(
             model_name=settings.embedding_model,
             dimensions=settings.embedding_dimension,
             openai_api_key=settings.openai_api_key,
+            pinecone_api_key=settings.pinecone_api_key,
             require_native_sparse=resolved_require_native,
             model_revision=settings.embedding_model_revision,
             batch_size=settings.ingestion_embedding_batch_size,

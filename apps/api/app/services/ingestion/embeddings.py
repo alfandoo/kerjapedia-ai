@@ -453,11 +453,69 @@ class OpenAIEmbeddingProvider:
         return [item.embedding for item in ordered]
 
 
+class PineconeInferenceEmbeddingProvider:
+    """Embedding provider that calls Pinecone's hosted Inference API.
+
+    Uses ``multilingual-e5-large`` (1024d dense) so no local model is loaded,
+    keeping memory usage minimal for free-tier Render containers.
+    """
+
+    model_revision = "provider-managed"
+
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "multilingual-e5-large",
+        dimensions: int = 1024,
+        timeout_seconds: float = 120.0,
+    ) -> None:
+        import httpx
+
+        self.model_name = model_name
+        self.dimensions = dimensions
+        self.sparse_fallback_used = True  # sparse via lexical fallback
+        self._client = httpx.Client(
+            base_url="https://api.pinecone.io",
+            headers={
+                "Api-Key": api_key,
+                "X-Pinecone-Api-Version": "2026-04",
+            },
+            timeout=timeout_seconds,
+        )
+
+    def _call_embed(self, texts: list[str], input_type: str) -> list[list[float]]:
+        payload = {
+            "model": self.model_name,
+            "inputs": [{"text": t} for t in texts],
+            "parameters": {"input_type": input_type, "truncate": "END"},
+        }
+        resp = self._client.post("/embed", json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        return [item["values"] for item in data["data"]]
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        return self._call_embed(texts, "passage")
+
+    def embed_hybrid(self, texts: list[str]) -> HybridEmbeddingBatch:
+        return HybridEmbeddingBatch(
+            dense=self._call_embed(texts, "passage"),
+            sparse=[lexical_sparse_vector(t) for t in texts],
+        )
+
+    def embed_queries_hybrid(self, texts: list[str]) -> HybridEmbeddingBatch:
+        return HybridEmbeddingBatch(
+            dense=self._call_embed(texts, "query"),
+            sparse=[lexical_sparse_vector(t) for t in texts],
+        )
+
+
 def build_embedding_provider(
     provider_name: str,
     model_name: str = "BAAI/bge-m3",
     dimensions: int = 1024,
     openai_api_key: str | None = None,
+    pinecone_api_key: str | None = None,
     require_native_sparse: bool = False,
     model_revision: str = "unversioned",
     batch_size: int = 16,
@@ -481,6 +539,17 @@ def build_embedding_provider(
         return OpenAIEmbeddingProvider(
             api_key=openai_api_key,
             model_name=model_name or "text-embedding-3-small",
+            dimensions=dimensions,
+            timeout_seconds=timeout_seconds,
+        )
+    if provider_name == "pinecone_inference":
+        if not pinecone_api_key:
+            raise RuntimeError(
+                "PINECONE_API_KEY is required for EMBEDDING_PROVIDER=pinecone_inference."
+            )
+        return PineconeInferenceEmbeddingProvider(
+            api_key=pinecone_api_key,
+            model_name=model_name or "multilingual-e5-large",
             dimensions=dimensions,
             timeout_seconds=timeout_seconds,
         )

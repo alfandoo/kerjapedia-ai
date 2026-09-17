@@ -162,17 +162,20 @@ class Settings(BaseSettings):
                 "Production requires PINECONE_INDEX_NAME=kerjapedia."
             )
         if (
-            self.embedding_provider != "bge_m3"
-            or self.embedding_model.lower() != "baai/bge-m3"
+            self.embedding_provider not in ("bge_m3", "pinecone_inference")
+            or self.embedding_model.lower() not in ("baai/bge-m3", "multilingual-e5-large")
         ):
             raise ValueError(
-                "Production requires EMBEDDING_PROVIDER=bge_m3 and BAAI/bge-m3."
+                "Production requires EMBEDDING_PROVIDER=bge_m3 or pinecone_inference."
             )
         if self.embedding_dimension != 1024:
             raise ValueError(
                 "Production BGE-M3 embeddings require EMBEDDING_DIMENSION=1024."
             )
-        if self.embedding_model_revision in {"", "main", "unversioned"}:
+        if (
+            self.embedding_provider != "pinecone_inference"
+            and self.embedding_model_revision in {"", "main", "unversioned"}
+        ):
             raise ValueError("Production requires a pinned EMBEDDING_MODEL_REVISION.")
         if self.llm_provider != "openrouter":
             raise ValueError("LLM_PROVIDER=openrouter is required in production.")

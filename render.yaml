@@ -59,9 +59,11 @@ services:
 
       # Embedding
       - key: EMBEDDING_PROVIDER
-        value: bge_m3
+        value: pinecone_inference
       - key: EMBEDDING_MODEL
-        value: BAAI/bge-m3
+        value: multilingual-e5-large
+      - key: EMBEDDING_MODEL_REVISION
+        value: provider-managed
       - key: EMBEDDING_DIMENSION
         value: "1024"
       - key: INGESTION_EMBEDDING_TIMEOUT_SECONDS
