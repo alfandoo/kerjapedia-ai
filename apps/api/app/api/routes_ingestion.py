@@ -452,85 +452,6 @@ def list_ingestion_jobs(_: AdminUser, session: DbSession) -> list[dict]:
     ]
 
 
-@router.get("/{job_id}")
-def get_ingestion_job(job_id: str, session: DbSession, _: AdminUser) -> dict:
-    job = session.get(IngestionJob, job_id)
-    if job is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ingestion job was not found.",
-        )
-    build = session.get(IngestionBuild, job.build_id) if job.build_id else None
-    payload = _job_payload(job, build, avg_duration=_average_build_duration(session))
-    payload["artifact_paths"] = job.artifact_paths
-    return payload
-
-
-def _average_build_duration(session) -> float | None:
-    """Average duration of completed builds in seconds, used to estimate ETA."""
-    rows = (
-        session.query(IngestionBuild.completed_at, IngestionBuild.created_at)
-        .filter(
-            IngestionBuild.completed_at.is_not(None),
-            IngestionBuild.status.in_(["completed", "review_required"]),
-        )
-        .all()
-    )
-    durations = [
-        (completed - created).total_seconds()
-        for (completed, created) in rows
-        if completed is not None and (completed - created).total_seconds() > 0
-    ]
-    if not durations:
-        return None
-    return sum(durations) / len(durations)
-
-
-def _job_payload(
-    job: IngestionJob,
-    build: IngestionBuild | None,
-    avg_duration: float | None = None,
-) -> dict:
-    status = "needs_review" if job.status == "review_required" else job.status
-    created = job.created_at
-    now = datetime.now(UTC)
-    elapsed_seconds = (
-        (now - created).total_seconds()
-        if created is not None and status in {"running", "queued"}
-        else None
-    )
-    stored = job.artifact_paths or {}
-    quality_report = (build.quality_report or {}) if build else {}
-    chunk_count = quality_report.get("chunks", {}).get("count")
-    if chunk_count is None:
-        chunk_count = stored.get("chunk_count")
-    return {
-        "job_id": job.job_id,
-        "build_id": job.build_id,
-        "document_id": job.document_id,
-        "status": status,
-        "created_at": job.created_at,
-        "updated_at": job.created_at,
-        "elapsed_seconds": elapsed_seconds,
-        "avg_duration_seconds": avg_duration,
-        "warnings": job.warnings,
-        "result": {
-            **({"chunk_count": int(chunk_count)} if chunk_count is not None else {}),
-            "warnings": job.warnings or [],
-        },
-        "error": next(
-            (
-                item
-                for item in (job.warnings or [])
-                if item.startswith("ingestion_failed:")
-            ),
-            None,
-        ),
-        "quality_report": build.quality_report if build else {},
-        "review_status": build.review_status if build else "pending",
-    }
-
-
 # ---------------------------------------------------------------------------
 # Re-embed endpoint: migrate chunks to Upstash Vector
 # ---------------------------------------------------------------------------
@@ -617,4 +538,83 @@ def reembed_to_upstash(
         "upserted": upserted,
         "embedding_model": "text-embedding-3-small",
         "dimension": settings.upstash_vector_dimension,
+    }
+
+
+@router.get("/{job_id}")
+def get_ingestion_job(job_id: str, session: DbSession, _: AdminUser) -> dict:
+    job = session.get(IngestionJob, job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ingestion job was not found.",
+        )
+    build = session.get(IngestionBuild, job.build_id) if job.build_id else None
+    payload = _job_payload(job, build, avg_duration=_average_build_duration(session))
+    payload["artifact_paths"] = job.artifact_paths
+    return payload
+
+
+def _average_build_duration(session) -> float | None:
+    """Average duration of completed builds in seconds, used to estimate ETA."""
+    rows = (
+        session.query(IngestionBuild.completed_at, IngestionBuild.created_at)
+        .filter(
+            IngestionBuild.completed_at.is_not(None),
+            IngestionBuild.status.in_(["completed", "review_required"]),
+        )
+        .all()
+    )
+    durations = [
+        (completed - created).total_seconds()
+        for (completed, created) in rows
+        if completed is not None and (completed - created).total_seconds() > 0
+    ]
+    if not durations:
+        return None
+    return sum(durations) / len(durations)
+
+
+def _job_payload(
+    job: IngestionJob,
+    build: IngestionBuild | None,
+    avg_duration: float | None = None,
+) -> dict:
+    status = "needs_review" if job.status == "review_required" else job.status
+    created = job.created_at
+    now = datetime.now(UTC)
+    elapsed_seconds = (
+        (now - created).total_seconds()
+        if created is not None and status in {"running", "queued"}
+        else None
+    )
+    stored = job.artifact_paths or {}
+    quality_report = (build.quality_report or {}) if build else {}
+    chunk_count = quality_report.get("chunks", {}).get("count")
+    if chunk_count is None:
+        chunk_count = stored.get("chunk_count")
+    return {
+        "job_id": job.job_id,
+        "build_id": job.build_id,
+        "document_id": job.document_id,
+        "status": status,
+        "created_at": job.created_at,
+        "updated_at": job.created_at,
+        "elapsed_seconds": elapsed_seconds,
+        "avg_duration_seconds": avg_duration,
+        "warnings": job.warnings,
+        "result": {
+            **({"chunk_count": int(chunk_count)} if chunk_count is not None else {}),
+            "warnings": job.warnings or [],
+        },
+        "error": next(
+            (
+                item
+                for item in (job.warnings or [])
+                if item.startswith("ingestion_failed:")
+            ),
+            None,
+        ),
+        "quality_report": build.quality_report if build else {},
+        "review_status": build.review_status if build else "pending",
     }
