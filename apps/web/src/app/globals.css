@@ -147,6 +147,12 @@
   color: rgba(255, 255, 255, 0.82) !important;
 }
 
+/* Sidebar search placeholder needs its own pairing: the muted token
+   fails on green, so pin it to 85% white (5.24:1, verified). */
+.light aside.bg-sidebar input::placeholder {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
 /* ── Dark theme ── */
 
 .dark {

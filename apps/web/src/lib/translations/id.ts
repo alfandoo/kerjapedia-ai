@@ -3,7 +3,7 @@ const id = {
   "search.eyebrow": "Basis hukum ketenagakerjaan",
   "search.title": "Temukan dasar hukum yang tepat",
   "search.subtitle":
-    "Telusuri regulasi ketenagakerjaan Indonesia dari sumber resmi pemerintah — UU, PP, dan Permenaker yang telah dikurasi.",
+    "Telusuri regulasi ketenagakerjaan Indonesia dari sumber resmi pemerintah, UU, PP, dan Permenaker yang telah dikurasi.",
   "search.placeholder": "Cari judul, nomor, atau topik...",
   "search.searchAria": "Cari judul, nomor, atau topik regulasi",
   "search.filterTopic": "Topik",
@@ -39,7 +39,7 @@ const id = {
   // Kalkulator Ketenagakerjaan (belum diimplementasikan)
   "kalkulator.title": "Kalkulator Ketenagakerjaan",
   "kalkulator.description":
-    "Estimasi indikatif hak pekerja — pesangon, THR, cuti, dan upah lembur.",
+    "Estimasi indikatif hak pekerja: pesangon, THR, cuti, dan upah lembur.",
   "kalkulator.comingSoon": "Fitur ini sedang dalam pengembangan.",
   "kalkulator.note":
     "Hasil hanyalah estimasi dan tidak mengikat. Selalu verifikasi ke sumber resmi sebelum digunakan.",
@@ -246,13 +246,13 @@ const id = {
   "answer.feedbackOutdated": "Regulasi sudah tidak berlaku",
   "answer.feedbackOther": "Lainnya",
   "answer.warningNeedsVerification":
-    "Status hukum sumber belum diverifikasi — verifikasi sebelum digunakan.",
+    "Status hukum sumber belum diverifikasi. Verifikasi sebelum digunakan.",
   "answer.warningHistorical": "Sebagian sumber berstatus historis atau dicabut.",
   "answer.warningSuperseded":
     "Sebagian sumber telah diubah atau diganti oleh peraturan yang lebih baru.",
   "answer.warningRevoked": "Sumber dicabut atau digantikan oleh peraturan yang lebih baru.",
   "answer.warningDegradedExtractive":
-    "Jawaban disusun otomatis dari kutipan sumber — baca sumber resmi untuk detail lengkap.",
+    "Jawaban disusun otomatis dari kutipan sumber. Baca sumber resmi untuk detail lengkap.",
   // Sources
   "source.title": "Sumber",
   "source.panelLabel": "Daftar sumber resmi",
@@ -307,6 +307,16 @@ const id = {
   "notFound.backToChat": "Kembali ke chat",
   "notFound.searchRegulations": "Telusuri regulasi",
   "notFound.homeAriaLabel": "KerjaPedia AI, kembali ke chat",
+  // Error boundary
+  "error.eyebrow": "Galat",
+  "error.title": "Terjadi kesalahan",
+  "error.description":
+    "Muat ulang halaman ini. Jika berlanjut, kembali ke chat dan coba lagi.",
+  "error.retry": "Coba lagi",
+  "error.backToChat": "Kembali ke chat",
+  // History
+  "history.pinChat": "Sematkan chat",
+  "history.unpinChat": "Lepaskan sematan chat",
   // Footer
   "footer.disclaimer": "KerjaPedia dapat membuat kekeliruan. Periksa selalu sumber resmi.",
   "footer.agreement": "Dengan menggunakan layanan ini, Anda menyetujui",

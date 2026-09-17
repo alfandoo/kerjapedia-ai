@@ -259,7 +259,7 @@ export function ConversationThread({
                 <div className="flex min-h-7 items-center gap-0.5">
                   <button
                     type="button"
-                    className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                    className="grid size-11 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
                     aria-label={translate("answer.editMessage")}
                     title={translate("answer.editMessage")}
                     onClick={() => onEditMessage(message)}
@@ -268,7 +268,7 @@ export function ConversationThread({
                   </button>
                   <button
                     type="button"
-                    className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                    className="grid size-11 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
                     aria-label={translate("answer.copyMessage")}
                     title={translate("answer.copyMessage")}
                     onClick={() => void copyText(message.id, message.content)}
@@ -316,7 +316,7 @@ export function ConversationThread({
               )}
               {message.answer?.citations.length ? (
                 <button
-                  className="mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-transparent bg-javanese px-3 text-[11px] font-semibold text-white transition hover:bg-forest"
+                  className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-transparent bg-javanese px-3 text-[11px] font-semibold text-white transition hover:bg-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
                   type="button"
                   onClick={() => onShowSources(message)}
                 >
@@ -328,7 +328,7 @@ export function ConversationThread({
                 </button>
               ) : null}
               {message.answer?.refusal_reason ? (
-                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber/30 bg-amber-soft p-3 text-xs leading-relaxed text-amber">
+                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber/30 bg-amber-soft p-3 text-xs leading-relaxed text-[#8a5a10] dark:text-[#e5b85c]">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                   <span>
                     {message.answer.refusal_reason === "out_of_scope_query"
@@ -340,7 +340,7 @@ export function ConversationThread({
                 </div>
               ) : null}
               {message.answer?.clarification_question ? (
-                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber/30 bg-amber-soft p-3 text-xs leading-relaxed text-amber">
+                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber/30 bg-amber-soft p-3 text-xs leading-relaxed text-[#8a5a10] dark:text-[#e5b85c]">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                   <span>{message.answer.clarification_question}</span>
                 </div>
@@ -352,7 +352,7 @@ export function ConversationThread({
                     if (!labelKey) return null;
                     return (
                       <div
-                        className="flex items-start gap-2.5 rounded-lg border border-amber/30 bg-amber-soft p-3 text-xs leading-relaxed text-amber"
+                        className="flex items-start gap-2.5 rounded-lg border border-amber/30 bg-amber-soft p-3 text-xs leading-relaxed text-[#8a5a10] dark:text-[#e5b85c]"
                         key={code}
                       >
                         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
@@ -367,7 +367,7 @@ export function ConversationThread({
                   <div className="flex gap-0.5">
                     <button
                       type="button"
-                      className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                      className="grid size-11 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
                       aria-label={translate("answer.copyAnswer")}
                       title={translate("answer.copyAnswer")}
                       onClick={() => void copyText(message.id, displayContent)}
@@ -376,7 +376,7 @@ export function ConversationThread({
                     </button>
                     <button
                       type="button"
-                      className={`grid size-8 place-items-center rounded-lg border transition ${
+                      className={`grid size-11 place-items-center rounded-lg border transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese ${
                         feedback[message.id] === "helpful"
                           ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]"
                           : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -389,7 +389,7 @@ export function ConversationThread({
                     </button>
                     <button
                       type="button"
-                      className={`grid size-8 place-items-center rounded-lg border transition ${
+                      className={`grid size-11 place-items-center rounded-lg border transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese ${
                         feedback[message.id] === "not_helpful"
                           ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]"
                           : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -410,7 +410,7 @@ export function ConversationThread({
                     </button>
                     <button
                       type="button"
-                      className="grid size-8 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                      className="grid size-11 place-items-center rounded-lg border border-transparent text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
                       aria-label={translate("answer.shareAnswer")}
                       title={translate("answer.shareAnswer")}
                       onClick={() => void shareAnswer(message)}
@@ -443,7 +443,7 @@ export function ConversationThread({
                     <button
                       key={option.value}
                       type="button"
-                      className={`rounded-full border px-2.5 py-1.5 text-xs transition hover:border-javanese hover:text-javanese ${
+                      className={`min-h-11 rounded-full border px-2.5 py-1.5 text-xs transition hover:border-javanese hover:text-javanese focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese ${
                         issueSelection === option.value
                           ? "border-javanese bg-accent font-semibold text-javanese"
                           : "border-border bg-background text-foreground"
@@ -466,14 +466,14 @@ export function ConversationThread({
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    className="rounded-lg px-3 py-[7px] text-[13px] text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                    className="min-h-11 rounded-lg px-3 py-[7px] text-[13px] text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
                     onClick={() => setFeedbackPanel(null)}
                   >
                     {translate("answer.feedbackCancel")}
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg bg-javanese px-3.5 py-[7px] text-[13px] font-semibold text-white transition hover:bg-forest disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-h-11 rounded-lg bg-javanese px-3.5 py-[7px] text-[13px] font-semibold text-white transition hover:bg-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!issueSelection}
                     onClick={() => {
                       const detail: FeedbackDetail | undefined = issueSelection

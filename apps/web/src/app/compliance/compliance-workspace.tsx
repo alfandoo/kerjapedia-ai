@@ -64,14 +64,11 @@ export function ComplianceWorkspace() {
       onConversationRename={handleConversationRename}
       onConversationDelete={handleConversationDelete}
     >
-      <div className="mx-auto w-full max-w-[760px] px-[clamp(24px,6vw,92px)] pb-16 pt-[clamp(32px,5vw,64px)] max-[760px]:px-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-javanese">
-          {translate("compliance.title")}
-        </p>
+      <div className="mx-auto w-full min-w-0 max-w-[760px] px-[clamp(24px,6vw,92px)] pb-16 pt-[clamp(32px,5vw,64px)] max-[760px]:px-4 max-[760px]:pb-12 max-[760px]:pt-7">
         <h1 className="font-display text-[clamp(34px,3.5vw,46px)] font-medium leading-[1.12] tracking-[-0.02em] text-javanese-deep">
           {translate("compliance.title")}
         </h1>
-        <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+        <p className="mt-4 break-words text-sm leading-relaxed text-muted-foreground">
           {translate("compliance.description")}
         </p>
 
@@ -79,7 +76,7 @@ export function ComplianceWorkspace() {
           <p className="text-lg font-semibold text-foreground">
             {translate("compliance.comingSoon")}
           </p>
-          <p className="mt-2 max-w-[480px] text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-2 max-w-[480px] break-words text-sm leading-relaxed text-muted-foreground">
             {translate("compliance.note")}
           </p>
         </div>
@@ -87,7 +84,7 @@ export function ComplianceWorkspace() {
         <div className="mt-8 flex justify-center">
           <Link
             href="/chat"
-            className="inline-flex h-11 items-center rounded-xl border border-input px-5 text-sm font-semibold text-javanese transition hover:border-javanese hover:bg-accent"
+            className="inline-flex h-11 items-center rounded-xl border border-input px-5 text-sm font-semibold text-javanese transition hover:border-javanese hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {translate("compliance.backToChat")}
           </Link>

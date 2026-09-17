@@ -9,7 +9,7 @@ export function LegalLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto flex h-[64px] w-full max-w-[1080px] items-center justify-between gap-4 px-6 max-[760px]:px-4">
           <Link
             href="/chat"
-            className="flex items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-javanese"
+            className="flex min-h-[44px] items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-javanese"
             aria-label="KerjaPedia AI beranda"
           >
             <span className="grid size-9 place-items-center rounded-[9px] bg-javanese text-white">
@@ -21,7 +21,7 @@ export function LegalLayout({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/chat"
-            className="legal-back-link inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-secondary px-3.5 text-xs font-semibold text-javanese transition hover:border-javanese hover:bg-teal-soft focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-javanese"
+            className="legal-back-link inline-flex h-11 items-center gap-2 rounded-lg border border-border bg-secondary px-3.5 text-xs font-semibold text-javanese transition hover:border-javanese hover:bg-teal-soft focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-javanese"
           >
             <ArrowLeft className="size-4" />
             Kembali ke chat

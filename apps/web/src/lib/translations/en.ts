@@ -3,7 +3,7 @@ const en = {
   "search.eyebrow": "Employment law sources",
   "search.title": "Find the right legal basis",
   "search.subtitle":
-    "Explore Indonesian employment regulations from official government sources — curated UU, PP, and Permenaker.",
+    "Explore Indonesian employment regulations from official government sources, curated UU, PP, and Permenaker.",
   "search.placeholder": "Search title, number, or topic...",
   "search.searchAria": "Search regulations by title, number, or topic",
   "search.filterTopic": "Topic",
@@ -39,7 +39,7 @@ const en = {
   // Employment calculator (not yet implemented)
   "kalkulator.title": "Employment Calculator",
   "kalkulator.description":
-    "Indicative estimate of workers' entitlements — severance, THR, leave, and overtime.",
+    "Indicative estimate of workers' entitlements: severance, THR, leave, and overtime.",
   "kalkulator.comingSoon": "This feature is under development.",
   "kalkulator.note":
     "Results are only an estimate and are not binding. Always verify against official sources before use.",
@@ -245,12 +245,12 @@ const en = {
   "answer.feedbackOutdated": "Outdated regulation",
   "answer.feedbackOther": "Other",
   "answer.warningNeedsVerification":
-    "The source's legal status is not verified — verify it before use.",
+    "The source's legal status is not verified. Verify it before use.",
   "answer.warningHistorical": "Some sources are historical or have been revoked.",
   "answer.warningSuperseded": "Some sources have been amended or replaced by newer regulations.",
   "answer.warningRevoked": "A source has been revoked or superseded by a newer regulation.",
   "answer.warningDegradedExtractive":
-    "Answer assembled automatically from source quotes — read the official sources for full detail.",
+    "Answer assembled automatically from source quotes. Read the official sources for full detail.",
   // Sources
   "source.title": "Sources",
   "source.panelLabel": "Official source list",
@@ -304,6 +304,15 @@ const en = {
   "notFound.backToChat": "Back to chat",
   "notFound.searchRegulations": "Browse regulations",
   "notFound.homeAriaLabel": "KerjaPedia AI, back to chat",
+  // Error boundary
+  "error.eyebrow": "Error",
+  "error.title": "Something went wrong",
+  "error.description": "Reload this page. If it persists, return to chat and try again.",
+  "error.retry": "Try again",
+  "error.backToChat": "Back to chat",
+  // History
+  "history.pinChat": "Pin chat",
+  "history.unpinChat": "Unpin chat",
   // Footer
   "footer.disclaimer": "KerjaPedia may make errors. Always check official sources.",
   "footer.agreement": "By using this service, you agree to the",

@@ -89,7 +89,7 @@ export function SourcePanel({
                         {citation.document_title}
                       </h3>
                       <span
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold leading-none ${citation.legal_status === "active" ? "bg-javanese/10 text-javanese dark:bg-javanese/20 dark:text-[#82d5a9]" : "bg-amber-soft text-amber"}`}
+                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold leading-none ${citation.legal_status === "active" ? "bg-javanese/10 text-javanese dark:bg-javanese/20 dark:text-[#82d5a9]" : "bg-amber-soft text-[#8a5a10] dark:text-[#e5b85c]"}`}
                       >
                         <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
                         {legalStatusLabel(citation.legal_status)}
@@ -126,7 +126,7 @@ export function SourcePanel({
                         {canExpand ? (
                           <button
                             type="button"
-                            className="mt-2 inline-flex min-h-7 items-center gap-1 rounded-md px-1 text-[11px] font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese focus-visible:ring-offset-2 focus-visible:ring-offset-secondary"
+                            className="mt-2 inline-flex min-h-11 items-center gap-1 rounded-md px-1 text-[11px] font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese focus-visible:ring-offset-2 focus-visible:ring-offset-secondary"
                             aria-expanded={expanded}
                             onClick={() => toggleQuote(citation.citation_id)}
                           >
@@ -142,7 +142,7 @@ export function SourcePanel({
                       href={`${documentPdfUrl(citation.document_id)}#page=${citation.page_start}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-3 inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-[11px] font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-[11px] font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     >
                       {translate("source.openPdf")}
                       <ExternalLink className="size-3.5" />
@@ -162,7 +162,7 @@ export function SourcePanel({
               <button
                 type="button"
                 disabled={isSubmitting}
-                className={`inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese disabled:cursor-wait disabled:opacity-60 ${rating === "helpful" ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]" : "border-border bg-background text-foreground hover:bg-accent"}`}
+                className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese disabled:cursor-wait disabled:opacity-60 ${rating === "helpful" ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]" : "border-border bg-background text-foreground hover:bg-accent"}`}
                 aria-pressed={rating === "helpful"}
                 aria-label={translate("source.helpful")}
                 onClick={() => onRate("helpful")}
@@ -173,7 +173,7 @@ export function SourcePanel({
               <button
                 type="button"
                 disabled={isSubmitting}
-                className={`inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese disabled:cursor-wait disabled:opacity-60 ${rating === "not_helpful" ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]" : "border-border bg-background text-foreground hover:bg-accent"}`}
+                className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese disabled:cursor-wait disabled:opacity-60 ${rating === "not_helpful" ? "border-javanese/40 bg-javanese/10 text-javanese dark:text-[#82d5a9]" : "border-border bg-background text-foreground hover:bg-accent"}`}
                 aria-pressed={rating === "not_helpful"}
                 aria-label={translate("source.notHelpful")}
                 onClick={() => onRate("not_helpful")}
@@ -190,7 +190,7 @@ export function SourcePanel({
           </div>
           <Link
             href="/legal/disclaimer"
-            className="mt-4 inline-flex min-h-8 items-center gap-1.5 rounded-md text-xs font-semibold text-javanese transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese"
+            className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-md text-xs font-semibold text-javanese transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese"
           >
             <FileText className="size-4" />
             {translate("source.disclaimer")}

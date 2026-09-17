@@ -64,7 +64,7 @@ export function SearchWorkspace() {
       onConversationRename={handleConversationRename}
       onConversationDelete={handleConversationDelete}
     >
-      <div className="h-full min-h-0 overflow-y-auto px-[clamp(24px,6vw,92px)] pb-16 pt-[clamp(32px,5vw,64px)] max-[760px]:px-4 max-[760px]:pb-12 max-[760px]:pt-7">
+      <div className="h-full min-h-0 min-w-0 overflow-y-auto px-[clamp(24px,6vw,92px)] pb-16 pt-[clamp(32px,5vw,64px)] max-[760px]:px-4 max-[760px]:pb-12 max-[760px]:pt-7">
         <RegulationSearch />
       </div>
     </ChatWorkspaceShell>

@@ -17,17 +17,17 @@ function formatInt(value: number) {
 }
 
 function formatSeconds(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  if (value === null || value === undefined || Number.isNaN(value)) return "Belum ada data";
   return `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)} dtk`;
 }
 
 function formatScore(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  if (value === null || value === undefined || Number.isNaN(value)) return "Belum ada data";
   return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value);
 }
 
 function formatPct(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  if (value === null || value === undefined || Number.isNaN(value)) return "Belum ada data";
   return `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(value * 100)}%`;
 }
 

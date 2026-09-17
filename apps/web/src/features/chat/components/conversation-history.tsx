@@ -66,7 +66,7 @@ function ConversationTitleButton({ title, isActive, onSelect }: ConversationTitl
     <Button
       type="button"
       variant="ghost"
-      className="h-8 min-w-0 justify-start rounded-none border-0 px-0.5 text-left shadow-none hover:bg-transparent"
+      className="min-h-11 min-w-0 justify-start rounded-none border-0 px-0.5 text-left shadow-none hover:bg-transparent"
       aria-current={isActive ? "page" : undefined}
       title={title}
       onPointerEnter={updateOverflowDistance}
@@ -205,7 +205,7 @@ export function ConversationHistory({
               <button
                 type="button"
                 onClick={onRetry}
-                className="mt-2 text-sidebar-foreground underline underline-offset-4"
+                className="mt-2 inline-flex min-h-11 items-center text-sidebar-foreground underline underline-offset-4"
               >
                 {translate("sidebar.retryHistory")}
               </button>
@@ -255,7 +255,7 @@ export function ConversationHistory({
                     >
                       <Label
                         htmlFor={`conversation-title-${item.conversation_id}`}
-                        className="text-[10px] text-muted-foreground"
+                        className="text-[10px] text-sidebar-foreground"
                       >
                         {translate("sidebar.renameTitle")}
                       </Label>
@@ -289,8 +289,8 @@ export function ConversationHistory({
                     <div
                       className={`grid items-center ${
                         showPinnedIcon
-                          ? "grid-cols-[20px_minmax(0,1fr)_0_0] group-hover:grid-cols-[20px_minmax(0,1fr)_32px_32px] group-focus-within:grid-cols-[20px_minmax(0,1fr)_32px_32px] max-[760px]:grid-cols-[20px_minmax(0,1fr)_32px_32px]"
-                          : "grid-cols-[minmax(0,1fr)_0_0] group-hover:grid-cols-[minmax(0,1fr)_32px_32px] group-focus-within:grid-cols-[minmax(0,1fr)_32px_32px] max-[760px]:grid-cols-[minmax(0,1fr)_32px_32px]"
+                          ? "grid-cols-[20px_minmax(0,1fr)_0_0] group-hover:grid-cols-[20px_minmax(0,1fr)_44px_44px] group-focus-within:grid-cols-[20px_minmax(0,1fr)_44px_44px] max-[760px]:grid-cols-[20px_minmax(0,1fr)_44px_44px]"
+                          : "grid-cols-[minmax(0,1fr)_0_0] group-hover:grid-cols-[minmax(0,1fr)_44px_44px] group-focus-within:grid-cols-[minmax(0,1fr)_44px_44px] max-[760px]:grid-cols-[minmax(0,1fr)_44px_44px]"
                       }`}
                     >
                       {showPinnedIcon ? (
@@ -306,8 +306,10 @@ export function ConversationHistory({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="pointer-events-none size-8 border-0 text-sidebar-foreground/70 opacity-0 shadow-none transition hover:bg-sidebar-accent hover:text-sidebar-foreground group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 max-[760px]:pointer-events-auto max-[760px]:opacity-100"
-                        aria-label={isPinned ? "Unpin chat" : "Pin chat"}
+                        className="pointer-events-none size-11 border-0 text-sidebar-foreground/70 opacity-0 shadow-none transition hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 max-[760px]:pointer-events-auto max-[760px]:opacity-100"
+                        aria-label={
+                          isPinned ? translate("history.unpinChat") : translate("history.pinChat")
+                        }
                         aria-pressed={isPinned}
                         onClick={() => onTogglePinned?.(item.conversation_id)}
                       >
@@ -320,7 +322,7 @@ export function ConversationHistory({
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="pointer-events-none size-8 border-0 shadow-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 max-[760px]:pointer-events-auto max-[760px]:opacity-100"
+                            className="pointer-events-none size-11 border-0 shadow-none opacity-0 transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 max-[760px]:pointer-events-auto max-[760px]:opacity-100"
                             aria-label={`${translate("sidebar.actionsFor")} ${item.title}`}
                           >
                             <MoreHorizontal />

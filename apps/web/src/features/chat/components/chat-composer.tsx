@@ -52,7 +52,7 @@ export function ChatComposer({
           maxLength={2000}
           rows={2}
           disabled={loading}
-          className="w-full resize-none rounded-2xl bg-transparent p-4 pb-11 text-[14px] leading-[1.65] text-tinta outline-none placeholder:text-[#9ca39e] disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full resize-none rounded-2xl bg-transparent p-4 pb-14 text-[14px] leading-[1.65] text-tinta outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
         />
         <div className="absolute bottom-0 inset-x-0 flex items-center justify-between px-4 pb-3">
           <span className="text-xs font-medium tabular-nums text-muted-foreground">
@@ -60,7 +60,7 @@ export function ChatComposer({
           </span>
           {loading ? (
             <button
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#d8e8dc] bg-white px-3.5 text-xs font-semibold text-[#567064] transition hover:bg-[#e2f3e6] hover:text-[#14251b]"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#d8e8dc] bg-white px-3.5 text-xs font-semibold text-muted-foreground transition hover:bg-[#e2f3e6] hover:text-[#14251b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
               type="button"
               onClick={onCancel}
             >
@@ -69,7 +69,7 @@ export function ChatComposer({
             </button>
           ) : (
             <button
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest disabled:cursor-not-allowed disabled:bg-[#b8cfc0]"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese disabled:cursor-not-allowed disabled:bg-[#b8cfc0] disabled:text-tinta"
               type="submit"
               disabled={!question.trim()}
             >

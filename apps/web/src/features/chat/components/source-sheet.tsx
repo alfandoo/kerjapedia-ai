@@ -95,7 +95,7 @@ export function SourceSheet({
           <button
             ref={closeButtonRef}
             type="button"
-            className="grid size-9 place-items-center rounded-lg text-2xl leading-none text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese"
+            className="grid size-11 place-items-center rounded-lg text-2xl leading-none text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-javanese"
             onClick={onClose}
             aria-label={translate("source.close")}
           >

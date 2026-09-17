@@ -33,7 +33,7 @@ const actionLabels: Record<string, string> = {
 };
 
 function formatDateTime(value: string) {
-  if (Number.isNaN(new Date(value).getTime())) return "—";
+  if (Number.isNaN(new Date(value).getTime())) return "Tidak diketahui";
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
@@ -45,7 +45,7 @@ function formatDateTime(value: string) {
 }
 
 function formatDuration(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds < 0) return "—";
+  if (!Number.isFinite(seconds) || seconds < 0) return "Belum ada data";
   if (seconds < 60) return `${seconds} detik`;
   const mins = Math.round(seconds / 60);
   if (mins >= 1440) {
@@ -208,7 +208,7 @@ export function AdminSettings() {
                           >
                             <dt className="text-sm text-muted-text">{label}</dt>
                             <dd className="break-words text-sm font-medium text-tinta">
-                              {value || "—"}
+                              {value || "Tidak diketahui"}
                             </dd>
                           </div>
                         ))}

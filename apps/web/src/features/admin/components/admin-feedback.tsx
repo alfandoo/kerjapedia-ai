@@ -42,7 +42,7 @@ function safeDate(value: string) {
 
 function formatDateTime(value: string) {
   const d = safeDate(value);
-  if (!d) return "—";
+  if (!d) return "Tidak diketahui";
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
@@ -54,7 +54,7 @@ function formatDateTime(value: string) {
 
 function relativeTime(value: string) {
   const d = safeDate(value);
-  if (!d) return "—";
+  if (!d) return "Tidak diketahui";
   const diff = Date.now() - d.getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return "Baru saja";

@@ -198,7 +198,7 @@ export function AdminIngestion() {
         setLoadError(false);
         setJobs(items);
         setSelectedJobId(items[0]?.job_id ?? null);
-        setLoadStatus(items.length ? "" : "Belum ada job ingestion — mulai dari halaman dokumen.");
+        setLoadStatus(items.length ? "" : "Belum ada job ingestion. Mulai dari halaman dokumen.");
       })
       .catch((err) => {
         if ((err as Error)?.name === "AbortError") return;
@@ -284,7 +284,7 @@ export function AdminIngestion() {
       setFilter("all");
       setPage(1);
       toast.info(
-        force ? `Ingestion dipaksa diulang — ${documentId}` : `Ingestion dimulai — ${documentId}`
+        force ? `Ingestion dipaksa diulang: ${documentId}` : `Ingestion dimulai: ${documentId}`
       );
     } catch {
       toast.error("Gagal memulai pemrosesan. Periksa koneksi lalu coba lagi.");
@@ -399,7 +399,7 @@ export function AdminIngestion() {
           </div>
 
           <div className="grid min-w-0 gap-6">
-            {/* Left — job list */}
+            {/* Left - job list */}
             <div className="min-w-0 space-y-4">
               {/* Filter bar */}
               <div className="flex flex-wrap items-center gap-2">

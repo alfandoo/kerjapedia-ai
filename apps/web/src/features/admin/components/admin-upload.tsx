@@ -157,7 +157,7 @@ export function AdminUpload() {
     setIngestError(null);
     try {
       const job = await createIngestionJob(uploaded.document_id);
-      // Job starts as "running" — poll until it finishes
+      // Job starts as "running" - poll until it finishes
       if (job.status === "running" || job.status === "queued") {
         ingestFailuresRef.current = 0;
         ingestPollRef.current = setInterval(async () => {
@@ -280,7 +280,7 @@ export function AdminUpload() {
       </div>
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        {/* Left — upload zone */}
+        {/* Left - upload zone */}
         <div className="space-y-4">
           <div
             className={cn(
@@ -390,7 +390,7 @@ export function AdminUpload() {
           ) : null}
         </div>
 
-        {/* Right — config & actions */}
+        {/* Right - config & actions */}
         <div className="space-y-4">
           {/* Topic selector */}
           <Card>
@@ -464,7 +464,7 @@ export function AdminUpload() {
             </Button>
           )}
 
-          {/* Uploaded — ready for ingestion */}
+          {/* Uploaded - ready for ingestion */}
           {uploaded && !ingestDone && (
             <Card className="border-forest/25 bg-teal-soft/30">
               <CardContent className="space-y-3 p-5">

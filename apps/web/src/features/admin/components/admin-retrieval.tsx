@@ -39,7 +39,7 @@ import type { RetrievalPlaygroundResult } from "@/features/admin/types";
 function ScoreBadge({ score }: { score: number }) {
   return (
     <span className="font-mono text-sm font-semibold tabular-nums text-forest">
-      {Number.isFinite(score) ? score.toFixed(3) : "—"}
+      {Number.isFinite(score) ? score.toFixed(3) : "Belum ada data"}
     </span>
   );
 }
@@ -114,7 +114,7 @@ export function AdminRetrieval() {
       />
 
       <div className="grid items-start gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-        {/* Left — config */}
+        {/* Left - config */}
         <div className="space-y-4">
           <Card>
             <CardContent className="space-y-4 pt-5">
@@ -246,7 +246,7 @@ export function AdminRetrieval() {
             </CardContent>
           </Card>
 
-          {/* Selected quote — integrated */}
+          {/* Selected quote - integrated */}
           <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
             <DialogContent
               className={`admin-theme ${styles.ingestion} ${styles.detailModal} max-h-[85dvh] overflow-y-auto p-6 sm:max-w-xl`}
@@ -303,7 +303,7 @@ export function AdminRetrieval() {
           </Dialog>
         </div>
 
-        {/* Right — results */}
+        {/* Right - results */}
         <Card className="min-w-0 h-fit">
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center gap-3">
