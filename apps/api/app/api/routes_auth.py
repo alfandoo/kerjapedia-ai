@@ -204,7 +204,7 @@ def login(payload: LoginRequest) -> LoginResponse:
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email atau password salah.",
+            detail=f"Login error: {type(exc).__name__}: {exc}",
         ) from exc
 
 
