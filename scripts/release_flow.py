@@ -72,7 +72,7 @@ def login(base_url: str, email: str, password: str) -> str:
 
 def approve_builds(base_url: str, token: str) -> int:
     """Approve all pending ingestion builds. Returns count approved."""
-    jobs = api_call(base_url, "/ingestion", token=token)
+    jobs = api_call(base_url, "/ingestion/jobs", token=token)
     if not isinstance(jobs, list):
         jobs = jobs.get("jobs", [])
 

@@ -1,0 +1,104 @@
+services:
+  - type: web
+    name: kerjapedia-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
+    plan: free
+    healthCheckPath: /ready
+    envVars:
+      # Supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: regulations
+
+      # Database
+      - key: DATABASE_URL
+        sync: false
+
+      # LLM
+      - key: LLM_PROVIDER
+        value: openrouter
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: openrouter/free
+      - key: OPENROUTER_TIMEOUT_SECONDS
+        value: "60"
+      - key: OPENROUTER_MAX_RETRIES
+        value: "2"
+      - key: OPENROUTER_MAX_TOKENS
+        value: "6000"
+      - key: OPENROUTER_FALLBACK_MODELS
+        value: "google/gemma-4-31b-it:free,nvidia/nemotron-3-super-120b-a12b:free"
+
+      # Redis
+      - key: REDIS_URL
+        sync: false
+
+      # Vector Store
+      - key: VECTOR_STORE
+        value: pinecone
+      - key: TOP_K
+        value: "5"
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX_NAME
+        value: kerjapedia
+      - key: PINECONE_NAMESPACE
+        value: production
+      - key: PINECONE_CLOUD
+        value: aws
+      - key: PINECONE_REGION
+        value: us-east-1
+
+      # Embedding
+      - key: EMBEDDING_PROVIDER
+        value: bge_m3
+      - key: EMBEDDING_MODEL
+        value: BAAI/bge-m3
+      - key: EMBEDDING_DIMENSION
+        value: "1024"
+      - key: INGESTION_EMBEDDING_TIMEOUT_SECONDS
+        value: "300"
+      - key: INGESTION_EMBEDDING_BATCH_SIZE
+        value: "8"
+
+      # App
+      - key: APP_ENV
+        value: production
+      - key: APP_URL
+        sync: false
+
+      # SMTP
+      - key: SMTP_HOST
+        value: smtp.zoho.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_SENDER_EMAIL
+        sync: false
+      - key: SMTP_SENDER_NAME
+        value: KerjaPedia
+      - key: EMAIL_OTP_EXPIRY_MINUTES
+        value: "15"
+
+      # Reranker
+      - key: RERANKER_PROVIDER
+        value: pinecone
+      - key: RERANKER_MODEL
+        value: bge-reranker-v2-m3
+
+      # Evaluation
+      - key: RAGAS_ENABLED
+        value: "true"
+      - key: RAGAS_SAMPLE_RATE
+        value: "0.05"

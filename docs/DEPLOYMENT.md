@@ -1,154 +1,226 @@
-# Deployment MVP
+# Deployment Guide
 
-## Target Reference
+## Architecture
 
-Deployment reference menggunakan container OCI:
-
-- Next.js web pada port `3000`.
-- FastAPI pada port `8000`.
-- PostgreSQL 16 + pgvector sebagai metadata database.
-- Pinecone dan Groq sebagai managed provider.
-
-Image dapat dijalankan di Railway, Render, Fly.io, VPS, Kubernetes, atau platform lain
-yang menerima Docker image. Workflow GitHub Actions membangun image pada pull request
-dan menerbitkannya ke GHCR pada branch `main` atau tag `v*`.
-
-## Persiapan
-
-1. Salin `.env.production.example` menjadi `.env.production`.
-2. Ganti seluruh credential placeholder.
-3. Set `PUBLIC_API_URL` ke URL HTTPS backend.
-4. Set `CORS_ORIGINS` ke URL HTTPS frontend.
-5. Pastikan `DATABASE_URL` memakai password yang sama dengan `POSTGRES_PASSWORD`.
-
-Konfigurasi production akan menolak password admin default, credential provider kosong,
-dan origin localhost.
-
-## Menjalankan Container
-
-```powershell
-docker compose -f compose.production.yaml --env-file .env.production build
-docker compose -f compose.production.yaml --env-file .env.production up -d
-docker compose -f compose.production.yaml --env-file .env.production ps
+```
+┌─────────────────┐     ┌─────────────────┐
+│   Vercel        │     │   Render        │
+│   (Web/Next.js) │────▶│   (API/FastAPI) │
+│                 │     │                 │
+│  - Frontend     │     │  - Auth         │
+│  - API Proxy    │     │  - Chat/RAG     │
+│  - SSR Pages    │     │  - Admin API    │
+└─────────────────┘     └────────┬────────┘
+                                 │
+                    ┌────────────┼────────────┐
+                    │            │            │
+              ┌─────▼─────┐ ┌───▼───┐ ┌─────▼─────┐
+              │ Supabase  │ │ Redis │ │ Pinecone  │
+              │ (Postgres)│ │(Upstash)│ │(Vectors) │
+              └───────────┘ └───────┘ └───────────┘
 ```
 
-Service `migrate` menjalankan Alembic setelah PostgreSQL sehat. API baru berjalan setelah
-migration berhasil, dan web menunggu API sehat.
+## Prerequisites
 
-## Smoke Test
+1. GitHub account with the repo pushed
+2. Render account (free, no credit card needed)
+3. Vercel account (already have)
+4. All API keys ready (Supabase, Pinecone, OpenRouter, Upstash Redis, SMTP)
 
-```powershell
-python scripts/smoke_deployment.py `
-  --api-url https://api.example.com `
-  --web-url https://app.example.com
+## Step 1: Deploy API to Render
+
+### 1.1 Login to Render
+
+1. Go to https://dashboard.render.com
+2. Click "Sign Up" → "GitHub" (authorize Render)
+3. No credit card required for free tier
+
+### 1.2 Create Blueprint
+
+1. Click "New" → "Blueprint"
+2. Connect repository: `alfandoo/kerjapedia-ai`
+3. Render detects `render.yaml` automatically
+4. Click "Apply" to create the service
+
+### 1.3 Set Environment Variables
+
+In Render Dashboard → your service → "Environment" tab:
+
+Click "Add Environment Variable" for each:
+
+| Key | Value | Source |
+|-----|-------|--------|
+| `SUPABASE_URL` | `https://ybfhmxjldxfdlxpfviuk.supabase.co` | .env |
+| `SUPABASE_SERVICE_KEY` | (copy from .env) | .env |
+| `SUPABASE_ANON_KEY` | (copy from .env) | .env |
+| `DATABASE_URL` | (copy from .env) | .env |
+| `REDIS_URL` | (copy from .env, Upstash) | .env |
+| `OPENROUTER_API_KEY` | (copy from .env) | .env |
+| `PINECONE_API_KEY` | (copy from .env) | .env |
+| `SMTP_USERNAME` | `kerjapedia@zohomail.com` | .env |
+| `SMTP_PASSWORD` | (copy from .env) | .env |
+| `SMTP_SENDER_EMAIL` | `kerjapedia@zohomail.com` | .env |
+
+**Note:** `APP_URL` should be set to your Vercel URL after web deployment.
+
+### 1.4 Wait for First Deploy
+
+- First deploy: ~5-10 min (downloads BGE-M3 model ~1.3GB)
+- Subsequent deploys: ~2-3 min
+- Your API URL: `https://kerjapedia-api.onrender.com`
+
+### 1.5 Run Database Migration
+
+In Render Dashboard → your service → "Shell" tab:
+
+```bash
+python -m alembic upgrade head
 ```
 
-Smoke test memastikan `/health` mengembalikan status `ok` dan frontend mengembalikan
-halaman HTML.
+### 1.6 Verify API
 
-## Deployment Provider
+Open: `https://kerjapedia-api.onrender.com/health`
 
-Untuk managed deployment, buat tiga service:
+Should return:
+```json
+{"status": "ok"}
+```
 
-1. `web` dari `apps/web/Dockerfile`.
-2. `api` dari `apps/api/Dockerfile`.
-3. PostgreSQL managed atau service dari `compose.production.yaml`.
+---
 
-Jalankan `python -m alembic upgrade head` sebagai release command backend. Mount object
-storage persisten ke `/workspace/storage` bila fitur upload admin digunakan. Dataset
-harus tersedia read-only di `/workspace/dataset`, atau endpoint admin yang bergantung
-pada manifest harus dinonaktifkan sampai dataset tersedia.
+## Step 2: Deploy Web to Vercel
 
-## Rollback
+### 2.1 Login to Vercel
 
-Gunakan image bertag commit SHA dari GHCR. Rollback aplikasi dilakukan dengan mengganti
-tag image ke SHA sebelumnya. Migration database harus backward-compatible; lakukan
-backup dan restore-verification sebelum migration yang mengubah atau menghapus data.
+```bash
+vercel login
+```
 
-## Belum Dilakukan
+### 2.2 Initialize Project
 
-Deployment cloud aktual, konfigurasi DNS/TLS, dan smoke test URL production menunggu
-pemilihan provider serta akses akun deployment.
+From the project root:
 
-## Trusted proxy dan rate limit
+```bash
+cd KerjaPediaAI
+vercel
+```
 
-Entrypoint API container (`python -m app.server`) mengabaikan header forwarding secara
-default. `FORWARDED_ALLOW_IPS` hanya diisi dengan IP atau CIDR proxy yang benar-benar
-dikendalikan, dipisahkan koma. Wildcard `*` dan jaringan `/0` ditolak saat startup.
-Contoh untuk proxy internal dengan IP tetap: `FORWARDED_ALLOW_IPS=172.30.0.10`.
-Jangan menyalin IP contoh tanpa memeriksa alamat peer yang diterima container.
+When prompted:
+- Set up and deploy? → **Y**
+- Which scope? → (your account)
+- Link to existing project? → **N**
+- Project name? → `kerjapedia-web`
+- Directory where code is located? → `apps/web`
+- Want to override settings? → **N**
 
-Compose production mengikat port API ke `127.0.0.1:8000` pada host. Pasang reverse
-proxy HTTPS untuk `PUBLIC_API_URL`; proxy di host meneruskan ke port lokal ini,
-atau proxy dalam jaringan Docker meneruskan ke `api:8000`. Pastikan firewall dan
-jaringan membatasi akses langsung ke API. Proxy harus menimpa atau membersihkan
-header forwarding dari klien, lalu mengisi alamat klien yang benar.
+### 2.3 Set Environment Variables
 
-Pada platform managed, gunakan daftar alamat proxy resmi platform dan batasi
-koneksi langsung ke backend. Jangan mempercayai semua IP untuk mengatasi alamat
-proxy dinamis. Jika daftar belum diketahui, biarkan kosong; permintaan melalui
-proxy akan berbagi batas berdasarkan IP proxy sampai trust dikonfigurasi.
+Replace `<RENDER_API_URL>` with your actual Render URL:
 
-Untuk menjalankan Uvicorn langsung saat development, gunakan `--no-proxy-headers`.
-Pengaturan ini mengatasi spoofing IP; limiter saat ini masih berbasis memori per
-proses dan belum menyatukan kuota antar-replica.
+```bash
+vercel env add NEXT_PUBLIC_API_URL production
+# Paste: https://kerjapedia-api.onrender.com
 
-## Security headers frontend
+vercel env add API_INTERNAL_URL production
+# Paste: https://kerjapedia-api.onrender.com
 
-Frontend memasang CSP dengan nonce acak per respons. `connect-src` production dibatasi ke origin frontend
-karena semua request browser melewati BFF. Build production memblokir script inline
-tanpa nonce dan `eval`; development mengizinkan `eval` dan WebSocket untuk HMR.
-Style inline tetap diizinkan karena digunakan komponen UI. Halaman dirender dinamis
-dan tidak boleh di-cache bersama oleh CDN agar nonce pada header dan HTML tetap cocok.
-Header anti-iframe, nosniff, kebijakan referrer, permissions, dan HSTS production juga aktif.
+vercel env add NEXT_PUBLIC_GOOGLE_CLIENT_ID production
+# Paste: 313607429666-14jgl98127ur6kdcsf04op2ujr59a370.apps.googleusercontent.com
+```
 
-## Sesi browser HttpOnly
+### 2.4 Deploy to Production
 
-Browser memakai `/api/backend/*` pada origin frontend. Next.js meneruskan request
-ke `API_INTERNAL_URL` (Compose: `http://api:8000`); untuk development default-nya
-`http://127.0.0.1:8000`. `APP_ORIGIN` harus sama persis dengan origin HTTPS frontend,
-misalnya `https://app.example.com`, terutama bila web berada di belakang reverse proxy.
-Backend tetap memverifikasi bearer dan role di server. Jangan mengekspos backend
-langsung sebagai pengganti jalur BFF untuk sesi browser.
+```bash
+vercel --prod
+```
 
-Access token dan refresh token hanya diterima route server lalu disimpan dalam
-cookie host-only HttpOnly, SameSite=Lax, Path=/; production memakai Secure serta
-prefix `__Host-`. Masa simpan cookie maksimum 30 hari; validitas token tetap ditentukan
-Supabase. Browser hanya menerima profil pengguna dan menyimpannya di memori.
-Aplikasi tidak lagi membaca, menulis, maupun membersihkan Web Storage lama: pengguna
-perlu login ulang sekali setelah migrasi. Refresh dan logout tidak lagi menerima
-token dari JavaScript browser. Jangan log header Cookie/Authorization di proxy.
+### 2.5 Verify Web
 
-Semua mutation BFF, termasuk login, wajib membawa Origin yang cocok dengan
-`APP_ORIGIN` dan header `X-KerjaPedia-CSRF: 1`. Tidak ada CORS lintas origin di BFF.
-Respons sesi tidak boleh di-cache. Pengujian lokal build production sebaiknya memakai
-localhost yang didukung browser untuk cookie Secure; deployment nyata wajib HTTPS.
-Token HttpOnly mencegah pembacaan token oleh JavaScript, tetapi bukan pengganti CSP
-atau otorisasi: XSS yang berhasil tetap dapat bertindak lewat sesi korban.
+Your web URL: `https://kerjapedia-web.vercel.app`
 
-Limiter backend saat ini menghitung IP koneksi BFF (kuota bersama untuk request
-melalui proses proxy). Identitas IP klien dari header browser sengaja tidak diteruskan;
-kuota per pengguna/guest atau edge limiter tepercaya tetap diperlukan untuk scaling.
+1. Open the URL
+2. Test login with `admin@kerjapedia.ai`
+3. Test chat with a question
 
-## Endpoint operasional
+---
 
-`GET /health` tetap publik dan tanpa probe jaringan; respons hanya status dan nama
-layanan. `GET /ready` tetap dapat dipakai Docker/orchestrator tanpa token, tetapi
-hanya mengembalikan `ready` (200) atau `not_ready` (503), tanpa detail dependency.
-Probe readiness dibagikan antar-request dengan cache 10 detik per proses; perubahan
-kesiapan dapat memerlukan sampai 10 detik untuk terlihat.
+## Step 3: Post-Deployment
 
-Detail readiness, versi dan provider tersedia melalui `GET /admin/system/diagnostics`
-dengan autentikasi admin (browser lewat BFF). `GET /metrics` backend juga memerlukan
-bearer admin yang valid dan tidak diteruskan oleh BFF publik. Monitoring yang melakukan
-scrape harus mengirim kredensial tersebut melalui jaringan internal; jangan menaruhnya
-di URL atau membuka endpoint lewat pengecualian autentikasi reverse proxy.
+### 3.1 Update APP_URL
 
+In Render Dashboard → Environment → add:
 
-### Penyimpanan preferensi browser
+```
+APP_URL = https://kerjapedia-web.vercel.app
+```
 
-Tema, bahasa, dan status sidebar memakai cookie non-sensitif (`SameSite=Lax`, `Secure` pada HTTPS). Cookie tema/bahasa dibaca saat render server. Mode System mengikuti perangkat melalui skrip bernonce sebelum halaman tampil.
+### 3.2 Update CORS
 
-Identitas tamu memakai cookie HttpOnly `__Host-kp-guest` di production (`kp-guest` di development). BFF memasok ID dari cookie dan mengabaikan header ID tamu dari browser. Daftar chat yang dipin disimpan per ID akun di IndexedDB; jika IndexedDB tidak tersedia, pin hanya bertahan dalam memori halaman.
+In Render Dashboard → Environment → add:
 
-Tidak ada akses localStorage atau sessionStorage dalam kode aplikasi, termasuk pembersihan/migrasi data lama. Nilai lama tetap berada di browser tetapi tidak digunakan. Pengaturan yang sudah memiliki cookie tetap berlaku; pin lama, status sidebar lama, dan identitas tamu lama tidak dimigrasikan. Pengguna dapat membersihkan data situs melalui pengaturan browser jika diperlukan; pembersihan juga menghapus cookie dan IndexedDB.
+```
+CORS_ORIGINS = https://kerjapedia-web.vercel.app
+```
+
+### 3.3 Enable Auto-Deploy
+
+Both Render and Vercel auto-deploy on push to `main`.
+
+---
+
+## Troubleshooting
+
+### API Cold Start
+
+Free tier spins down after 15 min idle. First request takes ~30s.
+
+**Workaround:** Use UptimeRobot (free) to ping `/health` every 5 min.
+
+### API Build Fails
+
+Check Render logs: Dashboard → your service → "Logs"
+
+Common issues:
+- Missing environment variables
+- Docker build errors
+
+### Web Can't Connect to API
+
+1. Check `API_INTERNAL_URL` is set correctly in Vercel
+2. Check CORS settings in Render
+3. Test API directly: `curl https://kerjapedia-api.onrender.com/health`
+
+### Pinecone Connection Error
+
+Pinecone may need IP whitelist update. Check:
+1. Pinecone dashboard → Settings → API Keys
+2. Whitelist Render's IP range (or use `0.0.0.0/0` for testing)
+
+---
+
+## Cost
+
+| Service | Plan | Cost |
+|---------|------|------|
+| Render (API) | Free | $0/month |
+| Vercel (Web) | Hobby | $0/month |
+| Supabase | Free | $0/month |
+| Upstash Redis | Free | $0/month |
+| Pinecone | Starter | $0/month |
+| OpenRouter | Pay-as-you-go | ~$1-5/month |
+| **Total** | | **$0-5/month** |
+
+---
+
+## Manual Deploy Commands
+
+```bash
+# Deploy API to Render (via git push)
+git push origin main
+
+# Deploy Web to Vercel
+vercel --prod
+
+# Test API
+python scripts/deploy.py test-api https://kerjapedia-api.onrender.com
+```

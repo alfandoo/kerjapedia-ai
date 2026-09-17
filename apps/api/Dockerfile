@@ -21,7 +21,7 @@ RUN groupadd --system kerjapedia \
     && mkdir -p /workspace/storage /workspace/model-cache \
     && chown -R kerjapedia:kerjapedia /workspace
 
-COPY requirements.txt .
+COPY requirements-prod.txt requirements.txt .
 RUN python -m pip install --upgrade pip && python -m pip install -r requirements.txt
 
 COPY alembic.ini .
