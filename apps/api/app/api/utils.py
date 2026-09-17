@@ -12,7 +12,9 @@ from app.services.ingestion.uploads import load_uploads_manifest, merge_document
 
 
 def project_root() -> Path:
-    return settings.project_root or Path(__file__).resolve().parents[4]
+    if settings.project_root:
+        return settings.project_root
+    return Path(__file__).resolve().parents[2]
 
 
 def dataset_metadata_path() -> Path:
