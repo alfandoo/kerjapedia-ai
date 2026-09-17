@@ -38,8 +38,7 @@ const id = {
 
   // Kalkulator Ketenagakerjaan (belum diimplementasikan)
   "kalkulator.title": "Kalkulator Ketenagakerjaan",
-  "kalkulator.description":
-    "Estimasi indikatif hak pekerja: pesangon, THR, cuti, dan upah lembur.",
+  "kalkulator.description": "Estimasi indikatif hak pekerja: pesangon, THR, cuti, dan upah lembur.",
   "kalkulator.comingSoon": "Fitur ini sedang dalam pengembangan.",
   "kalkulator.note":
     "Hasil hanyalah estimasi dan tidak mengikat. Selalu verifikasi ke sumber resmi sebelum digunakan.",
@@ -310,8 +309,7 @@ const id = {
   // Error boundary
   "error.eyebrow": "Galat",
   "error.title": "Terjadi kesalahan",
-  "error.description":
-    "Muat ulang halaman ini. Jika berlanjut, kembali ke chat dan coba lagi.",
+  "error.description": "Muat ulang halaman ini. Jika berlanjut, kembali ke chat dan coba lagi.",
   "error.retry": "Coba lagi",
   "error.backToChat": "Kembali ke chat",
   // History

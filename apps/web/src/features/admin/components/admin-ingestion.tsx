@@ -441,24 +441,24 @@ export function AdminIngestion() {
                       ? "Unggah PDF untuk mulai menyiapkan dokumen."
                       : "Pilih status lain untuk melihat pekerjaan."
                   }
-                    action={
-                      jobs.length === 0 ? (
-                        <Button asChild className="min-h-11">
-                          <Link href="/admin/upload">Upload PDF</Link>
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          className="min-h-11"
-                          onClick={() => {
-                            setFilter("all");
-                            setPage(1);
-                          }}
-                        >
-                          Tampilkan semua
-                        </Button>
-                      )
-                    }
+                  action={
+                    jobs.length === 0 ? (
+                      <Button asChild className="min-h-11">
+                        <Link href="/admin/upload">Upload PDF</Link>
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="min-h-11"
+                        onClick={() => {
+                          setFilter("all");
+                          setPage(1);
+                        }}
+                      >
+                        Tampilkan semua
+                      </Button>
+                    )
+                  }
                 />
               ) : (
                 <div className="overflow-hidden rounded-xl border border-line bg-white">
@@ -591,8 +591,8 @@ export function AdminIngestion() {
                       </select>
                     </label>
                     <span role="status">
-                      {pageStart + 1} sampai {Math.min(pageStart + pageSize, filtered.length)}{" "}
-                      dari {filtered.length} pekerjaan
+                      {pageStart + 1} sampai {Math.min(pageStart + pageSize, filtered.length)} dari{" "}
+                      {filtered.length} pekerjaan
                     </span>
                     <nav
                       aria-label="Pagination daftar ingestion"

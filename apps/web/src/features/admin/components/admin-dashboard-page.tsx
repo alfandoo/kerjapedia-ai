@@ -435,7 +435,7 @@ export function AdminDashboardPage() {
             </Link>
           </header>
           <div className="flex flex-col px-6 py-5">
-                        <div className="flex items-end justify-between gap-4">
+            <div className="flex items-end justify-between gap-4">
               <p className="text-sm text-muted-text">Jawaban dinilai membantu</p>
 
               {stats.feedback.total > 0 ? (
@@ -516,7 +516,10 @@ export function AdminDashboardPage() {
             >
               <RefreshCw
                 aria-hidden="true"
-                className={cn("size-[18px]", refreshing && "animate-spin motion-reduce:animate-none")}
+                className={cn(
+                  "size-[18px]",
+                  refreshing && "animate-spin motion-reduce:animate-none"
+                )}
               />
             </button>
             <Link

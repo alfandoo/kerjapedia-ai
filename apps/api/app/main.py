@@ -25,6 +25,15 @@ from app.services.supabase import get_supabase
 
 logger = logging.getLogger("kerjapedia.api")
 
+
+class _AppState:
+    """Minimal state container for test backward compatibility."""
+
+    request_counts: dict[str, int] = {}
+
+
+state = _AppState()
+
 rate_limiter = RateLimiter(
     settings.rate_limit_per_minute, redis_url=settings.redis_url
 )

@@ -253,236 +253,252 @@ export function RunDetailDialog({
         ) : (
           <>
             <nav aria-label="Bagian laporan evaluasi" className={modalStyles.tabs}>
-          {[
-            { id: "summary", label: "Ringkasan" },
-            { id: "topics", label: "Per topik" },
-            { id: "questions", label: "Per pertanyaan" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              aria-pressed={section === tab.id}
-              aria-controls="evaluation-report-section"
-              onClick={() => setSection(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-        <div id="evaluation-report-section" className={modalStyles.body}>
-          {section === "summary" && (
-            <section className="space-y-4">
-              <div>
-                <h3 className="font-semibold text-tinta">Perbandingan metrik</h3>
-                <p className="mt-1 text-sm text-muted-text">
-                  Bandingkan setiap mode pada dataset dan pengujian yang sama.
-                </p>
-              </div>
-              {modes.length ? (
-                <div className={modalStyles.tableWrap}>
-                  <table className={modalStyles.table} aria-label="Perbandingan metrik evaluasi">
-                    <thead>
-                      <tr>
-                        <th scope="col">Metrik</th>
-                        {modes.map((mode) => (
-                          <th scope="col" key={mode}>
-                            {modeLabel[mode] ?? mode}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {metrics.map((metric) => (
-                        <tr key={metric.key}>
-                          <th scope="row">{metric.label}</th>
-                          {modes.map((mode) => (
-                            <td key={mode} className="font-mono tabular-nums">
-                              {pct(detail.metrics[mode][metric.key])}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-text">Metrik belum tersedia untuk evaluasi ini.</p>
-              )}
-              <div className="rounded-lg bg-surface-soft p-4 text-xs leading-relaxed text-muted-text">
-                <p>
-                  <strong>Recall@5</strong> menunjukkan cakupan sumber relevan pada lima hasil
-                  teratas. <strong>MRR</strong> mengukur posisi hasil relevan pertama.
-                </p>
-                <p className="mt-2">Nilai &quot;Belum ada data&quot; berarti metrik belum tersedia.</p>
-              </div>
-            </section>
-          )}
-          {/* Per-topic table */}
-          {section === "topics" &&
-            (topics.length > 0 ? (
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-tinta">Recall per topik</h3>
-                <div className="overflow-x-auto rounded-lg border">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-surface-soft">
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-text">
-                          Topik
-                        </th>
-                        {experiments.map((experiment) => (
-                          <th
-                            key={experiment.mode}
-                            className="px-3 py-2.5 text-right text-xs font-semibold text-muted-text"
-                          >
-                            {modeLabel[experiment.mode] ?? experiment.mode}
-                          </th>
-                        ))}
-                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-text">
-                          Pertanyaan
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topics.map((topic) => (
-                        <tr key={topic} className="border-b last:border-0">
-                          <td className="px-3 py-2 font-medium">{topic.replaceAll("_", " ")}</td>
-                          {experiments.map((experiment) => {
-                            const val = experiment.per_topic[topic]?.recall_at_5;
-                            return (
-                              <td
-                                key={experiment.mode}
-                                className={cn(
-                                  "px-3 py-2 text-right font-mono text-sm tabular-nums",
-                                  val != null ? scoreColor(val) : "text-muted-text"
-                                )}
-                              >
-                                {pct(val)}
-                              </td>
-                            );
-                          })}
-                          <td className="px-3 py-2 text-right text-muted-text tabular-nums">
-                            {experiments[0]?.per_topic[topic]?.question_count ?? 0}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <p className="py-10 text-center text-sm text-muted-text">
-                Laporan per topik belum tersedia.
-              </p>
-            ))}
-
-          {section === "questions" && (
-            <section className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="font-semibold text-tinta">Hasil per pertanyaan</h3>
-                <label className="flex items-center gap-2 text-sm text-muted-text">
-                  Mode
-                  <select
-                    className="min-h-11 rounded-lg border border-line bg-white px-3 text-tinta"
-                    value={modeFilter}
-                    onChange={(event) => {
-                      setModeFilter(event.target.value);
-                      setPage(1);
-                    }}
-                  >
-                    <option value="all">Semua mode</option>
-                    {experiments.map((experiment) => (
-                      <option key={experiment.mode} value={experiment.mode}>
-                        {modeLabel[experiment.mode] ?? experiment.mode}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {rows.length ? (
-                <>
-                  <div className={modalStyles.tableWrap}>
-                    <table className={modalStyles.table} aria-label="Hasil evaluasi per pertanyaan">
-                      <thead>
-                        <tr>
-                          {["Pertanyaan", "Mode", "Respons", "Recall@5", "Keputusan penolakan"].map(
-                            (label) => (
-                              <th key={label} scope="col">
-                                {label}
+              {[
+                { id: "summary", label: "Ringkasan" },
+                { id: "topics", label: "Per topik" },
+                { id: "questions", label: "Per pertanyaan" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-pressed={section === tab.id}
+                  aria-controls="evaluation-report-section"
+                  onClick={() => setSection(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+            <div id="evaluation-report-section" className={modalStyles.body}>
+              {section === "summary" && (
+                <section className="space-y-4">
+                  <div>
+                    <h3 className="font-semibold text-tinta">Perbandingan metrik</h3>
+                    <p className="mt-1 text-sm text-muted-text">
+                      Bandingkan setiap mode pada dataset dan pengujian yang sama.
+                    </p>
+                  </div>
+                  {modes.length ? (
+                    <div className={modalStyles.tableWrap}>
+                      <table
+                        className={modalStyles.table}
+                        aria-label="Perbandingan metrik evaluasi"
+                      >
+                        <thead>
+                          <tr>
+                            <th scope="col">Metrik</th>
+                            {modes.map((mode) => (
+                              <th scope="col" key={mode}>
+                                {modeLabel[mode] ?? mode}
                               </th>
-                            )
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.slice((currentPage - 1) * 5, currentPage * 5).map((result) => (
-                          <tr key={`${result.mode}-${result.question_id}`}>
-                            <th scope="row">
-                              <p className="font-mono text-xs">{result.question_id}</p>
-                              <p className="mt-1 text-xs font-normal text-muted-text">
-                                {result.category.replaceAll("_", " ")}
-                              </p>
-                            </th>
-                            <td>{modeLabel[result.mode] ?? result.mode}</td>
-                            <td>{result.actual_refuse ? "Menolak" : "Menjawab"}</td>
-                            <td className="font-mono">{pct(result.recall_at_5)}</td>
-                            <td>
-                              <span className="inline-flex items-center gap-2">
-                                {result.refusal_correct ? (
-                                  <CheckCircle2 className="size-4 text-forest" />
-                                ) : (
-                                  <AlertTriangle className="size-4 text-amber" />
-                                )}
-                                {result.refusal_correct ? "Sesuai" : "Perlu ditinjau"}
-                              </span>
-                            </td>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {metrics.map((metric) => (
+                            <tr key={metric.key}>
+                              <th scope="row">{metric.label}</th>
+                              {modes.map((mode) => (
+                                <td key={mode} className="font-mono tabular-nums">
+                                  {pct(detail.metrics[mode][metric.key])}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-text">
+                      Metrik belum tersedia untuk evaluasi ini.
+                    </p>
+                  )}
+                  <div className="rounded-lg bg-surface-soft p-4 text-xs leading-relaxed text-muted-text">
+                    <p>
+                      <strong>Recall@5</strong> menunjukkan cakupan sumber relevan pada lima hasil
+                      teratas. <strong>MRR</strong> mengukur posisi hasil relevan pertama.
+                    </p>
+                    <p className="mt-2">
+                      Nilai &quot;Belum ada data&quot; berarti metrik belum tersedia.
+                    </p>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-text">
-                    <span role="status">
-                      {(currentPage - 1) * 5 + 1} sampai {Math.min(currentPage * 5, rows.length)}{" "}
-                      dari {rows.length} hasil
-                    </span>
-                    <nav
-                      aria-label="Pagination hasil pertanyaan"
-                      className="flex items-center gap-2"
-                    >
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="min-h-11"
-                        disabled={currentPage === 1}
-                        onClick={() => setPage(currentPage - 1)}
-                      >
-                        Sebelumnya
-                      </Button>
-                      <span>
-                        {currentPage} / {pageCount}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="min-h-11"
-                        disabled={currentPage === pageCount}
-                        onClick={() => setPage(currentPage + 1)}
-                      >
-                        Berikutnya
-                      </Button>
-                    </nav>
-                  </div>
-                </>
-              ) : (
-                <p className="py-10 text-center text-sm text-muted-text">
-                  Hasil per pertanyaan belum tersedia.
-                </p>
+                </section>
               )}
-            </section>
-          )}
-        </div>
-            </>
-          )}
+              {/* Per-topic table */}
+              {section === "topics" &&
+                (topics.length > 0 ? (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-tinta">Recall per topik</h3>
+                    <div className="overflow-x-auto rounded-lg border">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-surface-soft">
+                            <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-text">
+                              Topik
+                            </th>
+                            {experiments.map((experiment) => (
+                              <th
+                                key={experiment.mode}
+                                className="px-3 py-2.5 text-right text-xs font-semibold text-muted-text"
+                              >
+                                {modeLabel[experiment.mode] ?? experiment.mode}
+                              </th>
+                            ))}
+                            <th className="px-3 py-2.5 text-right text-xs font-semibold text-muted-text">
+                              Pertanyaan
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {topics.map((topic) => (
+                            <tr key={topic} className="border-b last:border-0">
+                              <td className="px-3 py-2 font-medium">
+                                {topic.replaceAll("_", " ")}
+                              </td>
+                              {experiments.map((experiment) => {
+                                const val = experiment.per_topic[topic]?.recall_at_5;
+                                return (
+                                  <td
+                                    key={experiment.mode}
+                                    className={cn(
+                                      "px-3 py-2 text-right font-mono text-sm tabular-nums",
+                                      val != null ? scoreColor(val) : "text-muted-text"
+                                    )}
+                                  >
+                                    {pct(val)}
+                                  </td>
+                                );
+                              })}
+                              <td className="px-3 py-2 text-right text-muted-text tabular-nums">
+                                {experiments[0]?.per_topic[topic]?.question_count ?? 0}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="py-10 text-center text-sm text-muted-text">
+                    Laporan per topik belum tersedia.
+                  </p>
+                ))}
+
+              {section === "questions" && (
+                <section className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="font-semibold text-tinta">Hasil per pertanyaan</h3>
+                    <label className="flex items-center gap-2 text-sm text-muted-text">
+                      Mode
+                      <select
+                        className="min-h-11 rounded-lg border border-line bg-white px-3 text-tinta"
+                        value={modeFilter}
+                        onChange={(event) => {
+                          setModeFilter(event.target.value);
+                          setPage(1);
+                        }}
+                      >
+                        <option value="all">Semua mode</option>
+                        {experiments.map((experiment) => (
+                          <option key={experiment.mode} value={experiment.mode}>
+                            {modeLabel[experiment.mode] ?? experiment.mode}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  {rows.length ? (
+                    <>
+                      <div className={modalStyles.tableWrap}>
+                        <table
+                          className={modalStyles.table}
+                          aria-label="Hasil evaluasi per pertanyaan"
+                        >
+                          <thead>
+                            <tr>
+                              {[
+                                "Pertanyaan",
+                                "Mode",
+                                "Respons",
+                                "Recall@5",
+                                "Keputusan penolakan",
+                              ].map((label) => (
+                                <th key={label} scope="col">
+                                  {label}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.slice((currentPage - 1) * 5, currentPage * 5).map((result) => (
+                              <tr key={`${result.mode}-${result.question_id}`}>
+                                <th scope="row">
+                                  <p className="font-mono text-xs">{result.question_id}</p>
+                                  <p className="mt-1 text-xs font-normal text-muted-text">
+                                    {result.category.replaceAll("_", " ")}
+                                  </p>
+                                </th>
+                                <td>{modeLabel[result.mode] ?? result.mode}</td>
+                                <td>{result.actual_refuse ? "Menolak" : "Menjawab"}</td>
+                                <td className="font-mono">{pct(result.recall_at_5)}</td>
+                                <td>
+                                  <span className="inline-flex items-center gap-2">
+                                    {result.refusal_correct ? (
+                                      <CheckCircle2 className="size-4 text-forest" />
+                                    ) : (
+                                      <AlertTriangle className="size-4 text-amber" />
+                                    )}
+                                    {result.refusal_correct ? "Sesuai" : "Perlu ditinjau"}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-text">
+                        <span role="status">
+                          {(currentPage - 1) * 5 + 1} sampai{" "}
+                          {Math.min(currentPage * 5, rows.length)} dari {rows.length} hasil
+                        </span>
+                        <nav
+                          aria-label="Pagination hasil pertanyaan"
+                          className="flex items-center gap-2"
+                        >
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="min-h-11"
+                            disabled={currentPage === 1}
+                            onClick={() => setPage(currentPage - 1)}
+                          >
+                            Sebelumnya
+                          </Button>
+                          <span>
+                            {currentPage} / {pageCount}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="min-h-11"
+                            disabled={currentPage === pageCount}
+                            onClick={() => setPage(currentPage + 1)}
+                          >
+                            Berikutnya
+                          </Button>
+                        </nav>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="py-10 text-center text-sm text-muted-text">
+                      Hasil per pertanyaan belum tersedia.
+                    </p>
+                  )}
+                </section>
+              )}
+            </div>
+          </>
+        )}
         <footer className={modalStyles.footer}>
           <span
             title={detail.run_id}
@@ -491,7 +507,9 @@ export function RunDetailDialog({
             ID: {detail.run_id}
           </span>
           <DialogClose asChild>
-            <Button variant="outline" className="min-h-11">Tutup</Button>
+            <Button variant="outline" className="min-h-11">
+              Tutup
+            </Button>
           </DialogClose>
         </footer>
       </DialogContent>

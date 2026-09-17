@@ -171,9 +171,7 @@ export function AdminUpload() {
               if (updated.status === "completed") {
                 setIngestDone(true);
               } else {
-                const warnings = (
-                  updated as unknown as { warnings?: unknown }
-                ).warnings;
+                const warnings = (updated as unknown as { warnings?: unknown }).warnings;
                 const firstWarning = Array.isArray(warnings)
                   ? warnings.map(String).find((item) => item.length > 0)
                   : typeof warnings === "string" && warnings.length > 0

@@ -156,8 +156,7 @@ export function EditorialChatExperience() {
         ];
       });
       const latest = [...nextMessages].reverse().find((item) => item.answer)?.answer;
-      const latestMessageId =
-        [...nextMessages].reverse().find((item) => item.answer)?.id ?? null;
+      const latestMessageId = [...nextMessages].reverse().find((item) => item.answer)?.id ?? null;
       shouldStickToBottomRef.current = true;
       setConversationId(detail.conversation_id);
       setMessages(nextMessages);
@@ -428,9 +427,7 @@ export function EditorialChatExperience() {
               messages={messages}
               feedback={feedback}
               onShowSources={showSources}
-              onFeedback={(message, rating, detail) =>
-                void handleFeedback(message, rating, detail)
-              }
+              onFeedback={(message, rating, detail) => void handleFeedback(message, rating, detail)}
               onEditMessage={(message) => {
                 setQuestion(message.content);
                 window.setTimeout(() => inputRef.current?.focus(), 0);

@@ -186,9 +186,7 @@ export function AdminEvaluation() {
       setDetail(next);
       setDetailOpen(true);
     } catch {
-      setRunError(
-        "Evaluasi belum dapat dimulai. Periksa koneksi lalu coba lagi."
-      );
+      setRunError("Evaluasi belum dapat dimulai. Periksa koneksi lalu coba lagi.");
     } finally {
       runBusy.current = false;
       setSubmitting(false);
@@ -506,10 +504,7 @@ export function AdminEvaluation() {
       <details className="group rounded-xl border border-line bg-white">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 marker:hidden sm:px-6 [&::-webkit-details-marker]:hidden">
           <div>
-            <h2
-              id="evaluation-guide-title"
-              className="text-base font-semibold text-tinta"
-            >
+            <h2 id="evaluation-guide-title" className="text-base font-semibold text-tinta">
               Memahami mode dan metrik
             </h2>
             <p className="mt-1 text-sm text-muted-text">
@@ -523,80 +518,80 @@ export function AdminEvaluation() {
         </summary>
         <div className="px-5 pb-5 sm:px-6 sm:pb-6">
           <div className="mt-1 space-y-6">
-          <div>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-text">
-              Retrieval modes
-            </h3>
-            <dl className="grid gap-x-8 gap-y-5 md:grid-cols-2">
-              {[
-                [
-                  "Baseline",
-                  "Mengurutkan hasil berdasarkan kecocokan kata atau istilah (lexical score), sebagai pembanding awal.",
-                ],
-                [
-                  "Dense",
-                  "Mengurutkan hasil berdasarkan kemiripan makna (semantic score), sehingga tidak harus memakai kata yang sama.",
-                ],
-                [
-                  "Hybrid",
-                  "Menggabungkan peringkat lexical dan semantic melalui fusion score untuk memanfaatkan keduanya.",
-                ],
-                [
-                  "Re-rank",
-                  "Mengurutkan ulang kandidat menggunakan final score setelah penilaian relevansi lanjutan.",
-                ],
-              ].map(([label, description]) => (
-                <div key={label} className="min-w-0 border-l-2 border-line pl-4">
-                  <dt className="text-sm font-semibold text-tinta">{label}</dt>
-                  <dd className="mt-1 text-sm leading-relaxed text-muted-text">{description}</dd>
-                </div>
-              ))}
-            </dl>
+            <div>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-text">
+                Retrieval modes
+              </h3>
+              <dl className="grid gap-x-8 gap-y-5 md:grid-cols-2">
+                {[
+                  [
+                    "Baseline",
+                    "Mengurutkan hasil berdasarkan kecocokan kata atau istilah (lexical score), sebagai pembanding awal.",
+                  ],
+                  [
+                    "Dense",
+                    "Mengurutkan hasil berdasarkan kemiripan makna (semantic score), sehingga tidak harus memakai kata yang sama.",
+                  ],
+                  [
+                    "Hybrid",
+                    "Menggabungkan peringkat lexical dan semantic melalui fusion score untuk memanfaatkan keduanya.",
+                  ],
+                  [
+                    "Re-rank",
+                    "Mengurutkan ulang kandidat menggunakan final score setelah penilaian relevansi lanjutan.",
+                  ],
+                ].map(([label, description]) => (
+                  <div key={label} className="min-w-0 border-l-2 border-line pl-4">
+                    <dt className="text-sm font-semibold text-tinta">{label}</dt>
+                    <dd className="mt-1 text-sm leading-relaxed text-muted-text">{description}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-text">
+                Evaluation metrics
+              </h3>
+              <dl className="grid gap-x-8 gap-y-5 md:grid-cols-2">
+                {[
+                  [
+                    "Recall@5",
+                    "Proporsi dokumen acuan relevan yang ditemukan dalam lima hasil teratas.",
+                  ],
+                  [
+                    "MRR (Mean Reciprocal Rank)",
+                    "Rata-rata kebalikan posisi hasil relevan pertama. Posisi pertama bernilai 1; posisi kedua bernilai 0,5.",
+                  ],
+                  [
+                    "Citation correctness",
+                    "Kesesuaian kutipan dengan dokumen dan pasal acuan pada dataset evaluasi.",
+                  ],
+                  [
+                    "Faithfulness",
+                    "Dukungan sumber terhadap klaim jawaban. Perhitungan memakai skor dukungan klaim, atau kecocokan kata dengan kutipan jika data klaim tidak tersedia.",
+                  ],
+                  [
+                    "Refusal accuracy",
+                    "Ketepatan keputusan menjawab atau menolak dibandingkan jawaban acuan dalam dataset.",
+                  ],
+                  [
+                    "Hard-negative recall@5",
+                    "Recall@5 khusus pertanyaan yang ditandai hard negative: kasus sulit dengan sumber pengecoh yang tampak relevan.",
+                  ],
+                ].map(([label, description]) => (
+                  <div key={label} className="min-w-0 border-l-2 border-line pl-4">
+                    <dt className="text-sm font-semibold text-tinta">{label}</dt>
+                    <dd className="mt-1 text-sm leading-relaxed text-muted-text">{description}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
           </div>
-          <div>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-text">
-              Evaluation metrics
-            </h3>
-            <dl className="grid gap-x-8 gap-y-5 md:grid-cols-2">
-              {[
-                [
-                  "Recall@5",
-                  "Proporsi dokumen acuan relevan yang ditemukan dalam lima hasil teratas.",
-                ],
-                [
-                  "MRR (Mean Reciprocal Rank)",
-                  "Rata-rata kebalikan posisi hasil relevan pertama. Posisi pertama bernilai 1; posisi kedua bernilai 0,5.",
-                ],
-                [
-                  "Citation correctness",
-                  "Kesesuaian kutipan dengan dokumen dan pasal acuan pada dataset evaluasi.",
-                ],
-                [
-                  "Faithfulness",
-                  "Dukungan sumber terhadap klaim jawaban. Perhitungan memakai skor dukungan klaim, atau kecocokan kata dengan kutipan jika data klaim tidak tersedia.",
-                ],
-                [
-                  "Refusal accuracy",
-                  "Ketepatan keputusan menjawab atau menolak dibandingkan jawaban acuan dalam dataset.",
-                ],
-                [
-                  "Hard-negative recall@5",
-                  "Recall@5 khusus pertanyaan yang ditandai hard negative: kasus sulit dengan sumber pengecoh yang tampak relevan.",
-                ],
-              ].map(([label, description]) => (
-                <div key={label} className="min-w-0 border-l-2 border-line pl-4">
-                  <dt className="text-sm font-semibold text-tinta">{label}</dt>
-                  <dd className="mt-1 text-sm leading-relaxed text-muted-text">{description}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        </div>
-        <p className="mt-6 rounded-lg bg-surface-soft px-4 py-3 text-xs leading-relaxed text-muted-text">
-          Semakin tinggi nilai metrik di atas, semakin baik hasil pada dataset ini. Nilai tersebut
-          bukan persentase kepastian jawaban. Top K menentukan jumlah hasil yang diambil; pilih
-          minimal 5 untuk membandingkan Recall@5 dengan lima hasil penuh.
-        </p>
+          <p className="mt-6 rounded-lg bg-surface-soft px-4 py-3 text-xs leading-relaxed text-muted-text">
+            Semakin tinggi nilai metrik di atas, semakin baik hasil pada dataset ini. Nilai tersebut
+            bukan persentase kepastian jawaban. Top K menentukan jumlah hasil yang diambil; pilih
+            minimal 5 untuk membandingkan Recall@5 dengan lima hasil penuh.
+          </p>
         </div>
       </details>
 
@@ -608,100 +603,96 @@ export function AdminEvaluation() {
           <DialogHeader>
             <DialogTitle>Jalankan evaluasi</DialogTitle>
             <DialogDescription>
-              Pilih dataset dan mode pencarian yang ingin dibandingkan. Hasil menyusul:
-              halaman boleh ditinggal, progres dipantau dari riwayat.
+              Pilih dataset dan mode pencarian yang ingin dibandingkan. Hasil menyusul: halaman
+              boleh ditinggal, progres dipantau dari riwayat.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-              {runError && (
-                <p
-                  role="alert"
-                  className="rounded-lg border border-line bg-red-soft p-3 text-sm text-red"
-                >
-                  {runError}
-                </p>
-              )}
-              <div className="space-y-1.5">
-                <Label htmlFor="eval-dataset">Dataset</Label>
-                <Select disabled={submitting} value={runDatasetId} onValueChange={setRunDatasetId}>
-                  <SelectTrigger id="eval-dataset" className="min-h-11 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className={`admin-theme ${styles.ingestion}`}>
-                    {datasets.map((dataset) => (
-                      <SelectItem key={dataset.dataset_id} value={dataset.dataset_id}>
-                        {dataset.name} ({dataset.questions.length} pertanyaan)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {runError && (
+              <p
+                role="alert"
+                className="rounded-lg border border-line bg-red-soft p-3 text-sm text-red"
+              >
+                {runError}
+              </p>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="eval-dataset">Dataset</Label>
+              <Select disabled={submitting} value={runDatasetId} onValueChange={setRunDatasetId}>
+                <SelectTrigger id="eval-dataset" className="min-h-11 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={`admin-theme ${styles.ingestion}`}>
+                  {datasets.map((dataset) => (
+                    <SelectItem key={dataset.dataset_id} value={dataset.dataset_id}>
+                      {dataset.name} ({dataset.questions.length} pertanyaan)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-              <div className="space-y-1.5">
-                <Label>Mode eksperimen</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {modeOrder.map((mode) => {
-                    const selected = runModes.includes(mode);
-                    return (
-                      <button
-                        type="button"
-                        key={mode}
-                        aria-pressed={selected}
-                        disabled={submitting}
-                        onClick={() => toggleMode(mode)}
+            <div className="space-y-1.5">
+              <Label>Mode eksperimen</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {modeOrder.map((mode) => {
+                  const selected = runModes.includes(mode);
+                  return (
+                    <button
+                      type="button"
+                      key={mode}
+                      aria-pressed={selected}
+                      disabled={submitting}
+                      onClick={() => toggleMode(mode)}
+                      className={cn(
+                        "flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors",
+                        selected
+                          ? "border-forest bg-teal-soft text-forest"
+                          : "border-line text-muted-text hover:bg-surface-soft"
+                      )}
+                    >
+                      <span
                         className={cn(
-                          "flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors",
-                          selected
-                            ? "border-forest bg-teal-soft text-forest"
-                            : "border-line text-muted-text hover:bg-surface-soft"
+                          "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
+                          selected ? "border-forest bg-forest text-white" : "border-muted-text/30"
                         )}
                       >
-                        <span
-                          className={cn(
-                            "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
-                            selected ? "border-forest bg-forest text-white" : "border-muted-text/30"
-                          )}
-                        >
-                          {selected ? <Check className="size-3" /> : null}
-                        </span>
-                        {modeLabel[mode] ?? mode}
-                      </button>
-                    );
-                  })}
-                </div>
+                        {selected ? <Check className="size-3" /> : null}
+                      </span>
+                      {modeLabel[mode] ?? mode}
+                    </button>
+                  );
+                })}
               </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="eval-top-k">Jumlah hasil (Top K)</Label>
-                <Select disabled={submitting} value={runTopK} onValueChange={setRunTopK}>
-                  <SelectTrigger id="eval-top-k" className="min-h-11 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className={`admin-theme ${styles.ingestion}`}>
-                    <SelectItem value="3">3</SelectItem>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {datasets.length === 0 && (
-                <div className="rounded-lg border border-amber/25 bg-amber-soft px-3 py-2.5 text-sm text-amber">
-                  Belum ada dataset. Muat golden questions terlebih dahulu.
-                </div>
-              )}
-              {!runModes.length && (
-                <p role="status" className="text-xs text-amber">
-                  Pilih minimal satu mode untuk menjalankan evaluasi.
-                </p>
-              )}
             </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="eval-top-k">Jumlah hasil (Top K)</Label>
+              <Select disabled={submitting} value={runTopK} onValueChange={setRunTopK}>
+                <SelectTrigger id="eval-top-k" className="min-h-11 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={`admin-theme ${styles.ingestion}`}>
+                  <SelectItem value="3">3</SelectItem>
+                  <SelectItem value="5">5</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {datasets.length === 0 && (
+              <div className="rounded-lg border border-amber/25 bg-amber-soft px-3 py-2.5 text-sm text-amber">
+                Belum ada dataset. Muat golden questions terlebih dahulu.
+              </div>
+            )}
+            {!runModes.length && (
+              <p role="status" className="text-xs text-amber">
+                Pilih minimal satu mode untuk menjalankan evaluasi.
+              </p>
+            )}
+          </div>
           <DialogFooter className="mx-0 mb-0 mt-2 rounded-none border-line bg-transparent px-0 pb-0 pt-4">
-            <Button
-              variant="outline"
-              className="min-h-11"
-              onClick={() => setRunDialogOpen(false)}
-            >
+            <Button variant="outline" className="min-h-11" onClick={() => setRunDialogOpen(false)}>
               Batal
             </Button>
             <Button
