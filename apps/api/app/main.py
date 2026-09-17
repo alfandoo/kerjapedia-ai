@@ -141,6 +141,11 @@ async def request_timeout(request: Request, call_next):
 async def rate_limit_and_log(request: Request, call_next):
     started_at = time.perf_counter()
     request_id = request.headers.get("X-Request-ID") or uuid4().hex
+    path = request.url.path
+    if path in ("/health", "/ready", "/docs", "/openapi.json"):
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
     headers = {key.lower(): value for key, value in request.headers.items()}
     peer_ip = request.client.host if request.client else "unknown"
     ip = client_ip(headers, peer_ip, settings.trust_proxy_headers)
