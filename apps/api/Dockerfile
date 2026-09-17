@@ -27,7 +27,7 @@ RUN python -m pip install --upgrade pip && python -m pip install -r requirements
 COPY alembic.ini .
 COPY alembic ./alembic
 COPY app ./app
-COPY dataset/metadata.json ./dataset/metadata.json
+COPY dataset ./dataset
 COPY start.sh .
 RUN chmod +x start.sh
 
