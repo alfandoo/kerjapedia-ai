@@ -61,16 +61,7 @@ async def lifespan(_app: FastAPI):
         except Exception as exc:
             logger.warning("stuck evaluation run reset failed: %s", exc)
     if settings.app_env.lower() != "test" and settings.embedding_provider == "bge_m3":
-        from app.services.ingestion.embeddings import embed_hybrid, embed_queries_hybrid
-        from app.services.providers import embedding_provider_from_settings
-
-        try:
-            provider = embedding_provider_from_settings(settings)
-            embed_hybrid(provider, ["regulasi ketenagakerjaan"])
-            embed_queries_hybrid(provider, ["regulasi ketenagakerjaan"])
-            logger.info("embedding warmup completed")
-        except Exception as exc:
-            logger.warning("embedding warmup failed (will lazy-load on first request): %s", exc)
+        logger.info("BGE-M3 embedding will lazy-load on first request (saves startup RAM)")
     if settings.app_env.lower() == "production":
         from app.db.session import create_session
         from app.services.answering.prompts import PROMPT_VERSION_ID
