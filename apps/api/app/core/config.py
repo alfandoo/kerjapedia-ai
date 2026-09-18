@@ -18,24 +18,12 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     supabase_anon_key: str = ""
     supabase_storage_bucket: str = "regulations"
-    openai_api_key: str | None = None
     vector_store: str = "artifact"
-    pinecone_api_key: str | None = None
-    pinecone_index_name: str = "kerjapedia"
-    pinecone_namespace: str = "production"
-    pinecone_cloud: str = "aws"
-    pinecone_region: str = "us-east-1"
     embedding_provider: str = "hash"
-    embedding_model: str = "BAAI/bge-m3"
-    embedding_dimension: int = 1024
-    embedding_model_revision: str = "5617a9f61b028005a4858fdac845db406aefb181"
     ingestion_embedding_batch_size: int = 16
     ingestion_embedding_timeout_seconds: float = 120.0
     ingestion_embedding_max_retries: int = 3
     ingestion_embedding_retry_initial_seconds: float = 1.0
-    pinecone_upsert_batch_size: int = 100
-    pinecone_write_timeout_seconds: float = 60.0
-    pinecone_write_max_retries: int = 3
     upstash_vector_url: str = Field(
         default="",
         validation_alias=AliasChoices("upstash_vector_url", "upstash_vector_rest_url"),
@@ -46,8 +34,6 @@ class Settings(BaseSettings):
     )
     upstash_vector_dimension: int = 1536
     upstash_vector_namespace: str = "production"
-    upstash_batch_size: int = 100
-    upstash_retrieval_top_k: int = 20
     ingestion_target_tokens: int = 350
     ingestion_max_tokens: int = 550
     ingestion_overlap_tokens: int = 60
@@ -55,21 +41,15 @@ class Settings(BaseSettings):
     ingestion_parent_tokens: int = 1200
     ingestion_ocr_jobs: int = 2
     llm_provider: str = "local"
-    reranker_provider: str = "heuristic"
-    reranker_model: str = "bge-reranker-v2-m3"
     claim_verifier_provider: str = "deterministic"
     claim_verifier_model: str = "openai/gpt-oss-120b"
     rag_fail_closed: bool = False
     rag_allow_unpublished: bool = True
-    # Retrieval tuning knobs. Defaults are the calibration winners measured on
-    # the golden tuning subset (2026-09): MMR lambda is insensitive at top-10
-    # (0.5/0.7/0.9 identical), and hybrid alpha is a no-op against the
-    # dotproduct Pinecone index (sparse queries fall back to dense-only).
+    # Retrieval tuning knobs. Hybrid ranking is native to the Upstash
+    # index; MMR/diversity caps and context expansion shape the final
+    # candidate list after the heuristic rerank.
     retrieval_diversity_lambda: float = 0.7
-    retrieval_hybrid_alpha: float | None = None
     retrieval_semantic_limit: int = 100
-    retrieval_cross_encoder_top_n: int = 50
-    retrieval_cross_encoder_blend_weight: float = 0.75
     retrieval_mmr_max_per_document: int = 3
     retrieval_mmr_max_per_article: int = 2
     retrieval_expansion_max: int = 4
@@ -150,16 +130,6 @@ class Settings(BaseSettings):
             raise ValueError(
                 "INGESTION_EMBEDDING_RETRY_INITIAL_SECONDS must not be negative."
             )
-        if not 1 <= self.pinecone_upsert_batch_size <= 100:
-            raise ValueError("PINECONE_UPSERT_BATCH_SIZE must be between 1 and 100.")
-        if not 1 <= self.upstash_batch_size <= 1000:
-            raise ValueError("UPSTASH_BATCH_SIZE must be between 1 and 1000.")
-        if not 1 <= self.upstash_retrieval_top_k <= 100:
-            raise ValueError("UPSTASH_RETRIEVAL_TOP_K must be between 1 and 100.")
-        if self.pinecone_write_timeout_seconds <= 0:
-            raise ValueError("PINECONE_WRITE_TIMEOUT_SECONDS must be positive.")
-        if self.pinecone_write_max_retries < 0:
-            raise ValueError("PINECONE_WRITE_MAX_RETRIES must not be negative.")
         if self.app_env.lower() != "production":
             return self
         if self.admin_password == "secret" or len(self.admin_password) < 12:
@@ -172,58 +142,16 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Supabase URL, service key, and anon key are required in production."
             )
-        if self.vector_store == "pinecone" and not self.pinecone_api_key:
-            raise ValueError(
-                "PINECONE_API_KEY is required for the Pinecone vector store."
-            )
+        if self.vector_store != "upstash_vector":
+            raise ValueError("VECTOR_STORE must be upstash_vector in production.")
+        if not self.upstash_vector_url or not self.upstash_vector_token:
+            raise ValueError("UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN are required.")
         if self.llm_provider == "openrouter" and not self.openrouter_api_key:
             raise ValueError("OPENROUTER_API_KEY is required for the OpenRouter LLM provider.")
         if self.llm_provider == "groq" and not self.groq_api_key:
             raise ValueError("GROQ_API_KEY is required for the Groq LLM provider.")
-        if self.vector_store not in ("pinecone", "upstash_vector"):
-            raise ValueError("VECTOR_STORE must be pinecone or upstash_vector in production.")
-        if self.vector_store == "pinecone" and self.pinecone_index_name != "kerjapedia":
-            raise ValueError(
-                "Production requires PINECONE_INDEX_NAME=kerjapedia."
-            )
-        if self.vector_store == "upstash_vector":
-            if not self.upstash_vector_url or not self.upstash_vector_token:
-                raise ValueError("UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN are required.")
-        if self.vector_store == "pinecone" and (
-            self.embedding_provider not in ("bge_m3", "pinecone_inference")
-            or self.embedding_model.lower() not in ("baai/bge-m3", "multilingual-e5-large")
-        ):
-            raise ValueError(
-                "Production requires EMBEDDING_PROVIDER=bge_m3 or pinecone_inference."
-            )
-        if self.vector_store == "pinecone" and self.embedding_dimension != 1024:
-            raise ValueError(
-                "Production BGE-M3 embeddings require EMBEDDING_DIMENSION=1024."
-            )
-        # Upstash hosted embedding: dense/sparse vectors are produced
-        # server-side (open-ai/text-embedding-3-small + BM25), so the local
-        # EMBEDDING_* settings are intentionally not validated here. The
-        # expected index configuration is verified at runtime via index info.
-        if self.vector_store == "upstash_vector" and self.embedding_dimension not in (1024, 1536):
-            raise ValueError(
-                "EMBEDDING_DIMENSION is unused by the Upstash hosted path; "
-                "leave it at 1024 or 1536."
-            )
-        if (
-            self.embedding_provider != "pinecone_inference"
-            and self.vector_store == "pinecone"
-            and self.embedding_model_revision in {"", "main", "unversioned"}
-        ):
-            raise ValueError("Production requires a pinned EMBEDDING_MODEL_REVISION.")
         if self.llm_provider not in ("openrouter", "groq"):
             raise ValueError("LLM_PROVIDER=openrouter or groq is required in production.")
-        if (
-            self.reranker_provider != "pinecone"
-            or self.reranker_model != "bge-reranker-v2-m3"
-        ):
-            raise ValueError(
-                "Production requires Pinecone bge-reranker-v2-m3 reranking."
-            )
         if self.claim_verifier_provider not in ("openrouter", "groq"):
             raise ValueError(
                 "CLAIM_VERIFIER_PROVIDER=openrouter or groq is required in production."

@@ -12,7 +12,6 @@ PIPELINE_VERSION = "kerjapedia-ingestion-v15-amendment-provenance"
 PARSER_VERSION = "kerjapedia-legal-parser-v10"
 CHUNKER_VERSION = "kerjapedia-legal-chunker-v6"
 OCR_PROFILE_VERSION = "ocrmypdf-page-fallback-v2"
-DEFAULT_BGE_M3_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
 BUILD_IDENTITY_SCHEMA_VERSION = "build-identity-v2"
 MAX_EMBEDDING_BATCH_SIZE = 64
 
@@ -33,10 +32,10 @@ class IngestionBuildConfig:
     embedding_max_retries: int = 3
     embedding_retry_initial_seconds: float = 1.0
     ocr_jobs: int = 2
-    embedding_model: str = "BAAI/bge-m3"
-    embedding_revision: str = DEFAULT_BGE_M3_REVISION
-    embedding_dimension: int = 1024
-    require_native_sparse: bool = True
+    embedding_model: str = "local-hash-embedding-v1"
+    embedding_revision: str = "deterministic-v1"
+    embedding_dimension: int = 64
+    require_native_sparse: bool = False
     evaluation_thresholds: dict[str, int | float] | None = None
     runtime: dict[str, str] | None = None
 
@@ -177,8 +176,6 @@ def _command_version(command: list[str]) -> str:
 def build_config_from_settings(
     settings: Any,
     provider: object,
-    *,
-    release_candidate: bool = False,
 ) -> IngestionBuildConfig:
     return IngestionBuildConfig(
         target_tokens=int(settings.ingestion_target_tokens),
@@ -195,25 +192,7 @@ def build_config_from_settings(
         ocr_jobs=max(1, min(int(settings.ingestion_ocr_jobs), 2)),
         embedding_model=str(provider.model_name),
         embedding_revision=provider_revision(provider),
-        embedding_dimension=int(getattr(provider, "dimensions", settings.embedding_dimension)),
-        require_native_sparse=(
-            release_candidate or bool(getattr(provider, "require_native_sparse", False))
-        ),
+        embedding_dimension=int(getattr(provider, "dimensions", 64)),
+        require_native_sparse=bool(getattr(provider, "require_native_sparse", False)),
         runtime=runtime_provenance(),
     )
-
-
-def validate_candidate_runtime(config: IngestionBuildConfig) -> None:
-    if config.embedding_model.lower() != "baai/bge-m3":
-        raise RuntimeError("Release-candidate ingestion requires BAAI/bge-m3.")
-    if config.embedding_revision in {"", "main", "unversioned", "provider-managed"}:
-        raise RuntimeError("Release-candidate ingestion requires a pinned embedding revision.")
-    missing = [
-        name
-        for name in ("ocrmypdf", "flagembedding", "tesseract", "qpdf", "ghostscript")
-        if (config.runtime or {}).get(name, "unavailable") == "unavailable"
-    ]
-    if missing:
-        raise RuntimeError("Release-candidate ingestion runtime is missing: " + ", ".join(missing))
-    if not config.require_native_sparse:
-        raise RuntimeError("Release-candidate ingestion requires native sparse embeddings.")

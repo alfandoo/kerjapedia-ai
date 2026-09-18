@@ -16,17 +16,10 @@ Untuk memproses seluruh dokumen:
 .venv\Scripts\python -m app.services.ingestion.cli --all
 ```
 
-Secara default pipeline mengikuti `EMBEDDING_PROVIDER`. Untuk development offline gunakan `hash`; untuk mode industri gunakan BGE-M3 lokal:
-
-```bash
-.venv\Scripts\python -m app.services.ingestion.cli --document-id PP-35-2021 --embedding-provider bge_m3
-```
-
-OpenAI embeddings tetap tersedia sebagai opsi eksplisit:
-
-```bash
-.venv\Scripts\python -m app.services.ingestion.cli --document-id PP-35-2021 --embedding-provider openai
-```
+Pipeline ingestion selalu memakai provider lokal `hash` (artifact development).
+Embedding produksi di-hosting Upstash: indexing membaca pre-embedding
+`chunks.jsonl` via `scripts/index_upstash.py` dan Upstash meng-embedding
+server-side. Tidak ada opsi embedding lain.
 
 Untuk menyimpan hasil ke PostgreSQL, pastikan `docker compose up -d` sudah berjalan dan migration sudah diterapkan, lalu gunakan:
 
@@ -49,12 +42,11 @@ Untuk menyimpan hasil ke PostgreSQL, pastikan `docker compose up -d` sudah berja
    sebagai heading baru.
 6. Chunk per unit hukum menggunakan target 250–450 token, maksimum 550 token,
    overlap maksimum 60 token tanpa melintasi Pasal, serta simpan parent Pasal.
-7. Generate dense dan sparse embedding BGE-M3 untuk setiap chunk.
+7. Buat artifact embedding hash lokal untuk setiap chunk (development/baseline).
 8. Simpan artifact JSON dan log ingestion.
 9. Opsional: persist dokumen, versi, chunk, embedding, dan ingestion job ke PostgreSQL.
-10. Candidate yang sudah direview dimasukkan ke namespace Pinecone baru hanya
-    melalui immutable release builder; ingestion tidak dapat menulis langsung ke
-    namespace aktif.
+10. Index produksi dibangun dari `chunks.jsonl` via `scripts/index_upstash.py`;
+    ingestion tidak menulis langsung ke namespace aktif.
 
 ## Artifact Output
 
@@ -83,21 +75,15 @@ ulang sebelum source verification dan legal review.
 
 ## Immutable release-candidate builds
 
-Release-candidate ingestion must run in the Linux worker image and pass the runtime preflight:
+Each build is fingerprinted from the source checksum plus parser, OCR, chunker, embedding model revision, and effective configuration. Artifacts are written to `documents/{document_id}/v{version}/builds/{build_id}` and are never overwritten by a changed pipeline. Use `--persist-db` for builds whose metadata must land in PostgreSQL.
 
-```bash
-python -m app.services.ingestion.preflight
-```
+A successful automated quality report does not approve the build. An administrator must review every unresolved page and approve the immutable build through `POST /admin/ingestion/builds/{build_id}/review`. Source verification and substantive legal review remain separate gates.
 
-Each build is fingerprinted from the source checksum plus parser, OCR, chunker, embedding model revision, and effective configuration. Artifacts are written to `documents/{document_id}/v{version}/builds/{build_id}` and are never overwritten by a changed pipeline. Use `--release-candidate --persist-db` for candidate builds; native dense and sparse BGE-M3 vectors are mandatory.
-
-A successful automated quality report does not approve the build. An administrator must review every unresolved page and approve the immutable build through `POST /admin/ingestion/builds/{build_id}/review`. Source verification and substantive legal review remain separate gates. Only approved builds can be attached to an index release.
-
-The production worker uses Celery concurrency `1` so one BGE-M3 model process owns CPU memory. OCRmyPDF may use at most two OCR subprocesses inside that task. Checkpoint JSONL files make embedding resumable after worker restarts.
+The production worker uses Celery concurrency `1`. OCRmyPDF may use at most two OCR subprocesses inside that task. Checkpoint JSONL files make embedding resumable after worker restarts.
 Canary order:
 
 ```bash
-python -m app.services.ingestion.cli --document-id PP-36-2021 --document-id PP-35-2021 --document-id UU-6-2023 --embedding-provider bge_m3 --release-candidate --persist-db
+python -m app.services.ingestion.cli --document-id PP-36-2021 --document-id PP-35-2021 --document-id UU-6-2023 --persist-db
 ```
 
-Only after all three canaries pass and their problematic pages are reviewed, run all 19 sources with `--all`. Promotion remains blocked until canonical source verification, substantive legal review, build approval, and the release evaluation gates are complete.
+Only after all three canaries pass and their problematic pages are reviewed, run all 19 sources with `--all`. Indexing ke Upstash (`scripts/index_upstash.py --dry-run` dulu, lalu full) dilakukan setelah chunks tervalidasi.

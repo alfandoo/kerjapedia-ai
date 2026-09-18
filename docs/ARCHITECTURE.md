@@ -14,12 +14,12 @@ flowchart TD
     api --> eval["Evaluation Service"]
     docs --> queue["Redis Queue"]
     queue --> worker["Ingestion Worker"]
-    worker --> object["MinIO/S3 Object Storage"]
-    worker --> postgres["PostgreSQL (metadata only)"]
-    worker --> pinecone["Pinecone (production vector store)"]
+    worker --> object["Supabase Storage"]
+    worker --> postgres["PostgreSQL via Supabase (metadata only)"]
+    worker --> upstash["Upstash Vector (production hybrid index)"]
     chat --> retriever["Hybrid Retriever"]
-    retriever --> pinecone
-    retriever --> reranker["Reranker"]
+    retriever --> upstash
+    retriever --> reranker["Heuristic Reranker"]
     reranker --> llm["LLM Answer Generation"]
     llm --> citations["Citation Formatter"]
     citations --> web
@@ -31,21 +31,21 @@ Primary apps:
 - `apps/web`: Next.js frontend for chat, source viewer, search, and admin UI.
 - `apps/api`: FastAPI backend for auth, chat, documents, ingestion jobs, evaluation, and feedback.
 - `dataset`: source PDFs and `metadata.json`.
-- `compose.yaml`: local PostgreSQL, Redis, and MinIO.
+- `compose.yaml`: local Redis (PostgreSQL/object storage via Supabase).
 
 ### Vector Store Architecture
 
-**Production Vector Store: Pinecone**
-- Dense + sparse vectors for similarity search
-- Namespace isolation per release
-- Hybrid retrieval (dense + sparse)
+**Production Vector Store: Upstash Vector (HYBRID)**
+- Dense `open-ai/text-embedding-3-small` + sparse BM25, hosted server-side
+- Raw text upsert/query; application performs no local embedding
+- Namespace per environment (`production`, `staging`, `evaluation`)
 
 **Metadata Database: PostgreSQL**
 - Document metadata, versions, chunks
 - JSONB embeddings (backup/reference only)
 - pgvector extension enabled but NOT used for production vector search
 
-> **Note:** pgvector is enabled in the database schema but embeddings are stored as JSONB, not vector columns. Pinecone is the sole production vector store for similarity search. See [P3-2_PGVECTOR_AUDIT.md](P3_2_PGVECTOR_AUDIT.md) for details.
+> **Note:** pgvector is enabled in the database schema but embeddings are stored as JSONB, not vector columns. Upstash Vector is the sole production vector store for similarity search. See [P3-2_PGVECTOR_AUDIT.md](P3_2_PGVECTOR_AUDIT.md) for details. (Pinecone + self-hosted BGE-M3 were retired 2026-09.)
 
 ## Ingestion Flow
 
@@ -57,7 +57,7 @@ sequenceDiagram
     participant Q as Redis Queue
     participant W as Worker
     participant DB as PostgreSQL (metadata)
-    participant PC as Pinecone (vectors)
+    participant UV as Upstash Vector (hybrid index)
 
     A->>API: Upload/import PDF + metadata
     API->>API: Validate MIME, size, checksum, duplicate

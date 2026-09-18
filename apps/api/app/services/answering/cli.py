@@ -9,7 +9,6 @@ from pathlib import Path
 from app.core.config import settings
 from app.services.providers import (
     answer_generator_from_settings,
-    pinecone_store_from_settings,
     upstash_vector_store_from_settings,
 )
 from app.services.retrieval.engine import RetrievalEngine
@@ -32,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--vector-store",
-        choices=["artifact", "pinecone", "upstash_vector"],
+        choices=["artifact", "upstash_vector"],
         default=None,
         help="Retrieval backend. Defaults to VECTOR_STORE.",
     )
@@ -52,9 +51,7 @@ def main() -> None:
     project_root = project_root_from_api_dir()
     storage_root = args.storage_root or project_root / "storage" / "ingestion"
     vector_store = args.vector_store or settings.vector_store
-    if vector_store == "pinecone":
-        retrieval = pinecone_store_from_settings(settings).search(args.query, top_k=args.top_k)
-    elif vector_store == "upstash_vector":
+    if vector_store == "upstash_vector":
         retrieval = upstash_vector_store_from_settings(settings).search(
             args.query, top_k=args.top_k
         )

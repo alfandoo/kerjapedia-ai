@@ -50,6 +50,17 @@ python -m pytest tests/test_evaluation.py::test_golden_dataset_has_prd_distribut
 
 ## Script Evaluasi
 
+### 0. Evaluasi Backend Live — Upstash Hybrid (`scripts/eval_upstash_sample.py`)
+
+Jalur aktif untuk mengukur retrieval produksi (wajib kredensial Upstash):
+
+```bash
+apps/api/.venv/Scripts/python scripts/eval_upstash_sample.py
+```
+
+Sampel deterministik 10 pertanyaan memakai fungsi metrik repo; report JSON
+ditulis ke `storage/evaluation/` (tidak di-commit).
+
 ### 1. Retrieval Metrics (`retrieval_metrics.py`)
 
 Mengukur kualitas retrieval tanpa answer generation.
@@ -213,16 +224,18 @@ print(json.dumps(report['questions'][:3], indent=2))
 
 ```
 evaluation/
-├── golden_questions.json          # Dataset evaluasi utama
-├── golden_questions_backup.json   # Backup sebelum dedup
-├── retrieval_metrics.py           # Retrieval-only metrics
-├── tune_reranker.py              # Reranker weight tuning
+├── golden_questions.json          # Dataset evaluasi utama (source of truth)
+├── golden_questions_backup.json   # Backup sebelum dedup (arsip)
+├── retrieval_metrics.py           # Retrieval-only metrics (harness sintetik)
+├── tune_reranker.py              # Reranker weight tuning (harness sintetik)
 ├── semantic_eval.py              # Semantic evaluation
-├── retrieval_metrics_report.json  # Hasil retrieval metrics
-├── reranker_tuning_report.json    # Hasil tuning
-├── semantic_eval_report.json      # Hasil semantic eval
+├── *_report.json / pinecone_*.json / chunk_calibration_results.json
+│                                  # Generated output (regenerable; kandidat .gitignore)
 └── README.md                      # Dokumentasi ini
 ```
+
+Script Pinecone (`tune_reranker_real.py`, `upsert_*.py`, `debug_cross_encoder.py`)
+sudah dipensiunkan bersama pipeline Pinecone/BGE-M3 (2026-09).
 
 ## Referensi
 

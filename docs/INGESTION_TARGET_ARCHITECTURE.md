@@ -1,5 +1,9 @@
 # KerjaPedia AI Target Ingestion Architecture
 
+> ARCHIVED 2026-09: proposal ini mengasumsikan Pinecone sebagai production
+> index. Pinecone/BGE-M3 dipensiunkan; arsitektur aktif: chunks → Upstash
+> hosted hybrid embeddings. Dipertahankan sebagai arsip desain.
+
 **Status:** Proposed architecture; not implemented
 **Date:** 2026-09-13
 **Based on:** `docs/INGESTION_AUDIT.md` and the current repository implementation

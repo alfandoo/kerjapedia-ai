@@ -7,7 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import Float as sa_Float
 from sqlalchemy import cast as sa_cast
 from sqlalchemy import func as sa_func
@@ -20,8 +20,6 @@ from app.api.schemas import (
     DocumentVerificationRequest,
     IngestionBuildReviewRequest,
     PublicationRequest,
-    RagIndexReleaseRequest,
-    RagIndexTransitionRequest,
     RetrievalPlaygroundRequest,
 )
 from app.api.state import now_utc
@@ -37,8 +35,6 @@ from app.models.business import (
     Conversation,
     DailyUsage,
     DocumentAdmin,
-    EvaluationDataset,
-    EvaluationRun,
     Feedback,
     Message,
     RagProviderError,
@@ -54,15 +50,8 @@ from app.models.ingestion import (
     DocumentVersion,
     IngestionBuild,
     IngestionJob,
-    RagIndexRelease,
 )
-from app.services.answering.prompts import PROMPT_VERSION_ID
 from app.services.audit import list_audit_logs, log_audit
-from app.services.evaluation.policy import (
-    RELEASE_QUALITY_GATES,
-    REQUIRED_RELEASE_SCENARIOS,
-)
-from app.services.evaluation.reviews import verified_question_reviewers
 from app.services.ingestion.governance import is_canonical_official_source_url
 from app.services.ingestion.manifest_updater import (
     MANIFEST_EDITABLE_FIELDS,
@@ -74,12 +63,9 @@ from app.services.ingestion.uploads import (
     merge_documents,
     register_upload,
 )
-from app.services.providers import pinecone_store_from_settings, reset_provider_caches
+from app.services.providers import reset_provider_caches
 from app.services.retrieval.engine import RetrievalEngine
-from app.services.retrieval.relationships import (
-    relationship_index_for_manifest,
-    relationship_snapshot_hash,
-)
+from app.services.retrieval.relationships import relationship_index_for_manifest
 from app.services.retrieval.store import load_artifact_documents
 from app.services.storage import upload_bytes
 
@@ -677,15 +663,6 @@ def update_publication(
                     "can be published."
                 ),
             )
-    elif version is not None and version.is_current:
-        active_release = (
-            session.query(RagIndexRelease).filter(RagIndexRelease.status == "active").first()
-        )
-        if active_release is not None:
-            raise HTTPException(
-                status_code=409,
-                detail="Promote a replacement release before unpublishing a current version.",
-            )
     if version is not None:
         version.publication_status = publication_status
     record.version += 1
@@ -866,475 +843,6 @@ def review_ingestion_build(
     }
 
 
-def _ingestion_build_matches_runtime(build: IngestionBuild) -> bool:
-    config = build.pipeline_config or {}
-    expected = {
-        "target_tokens": settings.ingestion_target_tokens,
-        "max_tokens": settings.ingestion_max_tokens,
-        "overlap_tokens": settings.ingestion_overlap_tokens,
-        "min_merge_tokens": settings.ingestion_min_merge_tokens,
-        "parent_tokens": settings.ingestion_parent_tokens,
-        "embedding_batch_size": settings.ingestion_embedding_batch_size,
-        "embedding_dimension": settings.embedding_dimension,
-    }
-    gates = (build.quality_report or {}).get("gates") or {}
-    return bool(
-        build.status == "completed"
-        and build.review_status == "approved"
-        and build.embedding_model == settings.embedding_model
-        and build.embedding_revision == settings.embedding_model_revision
-        and (build.quality_report or {}).get("status") == "passed"
-        and gates
-        and all(bool(value) for value in gates.values())
-        and all(config.get(key) == value for key, value in expected.items())
-        and bool(config.get("require_native_sparse"))
-    )
-
-
-def _assert_ingestion_build_for_version(
-    session,
-    release: RagIndexRelease,
-    version: DocumentVersion,
-) -> None:
-    build_id = (release.ingestion_builds or {}).get(version.version_id)
-    build = session.get(IngestionBuild, build_id) if build_id else None
-    if (
-        build is None
-        or build.version_id != version.version_id
-        or build.source_sha256 != version.sha256
-        or not _ingestion_build_matches_runtime(build)
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail=f"Release has no approved immutable ingestion build for {version.version_id}.",
-        )
-
-
-def _assert_release_snapshot_eligible(session, release: RagIndexRelease) -> None:
-    if release.relationship_snapshot_hash != relationship_snapshot_hash(
-        session.query(DocumentRelationship).all()
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail="Release legal-relationship snapshot is stale.",
-        )
-    current_version_ids: set[str] = set()
-    for document_id, version_number in release.document_versions.items():
-        version = (
-            session.query(DocumentVersion)
-            .filter(
-                DocumentVersion.document_id == document_id,
-                DocumentVersion.version == int(version_number),
-            )
-            .one_or_none()
-        )
-        if version is None or not (
-            version.publication_status == "published"
-            and version.source_verification_status == "verified"
-            and version.legal_review_status == "verified"
-            and version.ingestion_status == "completed"
-            and version.legal_status in {"active", "amended"}
-            and is_canonical_official_source_url(version.source_url)
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Release snapshot is no longer eligible for {document_id}.",
-            )
-        _assert_ingestion_build_for_version(session, release, version)
-        current_version_ids.add(version.version_id)
-
-    for version_id in release.historical_version_ids:
-        version = session.get(DocumentVersion, version_id)
-        if version is None or not (
-            version.publication_status == "published"
-            and version.source_verification_status == "verified"
-            and version.legal_review_status == "verified"
-            and version.ingestion_status == "completed"
-            and is_canonical_official_source_url(version.source_url)
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Historical release version is no longer eligible: {version_id}.",
-            )
-        _assert_ingestion_build_for_version(session, release, version)
-        if version.version_id in current_version_ids:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Release version is duplicated as current and historical: {version_id}.",
-            )
-
-
-@router.get("/rag/releases")
-def list_rag_releases(session: DbSession, _: AdminUser) -> list[dict]:
-    rows = session.query(RagIndexRelease).order_by(RagIndexRelease.created_at.desc()).all()
-    return [
-        {
-            "release_id": row.release_id,
-            "namespace": row.namespace,
-            "status": row.status,
-            "build_status": row.build_status,
-            "models": {
-                "embedding": row.embedding_model,
-                "reranker": row.reranker_model,
-                "generator": row.generator_model,
-                "verifier": row.verifier_model,
-                "prompt": row.prompt_version_id,
-            },
-            "relationship_snapshot_hash": row.relationship_snapshot_hash,
-            "document_versions": row.document_versions,
-            "historical_version_ids": row.historical_version_ids,
-            "ingestion_builds": row.ingestion_builds,
-            "evaluation_metrics": row.evaluation_metrics,
-            "retrieval_thresholds": row.retrieval_thresholds,
-            "build_summary": row.build_summary,
-            "created_at": row.created_at,
-            "activated_at": row.activated_at,
-        }
-        for row in rows
-    ]
-
-
-@router.post("/rag/releases", status_code=status.HTTP_201_CREATED)
-def create_rag_release(
-    payload: RagIndexReleaseRequest,
-    session: DbSession,
-    user: AdminUser,
-) -> dict:
-    if payload.namespace and (
-        payload.namespace == settings.pinecone_namespace
-        or not payload.namespace.startswith(f"{settings.pinecone_namespace}-")
-        or re.fullmatch(r"[a-z0-9][a-z0-9-]{2,159}", payload.namespace) is None
-    ):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Release namespace must be a lowercase child namespace of the configured "
-                "Pinecone namespace and cannot be the active base namespace."
-            ),
-        )
-    versions = (
-        session.query(DocumentVersion)
-        .filter(
-            DocumentVersion.publication_status == "published",
-            DocumentVersion.source_verification_status == "verified",
-            DocumentVersion.legal_review_status == "verified",
-            DocumentVersion.ingestion_status == "completed",
-        )
-        .all()
-    )
-    eligible_pairs: list[tuple[DocumentVersion, IngestionBuild]] = []
-    for version in versions:
-        build = (
-            session.query(IngestionBuild)
-            .filter(
-                IngestionBuild.version_id == version.version_id,
-                IngestionBuild.status == "completed",
-                IngestionBuild.review_status == "approved",
-                IngestionBuild.embedding_model == settings.embedding_model,
-                IngestionBuild.embedding_revision == settings.embedding_model_revision,
-            )
-            .order_by(
-                IngestionBuild.completed_at.desc().nullslast(),
-                IngestionBuild.created_at.desc(),
-            )
-            .first()
-        )
-        if (
-            build is not None
-            and is_canonical_official_source_url(version.source_url)
-            and _ingestion_build_matches_runtime(build)
-        ):
-            eligible_pairs.append((version, build))
-
-    candidate_by_document: dict[str, tuple[DocumentVersion, IngestionBuild]] = {}
-    for row, build in sorted(
-        eligible_pairs,
-        key=lambda item: (
-            item[0].created_at.timestamp() if item[0].created_at else 0.0,
-            item[0].version,
-            item[0].version_id,
-        ),
-        reverse=True,
-    ):
-        if row.legal_status in {"active", "amended"}:
-            candidate_by_document.setdefault(row.document_id, (row, build))
-    release_versions = [row for row, _ in candidate_by_document.values()]
-    if not release_versions:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "No version has passed publication, source/legal review, and approved "
-                "immutable ingestion-build gates."
-            ),
-        )
-    release_builds = {row.version_id: build.build_id for row, build in eligible_pairs}
-    release_id = f"ragrel_{uuid4().hex}"
-    namespace = payload.namespace or f"{settings.pinecone_namespace}-{release_id[-12:]}"
-    current_version_ids = {candidate.version_id for candidate in release_versions}
-    relationship_hash = relationship_snapshot_hash(session.query(DocumentRelationship).all())
-    release = RagIndexRelease(
-        release_id=release_id,
-        namespace=namespace,
-        status="building",
-        build_status="pending",
-        embedding_model=settings.embedding_model,
-        reranker_model=settings.reranker_model,
-        generator_model=settings.openrouter_model,
-        verifier_model=settings.claim_verifier_model,
-        prompt_version_id=PROMPT_VERSION_ID,
-        relationship_snapshot_hash=relationship_hash,
-        document_versions={row.document_id: row.version for row in release_versions},
-        historical_version_ids=[
-            row.version_id for row, _ in eligible_pairs if row.version_id not in current_version_ids
-        ],
-        ingestion_builds=release_builds,
-        evaluation_metrics={},
-        retrieval_thresholds={"general": 0.08},
-        build_summary={},
-        created_by=user.user_id,
-    )
-    session.add(release)
-    session.commit()
-    return {
-        "release_id": release_id,
-        "namespace": namespace,
-        "status": release.status,
-        "build_status": release.build_status,
-        "models": {
-            "embedding": release.embedding_model,
-            "reranker": release.reranker_model,
-            "generator": release.generator_model,
-            "verifier": release.verifier_model,
-            "prompt": release.prompt_version_id,
-        },
-        "relationship_snapshot_hash": release.relationship_snapshot_hash,
-        "document_versions": release.document_versions,
-        "historical_version_ids": release.historical_version_ids,
-        "ingestion_builds": release.ingestion_builds,
-    }
-
-
-@router.post("/rag/releases/{release_id}/build", status_code=status.HTTP_202_ACCEPTED)
-def build_rag_release(
-    release_id: str,
-    background_tasks: BackgroundTasks,
-    session: DbSession,
-    _: AdminUser,
-) -> dict:
-    release = (
-        session.query(RagIndexRelease)
-        .filter(RagIndexRelease.release_id == release_id)
-        .with_for_update()
-        .one_or_none()
-    )
-    if release is None:
-        raise HTTPException(status_code=404, detail="RAG index release was not found.")
-    if release.status != "building" or release.build_status == "running":
-        raise HTTPException(
-            status_code=409,
-            detail="Only an idle release in the building lifecycle can be built.",
-        )
-    release.build_status = "queued"
-    session.commit()
-    try:
-        if settings.celery_enabled:
-            from app.services.ingestion.tasks import enqueue_index_release
-
-            enqueue_index_release(release_id)
-        else:
-            from app.services.ingestion.release_builder import build_index_release
-
-            background_tasks.add_task(build_index_release, release_id, storage_root())
-    except Exception as exc:
-        release.build_status = "failed"
-        release.build_summary = {"error": "release_queue_unavailable"}
-        session.commit()
-        raise HTTPException(
-            status_code=503,
-            detail="The index build queue is temporarily unavailable.",
-        ) from exc
-    return {
-        "release_id": release_id,
-        "namespace": release.namespace,
-        "status": "building",
-        "build_status": "queued",
-    }
-
-
-@router.post("/rag/releases/{release_id}/transition")
-def transition_rag_release(
-    release_id: str,
-    payload: RagIndexTransitionRequest,
-    session: DbSession,
-    user: AdminUser,
-) -> dict:
-    release = (
-        session.query(RagIndexRelease)
-        .filter(RagIndexRelease.release_id == release_id)
-        .with_for_update()
-        .one_or_none()
-    )
-    if release is None:
-        raise HTTPException(status_code=404, detail="RAG index release was not found.")
-    if payload.action == "validate":
-        _assert_release_snapshot_eligible(session, release)
-        if release.status != "building" or release.build_status != "succeeded":
-            raise HTTPException(
-                status_code=409,
-                detail="The index release must finish building before validation.",
-            )
-        if not payload.evaluation_run_id:
-            raise HTTPException(
-                status_code=422,
-                detail="A verified evaluation_run_id is required for validation.",
-            )
-        evaluation_run = session.get(EvaluationRun, payload.evaluation_run_id)
-        if evaluation_run is None:
-            raise HTTPException(status_code=404, detail="Evaluation run was not found.")
-        if evaluation_run.release_id != release_id:
-            raise HTTPException(
-                status_code=409,
-                detail="Evaluation run does not belong to this immutable index release.",
-            )
-        evaluation_dataset = session.get(
-            EvaluationDataset,
-            evaluation_run.dataset_id,
-        )
-        if (
-            evaluation_dataset is None
-            or len(evaluation_dataset.questions) < 100
-            or {question.get("split", "development") for question in evaluation_dataset.questions}
-            != {"development", "test"}
-            or any(
-                question.get("status") != "verified"
-                or question.get("verified_by") in {None, "", "unknown"}
-                for question in evaluation_dataset.questions
-            )
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "Release validation requires at least 100 human-verified questions "
-                    "with development and held-out test splits."
-                ),
-            )
-        if len({question.get("question_id") for question in evaluation_dataset.questions}) != len(
-            evaluation_dataset.questions
-        ) or len(
-            {
-                " ".join(str(question.get("question", "")).lower().split())
-                for question in evaluation_dataset.questions
-            }
-        ) != len(evaluation_dataset.questions):
-            raise HTTPException(
-                status_code=409,
-                detail="Release validation requires unique question IDs and texts.",
-            )
-        covered_scenarios = {
-            tag
-            for question in evaluation_dataset.questions
-            for tag in question.get("scenario_tags", [])
-        }
-        missing_scenarios = sorted(REQUIRED_RELEASE_SCENARIOS - covered_scenarios)
-        if missing_scenarios:
-            raise HTTPException(
-                status_code=409,
-                detail={"missing_release_scenarios": missing_scenarios},
-            )
-        verified_reviewers = verified_question_reviewers(
-            session,
-            evaluation_dataset.dataset_id,
-        )
-        if set(verified_reviewers) != {
-            question.get("question_id") for question in evaluation_dataset.questions
-        } or any(
-            verified_reviewers.get(question.get("question_id")) != question.get("verified_by")
-            for question in evaluation_dataset.questions
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail="Release validation requires a legal-review audit for every question.",
-            )
-        metrics = evaluation_run.metrics.get("rerank", {})
-        missing = [name for name in RELEASE_QUALITY_GATES if name not in metrics]
-        if "recommended_refusal_threshold" not in metrics:
-            missing.append("recommended_refusal_threshold")
-        failed = {
-            name: metrics.get(name, 0.0)
-            for name, threshold in RELEASE_QUALITY_GATES.items()
-            if metrics.get(name, 0.0) < threshold
-        }
-        if missing or failed:
-            raise HTTPException(
-                status_code=409,
-                detail={"missing_metrics": missing, "failed_gates": failed},
-            )
-        if (
-            metrics.get("unsupported_claim_rate", 1.0) > 0.01
-            or metrics.get("stale_source_rate", 1.0) > 0.0
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "failed_gates": {
-                        "unsupported_claim_rate": metrics.get("unsupported_claim_rate"),
-                        "stale_source_rate": metrics.get("stale_source_rate"),
-                    }
-                },
-            )
-        release.evaluation_metrics = metrics
-        release.retrieval_thresholds = {"general": float(metrics["recommended_refusal_threshold"])}
-        release.status = "validated"
-    elif payload.action == "promote":
-        _assert_release_snapshot_eligible(session, release)
-        if release.status not in {"validated", "retired"}:
-            raise HTTPException(status_code=409, detail="Only validated releases can be promoted.")
-        session.query(RagIndexRelease).with_for_update().all()
-        session.query(RagIndexRelease).filter(RagIndexRelease.status == "active").update(
-            {RagIndexRelease.status: "retired"}
-        )
-        session.query(DocumentVersion).filter(DocumentVersion.is_current.is_(True)).update(
-            {DocumentVersion.is_current: False}
-        )
-        session.flush()
-        for document_id, version_number in release.document_versions.items():
-            version_row = (
-                session.query(DocumentVersion)
-                .filter(
-                    DocumentVersion.document_id == document_id,
-                    DocumentVersion.version == int(version_number),
-                )
-                .with_for_update()
-                .one()
-            )
-            version_row.is_current = True
-        release.status = "active"
-        release.activated_at = now_utc()
-    else:
-        if release.status == "active":
-            raise HTTPException(
-                status_code=409,
-                detail="Promote another validated release before retiring the active release.",
-            )
-        release.status = "retired"
-    session.commit()
-    reset_provider_caches()
-    log_audit(
-        actor=user.user_id,
-        action=f"rag_release.{payload.action}",
-        target_type="rag_index_release",
-        target_id=release_id,
-        details={"namespace": release.namespace},
-    )
-    return {
-        "release_id": release.release_id,
-        "namespace": release.namespace,
-        "status": release.status,
-        "evaluation_metrics": release.evaluation_metrics,
-        "retrieval_thresholds": release.retrieval_thresholds,
-        "activated_at": release.activated_at,
-    }
-
 
 async def _read_upload_content(request: Request) -> bytes:
     """Bound buffering by actual streamed bytes, not the client's size claim."""
@@ -1432,8 +940,10 @@ def retrieval_playground(
 ) -> dict:
     started_at = time.perf_counter()
     try:
-        if settings.vector_store == "pinecone":
-            response = pinecone_store_from_settings(settings).search(
+        if settings.vector_store == "upstash_vector":
+            from app.services.providers import upstash_vector_store_from_settings
+
+            response = upstash_vector_store_from_settings(settings).search(
                 payload.question,
                 top_k=payload.top_k,
             )

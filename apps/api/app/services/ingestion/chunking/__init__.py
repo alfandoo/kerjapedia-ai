@@ -10,7 +10,6 @@ from app.services.ingestion.chunking.models import (
     ChunkStatistics,
 )
 from app.services.ingestion.chunking.tokenizer import (
-    HuggingFaceTokenizer,
     RegexTokenizer,
     Tokenizer,
 )
@@ -19,7 +18,6 @@ __all__ = [
     "ChunkingConfig",
     "ChunkingResult",
     "ChunkStatistics",
-    "HuggingFaceTokenizer",
     "RegexTokenizer",
     "StructureAwareChunker",
     "Tokenizer",

@@ -59,23 +59,6 @@ def enqueue_ingestion(
     run_ingestion_task.delay(job_id, document_id, version_id, build_id, persist_db)
 
 
-@celery_app.task(
-    name="kerjapedia.rag.build_release",
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=3,
-)
-def run_index_release_task(release_id: str) -> None:
-    from app.api.utils import storage_root
-    from app.services.ingestion.release_builder import build_index_release
-
-    build_index_release(release_id, storage_root())
-
-
-def enqueue_index_release(release_id: str) -> None:
-    run_index_release_task.delay(release_id)
-
-
 @celery_app.task(name="kerjapedia.rag.purge_expired_traces")
 def purge_expired_rag_traces() -> int:
     cutoff = datetime.now(UTC) - timedelta(days=settings.rag_trace_retention_days)

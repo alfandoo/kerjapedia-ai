@@ -37,7 +37,7 @@ def test_public_liveness_has_no_provider_or_version_details(env):
 
 @pytest.mark.parametrize(
     "failures,code,expected",
-    [([], 200, "ready"), (["database", "pinecone", "supabase"], 503, "not_ready")],
+    [([], 200, "ready"), (["database", "upstash_vector", "supabase"], 503, "not_ready")],
 )
 def test_public_readiness_only_reports_generic_status(env, failures, code, expected):
     env.probe.return_value = failures
@@ -57,7 +57,7 @@ def test_diagnostics_reject_non_admin_before_work(env, path, token, code):
 
 
 def test_admin_can_read_diagnostics_without_secrets(env, monkeypatch):
-    monkeypatch.setattr(routes.settings, "pinecone_api_key", "never-return-this-key")
+    monkeypatch.setattr(routes.settings, "groq_api_key", "never-return-this-key")
     env.probe.return_value = ["database"]
     response = env.client.get(
         "/admin/system/diagnostics", headers={"Authorization": "Bearer admin"}
@@ -108,14 +108,13 @@ def test_provider_exception_is_classified_without_exposing_message(monkeypatch):
     context.__exit__ = Mock(return_value=False)
     monkeypatch.setattr(db, "create_session", lambda: context)
     monkeypatch.setattr(governance, "load_retrieval_governance", lambda *a, **kw: None)
-    monkeypatch.setattr(routes.settings, "vector_store", "pinecone")
+    monkeypatch.setattr(routes.settings, "vector_store", "upstash_vector")
     monkeypatch.setattr(routes.settings, "app_env", "test")
     monkeypatch.setattr(
-        routes,
-        "pinecone_store_from_settings",
+        "app.services.providers.upstash_vector_store_from_settings",
         Mock(side_effect=RuntimeError("private-host-and-token")),
     )
-    assert routes._probe_readiness() == ["pinecone"]
+    assert routes._probe_readiness() == ["upstash_vector"]
 
 
 def test_missing_exporter_is_only_reported_to_admin(env, monkeypatch):

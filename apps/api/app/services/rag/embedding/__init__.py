@@ -7,7 +7,6 @@ from app.services.rag.embedding.embedder import (
     save_checkpoint,
 )
 from app.services.rag.embedding.providers import (
-    BGEM3Provider,
     EmbeddingProvider,
     HashEmbeddingProvider,
     effective_config,
@@ -28,7 +27,6 @@ from app.services.rag.embedding.schemas import (
 )
 
 __all__ = [
-    "BGEM3Provider",
     "EmbeddedChunk",
     "EmbeddingConfig",
     "EmbeddingProvider",

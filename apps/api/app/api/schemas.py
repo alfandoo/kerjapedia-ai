@@ -303,16 +303,6 @@ class IngestionBuildReviewRequest(ApiModel):
     notes: str = Field(default="", max_length=4000)
 
 
-class RagIndexReleaseRequest(ApiModel):
-    namespace: str | None = Field(default=None, min_length=3, max_length=160)
-
-
-class RagIndexTransitionRequest(ApiModel):
-    action: Literal["validate", "promote", "retire"]
-    evaluation_run_id: str | None = Field(default=None, max_length=160)
-    metrics: dict[str, float] = Field(default_factory=dict)
-
-
 class PublicationRequest(ApiModel):
     action: Literal["publish", "unpublish"]
 
@@ -328,7 +318,6 @@ class RetrievalPlaygroundRequest(ApiModel):
 class IngestionJobRequest(ApiModel):
     document_id: str = Field(min_length=3, max_length=80)
     persist_db: bool = False
-    release_candidate: bool = False
     force: bool = False
 
 

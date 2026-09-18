@@ -85,17 +85,12 @@ class UpstashVectorStore:
     def __init__(
         self,
         config: UpstashVectorConfig,
-        reranker_provider: str = "heuristic",
-        reranker_model: str = "bge-reranker-v2-m3",
         fail_closed: bool = False,
         allow_unpublished: bool = True,
         relationship_index: RelationshipIndex | None = None,
         rerank_weights: RerankWeights | None = None,
         diversity_lambda: float = 0.7,
-        hybrid_alpha: float = 0.7,
         semantic_limit: int = 100,
-        cross_encoder_top_n: int = 50,
-        cross_encoder_blend_weight: float = 0.75,
         mmr_max_per_document: int = 3,
         mmr_max_per_article: int = 2,
         expansion_max: int = 4,
@@ -114,17 +109,12 @@ class UpstashVectorStore:
                 "UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN are required."
             )
         self.config = config
-        self.reranker_provider = reranker_provider
-        self.reranker_model = reranker_model
         self.fail_closed = fail_closed
         self.allow_unpublished = allow_unpublished
         self.relationship_index = relationship_index or build_relationship_index([])
         self.rerank_weights = rerank_weights or DEFAULT_RERANK_WEIGHTS
         self.diversity_lambda = diversity_lambda
-        self.hybrid_alpha = hybrid_alpha
         self.semantic_limit = semantic_limit
-        self.cross_encoder_top_n = cross_encoder_top_n
-        self.cross_encoder_blend_weight = cross_encoder_blend_weight
         self.mmr_max_per_document = mmr_max_per_document
         self.mmr_max_per_article = mmr_max_per_article
         self.expansion_max = expansion_max

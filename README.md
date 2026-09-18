@@ -7,8 +7,7 @@ KerjaPedia AI adalah asisten regulasi ketenagakerjaan Indonesia berbasis Retriev
 Project sudah memiliki MVP RAG lokal dan jalur RAG industri berbasis provider:
 
 - Mode lokal/offline: artifact ingestion + hash embedding + answer composer deterministik.
-- Mode industri (aktif): Upstash Vector hybrid index + hosted embedding + Groq/OpenRouter chat completions.
-- Mode legacy/baseline: Pinecone vector database + local BGE-M3 embedding (dipertahankan untuk rollback dan perbandingan evaluasi).
+- Mode industri (aktif): Upstash Vector hybrid index + hosted embedding + Groq chat completions.
 
 Dokumen produk utama tersedia di `docs/PRD_KerjaPedia_AI.md`, roadmap pengerjaan tersedia di `docs/project/ROADMAP.md`, dan arsitektur RAG provider tersedia di `docs/RAG_PIPELINE.md`.
 
@@ -17,8 +16,8 @@ Dokumen produk utama tersedia di `docs/PRD_KerjaPedia_AI.md`, roadmap pengerjaan
 - Frontend: Next.js
 - Backend API: Python FastAPI
 - Database: PostgreSQL
-- Vector store: Upstash Vector untuk mode industri, Pinecone untuk baseline legacy, artifact lokal untuk development/test
-- Embedding: hosted oleh Upstash (open-ai/text-embedding-3-small + BM25) untuk mode industri; BGE-M3 lokal hanya untuk baseline Pinecone; hash embedding untuk development/test
+- Vector store: Upstash Vector untuk mode industri, artifact lokal untuk development/test
+- Embedding: hosted oleh Upstash (open-ai/text-embedding-3-small + BM25) untuk mode industri; hash embedding untuk development/test
 - LLM provider: Groq untuk mode industri, local answer composer untuk development/test
 
 ## Struktur Folder
@@ -43,12 +42,11 @@ docker compose up -d
 
 Service lokal:
 
-- PostgreSQL (metadata only): `localhost:5432`
 - Redis: `localhost:6379`
-- MinIO API: `http://localhost:9000`
-- MinIO Console: `http://localhost:9001`
 
-> **Note:** PostgreSQL has pgvector extension enabled but it's not used for production vector search. Pinecone is the production vector store. See [docs/P3_2_PGVECTOR_AUDIT.md](docs/P3_2_PGVECTOR_AUDIT.md) for details.
+PostgreSQL berjalan via Supabase (`DATABASE_URL`) dan object storage via
+Supabase Storage — tidak ada service postgres/MinIO lokal lagi. Lihat
+`compose.production.yaml` untuk stack penuh.
 
 Untuk mode industri, isi minimal variabel berikut di `.env`:
 
@@ -107,7 +105,7 @@ Frontend berjalan di `http://localhost:3000`.
 ```bash
 cd apps/api
 python -m venv .venv
-.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m pip install -r requirements-dev.txt
 .venv\Scripts\python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -151,13 +149,13 @@ cd apps/api
 .venv\Scripts\python -m app.services.ingestion.cli --document-id PP-35-2021
 ```
 
-Untuk production, ingestion hanya menghasilkan artifact dan registry version. Namespace
-Pinecone dibangun dari dokumen published/verified melalui immutable release admin; job
-ingestion tidak pernah menulis langsung ke namespace aktif.
+Untuk production, ingestion menghasilkan artifact (chunks + registry version).
+Index Upstash dibangun dari pre-embedding chunks via `scripts/index_upstash.py`;
+job ingestion tidak pernah menulis langsung ke namespace aktif.
 
 ```bash
 cd apps/api
-.venv\Scripts\python -m app.services.ingestion.cli --all --embedding-provider bge_m3 --persist-db
+.venv\Scripts\python -m app.services.ingestion.cli --all --persist-db
 ```
 
 Artifact ingestion tetap disimpan di `storage/ingestion/`. Lihat `docs/INGESTION_PIPELINE.md` untuk detail pipeline dan opsi `--persist-db`.
@@ -176,13 +174,6 @@ Retrieval Upstash (hybrid, hosted embedding):
 ```bash
 cd apps/api
 .venv\Scripts\python -m app.services.retrieval.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store upstash_vector
-```
-
-Retrieval Pinecone (baseline legacy):
-
-```bash
-cd apps/api
-.venv\Scripts\python -m app.services.retrieval.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store pinecone
 ```
 
 ### Indexing Upstash
@@ -249,7 +240,7 @@ Dataset evaluasi (`evaluation/golden_questions.json`) tidak diubah. Yang
 berubah hanya backend embedding/index/retrieval; dokumen, chunking,
 metadata, reranker, dan context construction dipertahankan sama:
 
-| Metric | Baseline (Pinecone + BGE-M3) | Upstash Hybrid |
+| Metric | Baseline historis | Upstash Hybrid |
 |---|---|---|
 | Recall@5 | ... | ... |
 | Precision@5 | ... | ... |

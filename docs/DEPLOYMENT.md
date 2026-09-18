@@ -15,8 +15,8 @@
                     ┌────────────┼────────────┐
                     │            │            │
               ┌─────▼─────┐ ┌───▼───┐ ┌─────▼─────┐
-              │ Supabase  │ │ Redis │ │ Pinecone  │
-              │ (Postgres)│ │(Upstash)│ │(Vectors) │
+              │ Supabase  │ │ Redis │ │ Upstash │
+              │ (Postgres)│ │(Upstash)│ │(Vectors)│
               └───────────┘ └───────┘ └───────────┘
 ```
 
@@ -25,7 +25,7 @@
 1. GitHub account with the repo pushed
 2. Render account (free, no credit card needed)
 3. Vercel account (already have)
-4. All API keys ready (Supabase, Pinecone, OpenRouter, Upstash Redis, SMTP)
+4. All API keys ready (Supabase, Upstash Vector, Groq, Upstash Redis, SMTP)
 
 ## Step 1: Deploy API to Render
 
@@ -55,18 +55,20 @@ Click "Add Environment Variable" for each:
 | `SUPABASE_ANON_KEY` | (copy from .env) | .env |
 | `DATABASE_URL` | (copy from .env) | .env |
 | `REDIS_URL` | (copy from .env, Upstash) | .env |
-| `OPENROUTER_API_KEY` | (copy from .env) | .env |
-| `PINECONE_API_KEY` | (copy from .env) | .env |
+| `OPENROUTER_API_KEY` | (copy from .env, fallback only) | .env |
+| `GROQ_API_KEY` | (copy from .env) | .env |
+| `UPSTASH_VECTOR_URL` | (copy from .env) | .env |
+| `UPSTASH_VECTOR_TOKEN` | (copy from .env) | .env |
 | `SMTP_USERNAME` | `kerjapedia@zohomail.com` | .env |
 | `SMTP_PASSWORD` | (copy from .env) | .env |
 | `SMTP_SENDER_EMAIL` | `kerjapedia@zohomail.com` | .env |
 
-**Note:** `APP_URL` should be set to your Vercel URL after web deployment.
+**Note:** `APP_ORIGIN` should be set to your Vercel URL after web deployment.
 
 ### 1.4 Wait for First Deploy
 
-- First deploy: ~5-10 min (downloads BGE-M3 model ~1.3GB)
-- Subsequent deploys: ~2-3 min
+- First deploy: ~5-10 min (system deps + OCR toolchain)
+- Subsequent deploys: ~2-3 min (Docker layer cache)
 - Your API URL: `https://kerjapedia-api.onrender.com`
 
 ### 1.5 Run Database Migration
@@ -190,11 +192,15 @@ Common issues:
 2. Check CORS settings in Render
 3. Test API directly: `curl https://kerjapedia-api.onrender.com/health`
 
-### Pinecone Connection Error
+### Upstash / Groq Connection Error
 
-Pinecone may need IP whitelist update. Check:
-1. Pinecone dashboard → Settings → API Keys
-2. Whitelist Render's IP range (or use `0.0.0.0/0` for testing)
+Retrieval answers `temporarily unavailable` right after deploy usually means:
+1. `UPSTASH_VECTOR_URL` / `UPSTASH_VECTOR_TOKEN` mismatch (token must belong
+   to the same index as the URL) — the API log shows
+   `Upstash hybrid query failed: Unauthorized`.
+2. `GROQ_API_KEY` missing — the log shows `GROQ_API_KEY is required`.
+3. Startup `model provenance` errors are gone: production readiness now
+   verifies the Upstash index contract (HYBRID/BM25/COSINE) via `/ready`.
 
 ---
 
@@ -206,8 +212,8 @@ Pinecone may need IP whitelist update. Check:
 | Vercel (Web) | Hobby | $0/month |
 | Supabase | Free | $0/month |
 | Upstash Redis | Free | $0/month |
-| Pinecone | Starter | $0/month |
-| OpenRouter | Pay-as-you-go | ~$1-5/month |
+| Upstash Vector | Free | $0/month |
+| Groq | Free tier / pay-as-you-go | $0-5/month |
 | **Total** | | **$0-5/month** |
 
 ---

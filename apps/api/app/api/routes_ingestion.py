@@ -23,7 +23,6 @@ from app.services.ingestion.builds import (
     build_config_from_settings,
     document_metadata_hash,
     make_build_identity,
-    validate_candidate_runtime,
 )
 from app.services.ingestion.metadata import find_document
 from app.services.ingestion.pipeline import (
@@ -214,26 +213,8 @@ def create_ingestion_job(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Document {payload.document_id} was not found.",
         ) from exc
-    if payload.release_candidate and not payload.persist_db:
-        raise HTTPException(
-            status_code=422,
-            detail="A release-candidate ingestion must persist its immutable build to PostgreSQL.",
-        )
-
-    provider = embedding_provider_from_settings(
-        settings,
-        require_native_sparse=(True if payload.release_candidate else None),
-    )
-    build_config = build_config_from_settings(
-        settings,
-        provider,
-        release_candidate=payload.release_candidate,
-    )
-    if payload.release_candidate:
-        try:
-            validate_candidate_runtime(build_config)
-        except RuntimeError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+    provider = embedding_provider_from_settings(settings)
+    build_config = build_config_from_settings(settings, provider)
     identity = make_build_identity(
         document.document_id,
         document.sha256,

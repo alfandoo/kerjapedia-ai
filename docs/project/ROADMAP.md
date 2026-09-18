@@ -10,9 +10,9 @@ Dokumen ini berisi tahapan kerja dari awal sampai akhir untuk membangun KerjaPed
 - [x] Tentukan stack utama:
   - Frontend: Next.js.
   - Backend API: Python FastAPI.
-  - Database: PostgreSQL.
-  - Vector store: pgvector.
-  - LLM provider: OpenAI.
+  - Database: PostgreSQL (via Supabase).
+  - Vector store: Upstash Vector (HYBRID; sebelumnya pgvector, lalu Pinecone+BGE-M3 — keduanya pensiun 2026-09).
+  - LLM provider: Groq (sebelumnya OpenAI/OpenRouter).
 - [x] Inisialisasi Git repository jika belum ada.
 - [x] Buat struktur folder awal:
   - `apps/web/` untuk frontend.

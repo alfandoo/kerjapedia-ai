@@ -10,13 +10,12 @@ This repository contains product documentation and source legal documents for Ke
 
 ## Build, Test, and Development Commands
 
-No application runtime, package manifest, or test runner is present yet. Until implementation files are added, use:
+Monorepo FastAPI (`apps/api`) + Next.js (`apps/web`):
 
-- `rg --files` lists all tracked workspace files quickly.
-- `Get-ChildItem -Recurse dataset` reviews available regulation sources.
-- `git status` checks pending changes once Git is initialized.
-
-When a web app or ingestion pipeline is added, document commands such as `npm run dev`, `npm test`, or `python -m pytest`.
+- Backend: `cd apps/api && .venv\Scripts\python -m pytest` (tests), `ruff check app tests` (lint)
+- Frontend: `cd apps/web && npm run lint`, `npm run build`, `npm run test:e2e`
+- Retrieval Upstash: `apps\api\.venv\Scripts\python scripts\index_upstash.py --dry-run`
+- `git status` checks pending changes.
 
 ## Coding Style & Naming Conventions
 
@@ -28,13 +27,13 @@ Future source code should follow its configured formatter and linter. Keep modul
 
 ## Testing Guidelines
 
-There is no automated test suite yet. For future RAG work, test document ingestion, metadata extraction, retrieval ranking, citation formatting, and refusal behavior. Use small excerpts instead of full PDFs where possible.
+Automated suites: `apps/api/tests` (pytest: ingestion, retrieval, answering, eval, security) and `apps/web/tests` (Playwright E2E). For RAG work, test document ingestion, metadata extraction, retrieval ranking, citation formatting, and refusal behavior. Use small excerpts instead of full PDFs where possible.
 
 Name tests after behavior, for example `test_retrieves_latest_upah_minimum_rule`.
 
 ## Commit & Pull Request Guidelines
 
-No local Git history is available to infer an existing convention. Use concise, imperative commit messages such as `Add BPJS regulation sources` or `Document RAG citation requirements`.
+No local Git history is available to infer an existing convention. Use concise, imperative commit messages such as `Migrate vector pipeline to Upstash hosted hybrid embeddings`.
 
 Pull requests should include a short summary, affected folders, validation performed, and screenshots only when UI changes are introduced. For dataset updates, mention the document source URL and whether the regulation replaces or amends an older file.
 

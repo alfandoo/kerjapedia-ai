@@ -34,35 +34,27 @@ memberikan retry durable dan mencegah job checksum yang sama diproses ulang. Pip
 4. parse Bab/Pasal/Ayat dan membentuk child chunk 250–450 token (maksimum 550,
    overlap maksimum 60, tidak lintas Pasal);
 5. menyimpan parent context maksimum 1.200 token, halaman, offset, checksum, dan versi;
-6. membuat dense serta lexical sparse vector BGE-M3; dan
+6. mengekspor pre-embedding chunks (`chunks.jsonl`, sumber kebenaran untuk indexing); dan
 7. menyimpan artifact tanpa menulis namespace aktif.
 
-Publication dilakukan melalui release admin:
+Indexing ke Upstash dilakukan terpisah via `scripts/index_upstash.py`, yang
+mengirim raw chunk text (Upstash meng-embedding server-side:
+`open-ai/text-embedding-3-small` + BM25). Indexing bersifat idempoten
+(chunk ID deterministik) dan mendukung `--dry-run`/`--limit`.
 
-1. `POST /admin/rag/releases` membuat snapshot dan namespace baru.
-2. `POST /admin/rag/releases/{id}/build` membangun namespace via worker.
-3. `POST /evaluation/runs` dengan `release_id` mengevaluasi namespace tersebut.
-4. `POST /admin/rag/releases/{id}/transition` memvalidasi, mempromosikan, atau
-   me-retire release.
-
-Lifecycle publik tetap `building → validated → active → retired`; `build_status`
-menyimpan substate queue/build. Hanya satu release boleh aktif karena partial unique
-constraint database. Promosi mengunci row dan mengganti active namespace secara atomik.
-Release juga membekukan embedding, reranker, generator, verifier, dan prompt version.
-Hash canonical relasi hukum juga dibekukan; perubahan relasi membuat release stale.
-Build, evaluation, startup, dan request production gagal tertutup ketika provenance
-runtime tidak cocok dengan release.
+Startup production gagal tertutup ketika index Upstash tidak cocok dengan
+kontrak hosted-embedding (HYBRID/BM25/COSINE) atau masih kosong.
 
 ## Retrieval
 
-Index Pinecone menggunakan metric `dotproduct`. Query mengirim dense dan sparse vector
-dalam satu hybrid request dengan maksimum 100 kandidat. Alpha adalah `0.35` untuk query
-dengan Pasal/nomor/tahun dan `0.65` untuk pertanyaan natural-language. Filter eksplisit
+Index Upstash HYBRID (dense hosted + sparse BM25, metric COSINE). Aplikasi
+mengirim raw query text; Upstash melakukan dense/sparse embedding
+server-side dengan maksimum 100 kandidat per rewrite. Filter eksplisit
 menjadi hard filter; topik hasil inferensi hanya memengaruhi ranking.
 
-Pinecone `bge-reranker-v2-m3` mererank maksimum 50 kandidat. Setelah itu policy relasi
-hukum, deduplikasi/diversity, dan context expansion memilih konteks akhir. Threshold
-refusal berasal dari development split release, bukan konstanta production.
+Heuristic reranker internal menilai kandidat. Setelah itu policy relasi
+hukum, deduplikasi/diversity, dan context expansion memilih konteks akhir.
+Threshold refusal berasal dari konfigurasi governance.
 
 ## Generation dan verification
 
@@ -82,7 +74,7 @@ digunakan. Streaming hanya mengirim isi jawaban setelah verification selesai.
 ## Operasional
 
 - `/health` adalah liveness tanpa panggilan dependency; `/ready` memeriksa DB,
-  Pinecone, Supabase, Redis, active release, dan konsistensi snapshot.
+  Upstash (verifikasi kontrak index), Supabase, dan Redis.
 - `/metrics` mengekspor latency tahap, provider error, outcome, token usage, claim
   verification, retrieved document version, prompt/answer version, dan index release.
 - OTLP spans dapat dikirim melalui `OTEL_EXPORTER_OTLP_ENDPOINT`.

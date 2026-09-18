@@ -1,7 +1,7 @@
 # RAG Evaluation
 
-`evaluation/golden_questions.json` berisi 150 seed case nonproduksi. Seed ini tetap
-`needs_human_review` dan tidak boleh dipakai untuk mempromosikan release.
+`evaluation/golden_questions.json` berisi 130 seed case nonproduksi. Seed ini tetap
+`needs_human_review` dan tidak boleh dipakai untuk klaim produksi.
 
 ## Dataset produksi
 
@@ -48,10 +48,11 @@ cd apps/api
   --top-k 10
 ```
 
-Evaluasi release dilakukan melalui `POST /evaluation/runs` dengan `dataset_id` dan
-`release_id`. Jalur ini memakai namespace Pinecone release, BGE-M3, reranker,
-generator Groq, dan claim verifier fail-closed. `evaluation_run_id` tersebut kemudian
-dikirim saat transisi `validate`; run dari artifact atau release lain ditolak.
+Evaluasi backend live dilakukan via `scripts/eval_upstash_sample.py` (sampel
+deterministik memakai fungsi metrik repo; report ke `storage/evaluation/`).
+Evaluasi artifact-mode via `POST /evaluation/runs` tanpa `release_id`.
+Jalur evaluasi berbasis release/namespace Pinecone sudah dipensiunkan
+(2026-09) bersama pipeline Pinecone/BGE-M3.
 
 CI menyediakan PostgreSQL test terisolasi, menjalankan migration upgrade–downgrade–
 upgrade, lalu seluruh unit/integration/provider-contract/evaluation regression test.

@@ -1,5 +1,12 @@
 name: kerjapedia-ai
 
+# Local dev infra is Redis-only by design: PostgreSQL runs via Supabase
+# (see DATABASE_URL) and object storage via Supabase Storage, so the old
+# local postgres/MinIO services were removed. The full stack
+# (postgres + redis + api + worker + web) lives in compose.production.yaml.
+# NOTE: scripts/backup_postgres.ps1 still targets a compose postgres service
+# that no longer exists here — point it at compose.production.yaml before use.
+
 services:
   redis:
     image: redis:7-alpine

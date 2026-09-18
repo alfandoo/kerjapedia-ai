@@ -6,7 +6,6 @@ import pytest
 
 from app.services.ingestion.embeddings import HashEmbeddingProvider
 from app.services.retrieval.engine import RetrievalEngine
-from app.services.retrieval.pinecone_store import _hybrid_alpha
 from app.services.retrieval.postprocessing import (
     apply_query_focus_adjustments,
     drop_heading_only_chunks,
@@ -348,11 +347,6 @@ def test_original_question_keeps_its_own_hard_filters_with_context() -> None:
     assert query.filters["year"] == 2016
     assert query.filters["number"] == 6
     assert query.filters["regulation_type"] == "Permenaker"
-
-
-def test_hybrid_alpha_prefers_sparse_signal_for_exact_legal_references() -> None:
-    assert _hybrid_alpha("Apa isi Pasal 10 Permenaker 6 Tahun 2016?") == 0.35
-    assert _hybrid_alpha("Bagaimana hak pekerja setelah kontrak berakhir?") == 0.65
 
 
 def test_retrieval_refuses_query_outside_employment_scope() -> None:

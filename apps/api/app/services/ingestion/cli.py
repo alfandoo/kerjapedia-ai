@@ -7,10 +7,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.db.session import create_session
-from app.services.ingestion.builds import (
-    build_config_from_settings,
-    validate_candidate_runtime,
-)
+from app.services.ingestion.builds import build_config_from_settings
 from app.services.ingestion.metadata import load_manifest
 from app.services.ingestion.pipeline import ingest_document
 from app.services.ingestion.retry import RetryPolicy, run_with_retry
@@ -47,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--embedding-provider",
-        choices=["hash", "bge_m3", "openai"],
+        choices=["hash"],
         default=None,
         help="Embedding provider. Defaults to EMBEDDING_PROVIDER.",
     )
@@ -55,11 +52,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--persist-db",
         action="store_true",
         help="Persist document, build, chunk, embedding, and job metadata to PostgreSQL.",
-    )
-    parser.add_argument(
-        "--release-candidate",
-        action="store_true",
-        help="Require the pinned BGE-M3, native sparse, OCR, and database release gates.",
     )
     parser.add_argument(
         "--resume",
@@ -91,28 +83,11 @@ def main() -> None:
 
     if not args.all and not args.document_id:
         parser.error("Provide --document-id or --all.")
-    if args.release_candidate and not args.persist_db:
-        parser.error("--release-candidate requires --persist-db.")
-    if (
-        args.release_candidate
-        and (args.embedding_provider or settings.embedding_provider) != "bge_m3"
-    ):
-        parser.error("--release-candidate requires --embedding-provider bge_m3.")
     if args.max_retries < 0 or args.retry_delay < 0:
         parser.error("--max-retries and --retry-delay must not be negative.")
 
-    provider = embedding_provider_from_settings(
-        settings,
-        args.embedding_provider,
-        require_native_sparse=(True if args.release_candidate else None),
-    )
-    build_config = build_config_from_settings(
-        settings,
-        provider,
-        release_candidate=args.release_candidate,
-    )
-    if args.release_candidate:
-        validate_candidate_runtime(build_config)
+    provider = embedding_provider_from_settings(settings, args.embedding_provider)
+    build_config = build_config_from_settings(settings, provider)
 
     manifest = load_manifest(metadata_path)
     document_ids = (

@@ -13,16 +13,10 @@ from app.api.schemas import (
 )
 from app.api.state import now_utc
 from app.api.utils import project_root
-from app.core.config import settings
 from app.models.business import EvaluationDataset, EvaluationQuestionReview, EvaluationRun
-from app.models.ingestion import DocumentRelationship, RagIndexRelease
-from app.services.answering.prompts import PROMPT_VERSION_ID
 from app.services.evaluation.dataset import load_evaluation_dataset
-from app.services.evaluation.policy import REQUIRED_RELEASE_SCENARIOS
-from app.services.evaluation.reviews import verified_question_reviewers
 from app.services.evaluation.schemas import EvaluationQuestion
 from app.services.evaluation.tasks import execute_evaluation_run
-from app.services.retrieval.relationships import relationship_snapshot_hash
 
 router = APIRouter(prefix="/evaluation", tags=["evaluation"])
 
@@ -152,90 +146,14 @@ def create_evaluation_run(
 
     questions = [EvaluationQuestion.from_dict(item) for item in dataset.questions]
     if payload.release_id:
-        release = session.get(RagIndexRelease, payload.release_id)
-        if release is None:
-            raise HTTPException(status_code=404, detail="RAG index release was not found.")
-        if release.status != "building" or release.build_status != "succeeded":
-            raise HTTPException(
-                status_code=409,
-                detail="The RAG index release must finish building before evaluation.",
-            )
-        if len(questions) < 100 or {question.split for question in questions} != {
-            "development",
-            "test",
-        }:
-            raise HTTPException(
-                status_code=409,
-                detail="Release evaluation requires at least 100 questions and both splits.",
-            )
-        if len({question.question_id for question in questions}) != len(questions) or len(
-            {" ".join(question.question.lower().split()) for question in questions}
-        ) != len(questions):
-            raise HTTPException(
-                status_code=409,
-                detail="Release evaluation requires unique question IDs and texts.",
-            )
-        covered_scenarios = {tag for question in questions for tag in question.scenario_tags}
-        missing_scenarios = sorted(REQUIRED_RELEASE_SCENARIOS - covered_scenarios)
-        if missing_scenarios:
-            raise HTTPException(
-                status_code=409,
-                detail={"missing_release_scenarios": missing_scenarios},
-            )
-        if any(
-            question.status != "verified" or question.verified_by in {"", "unknown"}
-            for question in questions
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail="Release evaluation requires a fully human-verified dataset.",
-            )
-        if {
-            "embedding": release.embedding_model,
-            "reranker": release.reranker_model,
-            "generator": release.generator_model,
-            "verifier": release.verifier_model,
-            "prompt": release.prompt_version_id,
-        } != {
-            "embedding": settings.embedding_model,
-            "reranker": settings.reranker_model,
-            "generator": settings.openrouter_model,
-            "verifier": settings.claim_verifier_model,
-            "prompt": PROMPT_VERSION_ID,
-        }:
-            raise HTTPException(
-                status_code=409,
-                detail="Release model provenance does not match the evaluation runtime.",
-            )
-        if release.relationship_snapshot_hash != relationship_snapshot_hash(
-            session.query(DocumentRelationship).all()
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail="Release legal-relationship snapshot is stale.",
-            )
-        verified_reviewers = verified_question_reviewers(session, dataset.dataset_id)
-        if set(verified_reviewers) != {question.question_id for question in questions} or any(
-            verified_reviewers.get(question.question_id) != question.verified_by
-            for question in questions
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail="Release evaluation requires an audit record for every legal review.",
-            )
-        if not (
-            settings.vector_store == "pinecone"
-            and settings.embedding_provider in ("bge_m3", "pinecone_inference")
-            and settings.llm_provider == "openrouter"
-            and settings.reranker_provider == "pinecone"
-            and settings.claim_verifier_provider == "openrouter"
-            and settings.rag_fail_closed
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail="Release evaluation requires the fail-closed production RAG providers.",
-            )
-        development_count = sum(1 for question in questions if question.split == "development")
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                "Release-bound evaluation runs were retired with the Pinecone "
+                "pipeline. Re-run without a release_id (artifact modes)."
+            ),
+        )
+    development_count = sum(1 for question in questions if question.split == "development")
     held_out_count = sum(1 for question in questions if question.split == "test")
     progress_total = (
         (development_count + held_out_count)

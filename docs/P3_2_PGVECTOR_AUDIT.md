@@ -1,5 +1,10 @@
 # P3-2: pgvector Usage Audit
 
+> Addendum 2026-09: Pinecone + self-hosted BGE-M3 terdokumentasi di bawah
+> ini sudah dipensiunkan. Production vector store saat ini adalah
+> **Upstash Vector** (HYBRID: `open-ai/text-embedding-3-small` + BM25).
+> Dokumen ini dipertahankan sebagai arsip keputusan.
+
 ## Current State
 
 ### Enabled but Not Used

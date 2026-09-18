@@ -11,19 +11,14 @@ from sqlalchemy import text
 from app.api.dependencies import AdminUser
 from app.api.schemas import HealthResponse
 from app.core.config import settings
-from app.services.providers import pinecone_store_from_settings
 
 router = APIRouter(tags=["system"])
 
 
 def _embedding_sparse_flavour() -> str:
-    try:
-        from app.services.ingestion.embeddings import bge_native_sparse_available
-    except ImportError:
-        return "unknown"
-    if settings.embedding_provider != "bge_m3":
-        return "not_applicable"
-    return "native" if bge_native_sparse_available() else "hash_fallback"
+    # Local artifact embeddings always use the hash fallback channel;
+    # production dense/sparse vectors are hosted by Upstash.
+    return "hash_fallback"
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -43,33 +38,20 @@ _READINESS_TTL_SECONDS = 10
 
 def _probe_readiness() -> list[str]:
     from app.db.session import create_session
-    from app.services.retrieval.governance import load_retrieval_governance
 
     failures: list[str] = []
-    governance = None
     try:
         with create_session() as session:
             session.execute(text("SELECT 1"))
-            governance = load_retrieval_governance(
-                session,
-                allow_unpublished=settings.rag_allow_unpublished,
-            )
     except Exception:
         failures.append("database")
-    if settings.vector_store == "pinecone":
+    if settings.vector_store == "upstash_vector":
         try:
-            if not pinecone_store_from_settings(settings).is_ready():
-                failures.append("pinecone")
+            from app.services.providers import upstash_vector_store_from_settings
+
+            upstash_vector_store_from_settings(settings).verify_index(strict=True)
         except Exception:
-            failures.append("pinecone")
-        if settings.app_env.lower() == "production" and (
-            governance is None or not governance.active_namespace
-        ):
-            failures.append("active_rag_release")
-        if settings.app_env.lower() == "production" and (
-            governance is None or not governance.release_consistent
-        ):
-            failures.append("stale_rag_release")
+            failures.append("upstash_vector")
     if settings.app_env.lower() == "production":
         try:
             from app.services.supabase import get_supabase
@@ -126,14 +108,15 @@ def system_diagnostics(_: AdminUser, response: HeaderResponse) -> dict:
         "providers": {
             "vector_store": settings.vector_store,
             "embedding_provider": settings.embedding_provider,
-            "embedding_model": settings.embedding_model,
             "embedding_sparse_flavour": _embedding_sparse_flavour(),
             "llm_provider": settings.llm_provider,
             "openrouter_model": (
                 settings.openrouter_model if settings.llm_provider == "openrouter" else None
             ),
-            "pinecone_index": settings.pinecone_index_name,
-            "pinecone_namespace": settings.pinecone_namespace,
+            "groq_model": (
+                settings.groq_model if settings.llm_provider == "groq" else None
+            ),
+            "upstash_namespace": settings.upstash_vector_namespace,
         },
     }
 

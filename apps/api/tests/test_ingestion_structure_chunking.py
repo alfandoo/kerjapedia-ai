@@ -3,11 +3,8 @@ from __future__ import annotations
 import statistics
 from pathlib import Path
 
-import pytest
-
 from app.services.ingestion.chunking import (
     ChunkingConfig,
-    HuggingFaceTokenizer,
     RegexTokenizer,
     chunk_legal_document,
 )
@@ -47,11 +44,6 @@ def _chunk(structured, *, target=40, maximum=60, minimum=8, overlap=6):
             overlap_tokens=overlap,
         ),
     )
-
-
-def test_production_tokenizer_requires_a_pinned_revision() -> None:
-    with pytest.raises(ValueError, match="pinned tokenizer revision"):
-        HuggingFaceTokenizer(revision="main")
 
 
 def test_very_short_pasal_remains_one_useful_legal_chunk() -> None:

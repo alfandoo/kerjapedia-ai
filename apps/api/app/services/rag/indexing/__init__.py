@@ -15,7 +15,6 @@ from app.services.rag.indexing.guards import (
     fit_metadata,
     write_verified,
 )
-from app.services.rag.indexing.pinecone_backend import PineconeVectorStore
 from app.services.rag.indexing.schemas import (
     NamespaceClearance,
     ReleaseManifest,
@@ -29,7 +28,6 @@ __all__ = [
     "InMemoryVectorStore",
     "METADATA_LIMIT_BYTES",
     "NamespaceClearance",
-    "PineconeVectorStore",
     "ReleaseManifest",
     "StoredVector",
     "VectorStore",

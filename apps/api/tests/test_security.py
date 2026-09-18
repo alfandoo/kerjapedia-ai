@@ -31,84 +31,7 @@ def test_optional_user_rejects_invalid_presented_token(
     assert exc_info.value.detail == "Invalid or expired token."
 
 
-def test_production_rejects_default_admin_password() -> None:
-    with pytest.raises(ValidationError, match="ADMIN_PASSWORD"):
-        Settings(
-            app_env="production",
-            cors_origins="https://kerjapedia.example",
-        )
-
-
-def test_production_requires_provider_secrets() -> None:
-    with pytest.raises(ValidationError, match="PINECONE_API_KEY"):
-        Settings(
-            app_env="production",
-            admin_password="a-secure-production-password",
-            supabase_url="https://example.supabase.co",
-            supabase_service_key="service-key",
-            supabase_anon_key="anon-key",
-            cors_origins="https://kerjapedia.example",
-            vector_store="pinecone",
-            pinecone_api_key=None,
-        )
-
-
-def test_production_rejects_development_rag_providers() -> None:
-    with pytest.raises(ValidationError, match="Production requires EMBEDDING_PROVIDER"):
-        Settings(
-            _env_file=None,
-            app_env="production",
-            admin_password="a-secure-production-password",
-            supabase_url="https://example.supabase.co",
-            supabase_service_key="service-key",
-            supabase_anon_key="anon-key",
-            cors_origins="https://kerjapedia.example",
-            vector_store="pinecone",
-            pinecone_api_key="pinecone-key",
-        llm_provider="openrouter",
-        openrouter_api_key="openrouter-key",
-        reranker_provider="pinecone",
-        claim_verifier_provider="openrouter",
-            rag_fail_closed=True,
-            rag_allow_unpublished=False,
-            celery_enabled=True,
-        )
-
-
-def test_production_accepts_high_assurance_rag_configuration() -> None:
-    configured = Settings(
-        _env_file=None,
-        app_env="production",
-        admin_password="a-secure-production-password",
-        supabase_url="https://example.supabase.co",
-        supabase_service_key="service-key",
-        supabase_anon_key="anon-key",
-        cors_origins="https://kerjapedia.example",
-        vector_store="pinecone",
-        pinecone_api_key="pinecone-key",
-        embedding_provider="bge_m3",
-        llm_provider="openrouter",
-        openrouter_api_key="openrouter-key",
-        reranker_provider="pinecone",
-        claim_verifier_provider="openrouter",
-        rag_fail_closed=True,
-        rag_allow_unpublished=False,
-        celery_enabled=True,
-        ragas_enabled=True,
-    )
-
-    assert configured.rag_fail_closed is True
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("llm_provider", "local"),
-        ("embedding_dimension", 768),
-        ("reranker_model", "other-reranker"),
-    ],
-)
-def test_production_rejects_provider_contract_drift(field: str, value) -> None:
+def _production_payload(**overrides):
     payload = {
         "_env_file": None,
         "app_env": "production",
@@ -117,18 +40,52 @@ def test_production_rejects_provider_contract_drift(field: str, value) -> None:
         "supabase_service_key": "service-key",
         "supabase_anon_key": "anon-key",
         "cors_origins": "https://kerjapedia.example",
-        "vector_store": "pinecone",
-        "pinecone_api_key": "pinecone-key",
-        "embedding_provider": "bge_m3",
-        "llm_provider": "openrouter",
-        "openrouter_api_key": "openrouter-key",
-        "reranker_provider": "pinecone",
-        "claim_verifier_provider": "openrouter",
+        "vector_store": "upstash_vector",
+        "upstash_vector_url": "https://example-vector.upstash.io",
+        "upstash_vector_token": "upstash-token",
+        "llm_provider": "groq",
+        "groq_api_key": "groq-key",
+        "claim_verifier_provider": "groq",
         "rag_fail_closed": True,
         "rag_allow_unpublished": False,
         "celery_enabled": True,
         "ragas_enabled": True,
     }
+    payload.update(overrides)
+    return payload
+
+
+def test_production_rejects_default_admin_password() -> None:
+    with pytest.raises(ValidationError, match="ADMIN_PASSWORD"):
+        Settings(**_production_payload(admin_password="secret"))
+
+
+def test_production_requires_provider_secrets() -> None:
+    with pytest.raises(ValidationError, match="UPSTASH_VECTOR_TOKEN"):
+        Settings(**_production_payload(upstash_vector_token=""))
+
+
+def test_production_rejects_development_rag_providers() -> None:
+    with pytest.raises(ValidationError, match="VECTOR_STORE must be upstash_vector"):
+        Settings(**_production_payload(vector_store="pinecone"))
+
+
+def test_production_accepts_high_assurance_rag_configuration() -> None:
+    configured = Settings(**_production_payload())
+
+    assert configured.rag_fail_closed is True
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("llm_provider", "local"),
+        ("vector_store", "pinecone"),
+        ("claim_verifier_provider", "deterministic"),
+    ],
+)
+def test_production_rejects_provider_contract_drift(field: str, value) -> None:
+    payload = _production_payload()
     payload[field] = value
 
     with pytest.raises(ValidationError):

@@ -60,36 +60,37 @@ async def lifespan(_app: FastAPI):
                 logger.info("marked %s stuck evaluation runs as failed", reset)
         except Exception as exc:
             logger.warning("stuck evaluation run reset failed: %s", exc)
-    if settings.app_env.lower() != "test" and settings.embedding_provider == "bge_m3":
-        logger.info("BGE-M3 embedding will lazy-load on first request (saves startup RAM)")
-    if settings.app_env.lower() != "test" and settings.embedding_provider == "pinecone_inference":
-        logger.info("Using Pinecone Inference API for embeddings (no local model loaded)")
+    if settings.app_env.lower() != "test":
+        logger.info(
+            "Local artifact embeddings use the deterministic hash provider; "
+            "production vectors are hosted by Upstash."
+        )
     if settings.app_env.lower() == "production":
-        from app.db.session import create_session
-        from app.services.answering.prompts import PROMPT_VERSION_ID
-        from app.services.retrieval.governance import load_retrieval_governance
+        # Fail closed on the active backend: the Upstash HYBRID index must
+        # exist and match the hosted-embedding contract (text-embedding-3-small
+        # + BM25 + COSINE) before serving traffic. The Pinecone release system
+        # was retired; document eligibility is enforced per-request instead.
+        if settings.vector_store == "upstash_vector":
+            from app.services.providers import upstash_vector_store_from_settings
 
-        with create_session() as session:
-            governance = load_retrieval_governance(
-                session,
-                allow_unpublished=False,
-            )
-            if not governance.active_namespace:
-                raise RuntimeError("Production requires an active validated RAG index release.")
-            if not governance.eligible_versions:
-                raise RuntimeError("Production has no published, legally reviewed documents.")
-            if not governance.release_consistent:
-                raise RuntimeError("The active RAG release is stale and must be replaced.")
-            if governance.active_models != {
-                "embedding": settings.embedding_model,
-                "reranker": settings.reranker_model,
-                "generator": settings.openrouter_model,
-                "verifier": settings.claim_verifier_model,
-                "prompt": PROMPT_VERSION_ID,
-            }:
+            report = upstash_vector_store_from_settings(settings).verify_index(strict=False)
+            if not report.matches_expected:
                 raise RuntimeError(
-                    "The active RAG release model provenance does not match runtime."
+                    "Upstash index does not match the hosted-embedding contract: "
+                    + "; ".join(report.problems)
                 )
+            if report.vector_count == 0:
+                raise RuntimeError("Upstash index is empty; run scripts/index_upstash.py.")
+            logger.info(
+                "Upstash index verified: %s vectors (dense=%s sparse=%s)",
+                report.vector_count,
+                report.dense_embedding_model,
+                report.sparse_embedding_model,
+            )
+        elif settings.vector_store != "artifact":
+            raise RuntimeError(
+                f"Unsupported VECTOR_STORE in production: {settings.vector_store!r}."
+            )
     try:
         get_supabase()
         ensure_bucket()

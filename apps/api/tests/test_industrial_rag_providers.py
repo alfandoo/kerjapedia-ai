@@ -1,633 +1,32 @@
 from __future__ import annotations
 
 import json
-import sys
-import types
-from dataclasses import asdict, replace
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
-from fastapi.testclient import TestClient
 
-from app.api.state import state
-from app.core.config import settings
-from app.main import app
 from app.services.answering.openrouter_generator import (
     OpenRouterAnswerGenerator,
     _clean_answer_text,
     _is_transient_provider_error,
 )
 from app.services.answering.schemas import HistoryTurn
-from app.services.ingestion.embeddings import BGEM3EmbeddingProvider
-from app.services.ingestion.schemas import Chunk, DocumentMetadata, EmbeddedChunk
-from app.services.retrieval.pinecone_store import (
-    PineconeConfig,
-    PineconeRetrievalStore,
-    _pinecone_filter,
-)
-from app.services.retrieval.schemas import RankedChunk, RetrievalDocument, RetrievalResponse
-
-
-class StaticEmbeddingProvider:
-    model_name = "test-embedding"
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[1.0] + [0.0] * 1023 for _ in texts]
-
-
-def sample_document() -> DocumentMetadata:
-    return DocumentMetadata(
-        document_id="PP-35-2021",
-        title="Peraturan Pemerintah Nomor 35 Tahun 2021",
-        short_title="PP 35/2021",
-        regulation_type="PP",
-        number=35,
-        year=2021,
-        issuer="Pemerintah Republik Indonesia",
-        topics=["pkwt"],
-        legal_status="active",
-        source_name="JDIH BPK",
-        source_url="https://peraturan.bpk.go.id/",
-        local_file="dataset/PP-35-2021.pdf",
-        file_name="PP-35-2021.pdf",
-        size_bytes=100,
-        sha256="a" * 64,
-        verification_status="verified",
-        source_verification_status="verified",
-        legal_review_status="verified",
-    )
-
-
-def sample_embedded_chunk() -> EmbeddedChunk:
-    chunk = Chunk(
-        chunk_id="chunk-1",
-        document_id="PP-35-2021",
-        chapter="BAB II",
-        section="PKWT",
-        article="Pasal 15",
-        paragraph="Ayat (1)",
-        page_start=12,
-        page_end=12,
-        text="Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
-        token_count=8,
-        topics=["pkwt"],
-        legal_status="active",
-        source_url="https://peraturan.bpk.go.id/",
-    )
-    return EmbeddedChunk(chunk=chunk, embedding_model="BAAI/bge-m3", embedding=[1.0] + [0.0] * 1023)
-
-
-def test_bge_m3_provider_uses_lazy_sentence_transformer(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class FakeSentenceTransformer:
-        def __init__(self, model_name: str) -> None:
-            self.model_name = model_name
-
-        def encode(
-            self,
-            texts,
-            normalize_embeddings: bool,
-            show_progress_bar: bool,
-            batch_size: int,
-        ):
-            assert normalize_embeddings is True
-            assert show_progress_bar is False
-            assert batch_size == 16
-            return [[1.0] + [0.0] * 1023 for _ in texts]
-
-    fake_module = types.ModuleType("sentence_transformers")
-    fake_module.SentenceTransformer = FakeSentenceTransformer
-    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
-
-    provider = BGEM3EmbeddingProvider()
-    vectors = provider.embed(["aturan pkwt"])
-
-    assert len(vectors[0]) == 1024
-    assert sum(value * value for value in vectors[0]) == pytest.approx(1.0)
-
-
-def test_bge_m3_hybrid_uses_lexical_sparse_fallback_in_development(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setitem(sys.modules, "FlagEmbedding", None)
-    provider = BGEM3EmbeddingProvider(require_native_sparse=False)
-    monkeypatch.setattr(
-        provider,
-        "embed",
-        lambda texts: [[1.0] + [0.0] * 1023 for _ in texts],
-    )
-
-    batch = provider.embed_hybrid(["kapan THR dibayar"])
-
-    assert len(batch.dense[0]) == 1024
-    assert batch.sparse[0]
-    assert provider.sparse_fallback_used is True
-
-
-def test_bge_m3_hybrid_fails_closed_without_native_sparse_in_production(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setitem(sys.modules, "FlagEmbedding", None)
-    provider = BGEM3EmbeddingProvider(require_native_sparse=True)
-
-    with pytest.raises(RuntimeError, match="FlagEmbedding is required"):
-        provider.embed_hybrid(["kapan THR dibayar"])
-
-
-def test_bge_m3_routes_queries_through_query_instruction(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from app.services.ingestion.embeddings import BGE_M3_QUERY_INSTRUCTION
-
-    calls: list[tuple[str, list[str]]] = []
-    captured_kwargs: dict = {}
-
-    class FakeNativeModel:
-        def __init__(self, *args, **kwargs) -> None:
-            captured_kwargs.update(kwargs)
-
-        def encode_queries(self, texts, **kwargs):
-            calls.append(("queries", list(texts)))
-            return {"dense_vecs": [[1.0] + [0.0] * 1023], "lexical_weights": [{1: 0.5}]}
-
-        def encode_corpus(self, texts, **kwargs):
-            calls.append(("corpus", list(texts)))
-            return {
-                "dense_vecs": [[0.0, 1.0] + [0.0] * 1022],
-                "lexical_weights": [{2: 0.5}],
-            }
-
-    fake_module = types.ModuleType("FlagEmbedding")
-    fake_module.BGEM3FlagModel = FakeNativeModel
-    monkeypatch.setitem(sys.modules, "FlagEmbedding", fake_module)
-    provider = BGEM3EmbeddingProvider()
-
-    query_batch = provider.embed_queries_hybrid(["kapan THR dibayar"])
-    passage_batch = provider.embed_hybrid(["kapan THR dibayar"])
-
-    assert (
-        captured_kwargs["query_instruction_for_retrieval"] == BGE_M3_QUERY_INSTRUCTION
-    )
-    assert [kind for kind, _ in calls] == ["queries", "corpus"]
-    assert query_batch.dense != passage_batch.dense
-    assert query_batch.sparse[0] == {1: 0.5}
-    assert passage_batch.sparse[0] == {2: 0.5}
+from app.services.retrieval.schemas import RetrievalDocument, RetrievalResponse
 
 
 def test_embed_queries_hybrid_falls_back_without_native_method() -> None:
-    from app.services.ingestion.embeddings import embed_hybrid, embed_queries_hybrid
+    from app.services.ingestion.embeddings import (
+        HashEmbeddingProvider,
+        embed_hybrid,
+        embed_queries_hybrid,
+    )
 
-    provider = StaticEmbeddingProvider()
+    provider = HashEmbeddingProvider()
 
     assert embed_queries_hybrid(provider, ["kapan THR dibayar"]) == embed_hybrid(
         provider, ["kapan THR dibayar"]
     )
-
-
-def test_bge_native_sparse_available_reflects_installation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from app.services.ingestion.embeddings import bge_native_sparse_available
-
-    assert isinstance(bge_native_sparse_available(), bool)
-    monkeypatch.setattr("importlib.util.find_spec", lambda name: None)
-    assert bge_native_sparse_available() is False
-
-
-def test_pinecone_upsert_builds_flat_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: list[dict] = []
-    deleted: list[dict] = []
-
-    class FakeIndex:
-        def delete(self, namespace: str, filter: dict):
-            deleted.append({"namespace": namespace, "filter": filter})
-
-        def upsert(self, vectors, namespace: str):
-            captured.extend(vectors)
-            assert namespace == "production"
-            return SimpleNamespace(upserted_count=len(vectors))
-
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-    )
-    store._index = FakeIndex()
-    monkeypatch.setattr(store, "ensure_index", lambda: None)
-
-    upserted = store.upsert_document(sample_document(), 1, [sample_embedded_chunk()])
-
-    assert upserted == 1
-    assert deleted == [
-        {
-            "namespace": "production",
-            "filter": {"document_id": {"$eq": "PP-35-2021"}},
-        }
-    ]
-    assert captured[0]["id"] == "chunk-1"
-    metadata = captured[0]["metadata"]
-    assert metadata["document_id"] == "PP-35-2021"
-    assert metadata["article"] == "Pasal 15"
-    assert metadata["topics"] == ["pkwt"]
-    assert all(not isinstance(value, dict) for value in metadata.values())
-
-
-def test_pinecone_search_returns_ranked_retrieval_response() -> None:
-    class FakeIndex:
-        def query(self, **kwargs):
-            assert kwargs["namespace"] == "production"
-            assert kwargs["filter"] == {"legal_status": {"$in": ["active", "amended"]}}
-            assert kwargs["top_k"] == 100
-            assert kwargs["sparse_vector"]["indices"]
-            return SimpleNamespace(
-                matches=[
-                    SimpleNamespace(
-                        id="chunk-1",
-                        score=0.91,
-                        metadata={
-                            "chunk_id": "chunk-1",
-                            "document_id": "PP-35-2021",
-                            "text": "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
-                            "article": "Pasal 15",
-                            "paragraph": "Ayat (1)",
-                            "page_start": 12,
-                            "page_end": 12,
-                            "token_count": 8,
-                            "topics": ["pkwt"],
-                            "legal_status": "active",
-                            "source_url": "https://peraturan.bpk.go.id/",
-                            "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
-                            "short_title": "PP 35/2021",
-                            "regulation_type": "PP",
-                            "year": 2021,
-                        },
-                    )
-                ]
-            )
-
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-    )
-    store._index = FakeIndex()
-
-    response = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
-
-    assert isinstance(response, RetrievalResponse)
-    assert not response.should_refuse
-    assert response.results[0].document.chunk_id == "chunk-1"
-    # Single-candidate semantic scores min-max normalize to 1.0 so the
-    # reranker sees a query-independent scale.
-    assert response.results[0].semantic_score == 1.0
-
-
-class _HashFallbackProvider(StaticEmbeddingProvider):
-    sparse_fallback_used = True
-
-
-def _accepting_index():
-    class AcceptingIndex:
-        def query(self, **kwargs):
-            assert kwargs["sparse_vector"]["indices"]
-            return SimpleNamespace(
-                matches=[
-                    SimpleNamespace(
-                        id="chunk-1",
-                        score=0.91,
-                        metadata={
-                            "chunk_id": "chunk-1",
-                            "document_id": "PP-35-2021",
-                            "text": "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
-                            "article": "Pasal 15",
-                            "paragraph": "Ayat (1)",
-                            "page_start": 12,
-                            "page_end": 12,
-                            "token_count": 8,
-                            "topics": ["pkwt"],
-                            "legal_status": "active",
-                            "source_url": "https://peraturan.bpk.go.id/",
-                            "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
-                            "short_title": "PP 35/2021",
-                            "regulation_type": "PP",
-                            "year": 2021,
-                        },
-                    )
-                ]
-            )
-
-    return AcceptingIndex()
-
-
-def test_pinecone_search_rejects_hash_sparse_on_hybrid_index_when_fail_closed() -> None:
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        _HashFallbackProvider(),
-        fail_closed=True,
-    )
-    store._index = _accepting_index()
-
-    with pytest.raises(RuntimeError, match="native BGE-M3 sparse"):
-        store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
-
-
-def test_pinecone_search_warns_on_hash_sparse_when_fail_open() -> None:
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        _HashFallbackProvider(),
-    )
-    store._index = _accepting_index()
-
-    response = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
-
-    assert not response.should_refuse
-    assert "native_sparse_embedding_unavailable" in response.warnings
-
-
-def test_update_document_metadata_preserves_vectors() -> None:
-    updated: list[dict] = []
-
-    class MetadataIndex:
-        def query(self, **kwargs):
-            assert kwargs["filter"] == {"document_id": {"$eq": "PP-35-2021"}}
-            assert kwargs["top_k"] == 10000
-            return SimpleNamespace(
-                matches=[SimpleNamespace(id="chunk-1"), SimpleNamespace(id="chunk-2")]
-            )
-
-        def update(self, **kwargs):
-            updated.append(kwargs)
-
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-    )
-    store._index = MetadataIndex()
-
-    count = store.update_document_metadata(
-        "PP-35-2021", {"source_verification_status": "verified"}
-    )
-
-    assert count == 2
-    assert updated == [
-        {
-            "id": "chunk-1",
-            "set_metadata": {"source_verification_status": "verified"},
-            "namespace": "production",
-        },
-        {
-            "id": "chunk-2",
-            "set_metadata": {"source_verification_status": "verified"},
-            "namespace": "production",
-        },
-    ]
-
-
-def test_update_document_metadata_rejects_nested_values() -> None:
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-    )
-
-    with pytest.raises(ValueError, match="must stay flat"):
-        store.update_document_metadata("PP-35-2021", {"nested": {"a": 1}})
-
-
-def test_sparse_rejection_is_cached_per_namespace() -> None:
-    calls: list[dict] = []
-
-    class RejectingIndex:
-        def query(self, **kwargs):
-            calls.append(kwargs)
-            if "sparse_vector" in kwargs:
-                raise RuntimeError(
-                    "[400] Index configuration does not support sparse values."
-                )
-            return SimpleNamespace(matches=[])
-
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-        fail_closed=False,
-    )
-    store._index = RejectingIndex()
-
-    first = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
-    second = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
-
-    assert first.should_refuse and second.should_refuse
-    assert "pinecone_index_requires_dotproduct" in first.warnings
-    assert "pinecone_index_requires_dotproduct" in second.warnings
-    # First search: 1 failed sparse attempt + dense retries per rewrite;
-    # second search skips sparse entirely (3 rewrites -> 3 dense calls).
-    assert len(calls) == 4 + 3
-    assert "sparse_vector" not in calls[-1]
-
-
-def test_pinecone_search_fuses_candidates_across_rewritten_queries() -> None:
-    calls: list[dict] = []
-
-    def match(chunk_id: str, text: str, article: str):
-        return SimpleNamespace(
-            id=chunk_id,
-            score=0.9,
-            metadata={
-                "chunk_id": chunk_id,
-                "document_id": "PP-35-2021",
-                "text": text,
-                "article": article,
-                "page_start": 12,
-                "page_end": 12,
-                "token_count": 8,
-                "topics": ["pkwt"],
-                "legal_status": "active",
-                "source_url": "https://peraturan.bpk.go.id/",
-                "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
-                "short_title": "PP 35/2021",
-            },
-        )
-
-    class FusingIndex:
-        def query(self, **kwargs):
-            calls.append(kwargs)
-            if len(calls) == 1:
-                return SimpleNamespace(
-                    matches=[match("chunk-focus", "Pasal 15 uang kompensasi PKWT.", "Pasal 15")]
-                )
-            return SimpleNamespace(
-                matches=[match("chunk-generic", "Pasal 8 jangka waktu PKWT.", "Pasal 8")]
-            )
-
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-    )
-    store._index = FusingIndex()
-
-    # Three rewrites (original, abbreviation expansion, compensation expansion).
-    response = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=5)
-
-    assert len(calls) == 3
-    assert {item.document.chunk_id for item in response.results} == {
-        "chunk-focus",
-        "chunk-generic",
-    }
-
-
-def test_legacy_pinecone_index_retries_dense_only_in_development() -> None:
-    calls: list[dict] = []
-
-    class LegacyIndex:
-        def query(self, **kwargs):
-            calls.append(kwargs)
-            if "sparse_vector" in kwargs:
-                raise RuntimeError(
-                    "[400] Index configuration does not support sparse values - "
-                    "only indexes that are sparse or using dotproduct are supported"
-                )
-            return SimpleNamespace(
-                matches=[
-                    SimpleNamespace(
-                        id="chunk-1",
-                        score=0.91,
-                        metadata={
-                            "chunk_id": "chunk-1",
-                            "document_id": "PP-35-2021",
-                            "text": "Pasal 15 pekerja PKWT berhak memperoleh kompensasi.",
-                            "article": "Pasal 15",
-                            "page_start": 12,
-                            "page_end": 12,
-                            "token_count": 8,
-                            "topics": ["pkwt"],
-                            "legal_status": "active",
-                            "source_url": "https://peraturan.bpk.go.id/",
-                            "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
-                        },
-                    )
-                ]
-            )
-
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-        fail_closed=False,
-    )
-    store._index = LegacyIndex()
-
-    response = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
-
-    # Three rewritten queries: one sparse attempt fails over to dense-only,
-    # then each rewrite is retried without sparse values.
-    assert len(calls) == 4
-    assert "sparse_vector" in calls[0]
-    assert all("sparse_vector" not in call for call in calls[1:])
-    assert "pinecone_index_requires_dotproduct" in response.warnings
-    assert response.results[0].document.chunk_id == "chunk-1"
-
-
-def test_legacy_pinecone_index_stays_fail_closed_in_production() -> None:
-    class LegacyIndex:
-        def query(self, **kwargs):
-            raise RuntimeError(
-                "[400] Index configuration does not support sparse values - "
-                "only indexes that are sparse or using dotproduct are supported"
-            )
-
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-        fail_closed=True,
-    )
-    store._index = LegacyIndex()
-
-    with pytest.raises(RuntimeError, match="does not support sparse values"):
-        store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
-
-
-@pytest.mark.parametrize(
-    ("fail_closed", "expected"),
-    [(False, True), (True, False)],
-)
-def test_legacy_pinecone_readiness_is_development_only(
-    fail_closed: bool,
-    expected: bool,
-) -> None:
-    class FakeIndexes:
-        def describe(self, _name: str):
-            return SimpleNamespace(
-                dimension=1024,
-                metric="cosine",
-                status=SimpleNamespace(ready=True),
-            )
-
-    class FakeClient:
-        indexes = FakeIndexes()
-
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-        fail_closed=fail_closed,
-    )
-    store._client = FakeClient()
-
-    assert store.is_ready() is expected
-
-
-def test_pinecone_refuses_out_of_scope_query_before_embedding() -> None:
-    class FailingEmbeddingProvider:
-        model_name = "unused"
-
-        def embed(self, texts):
-            raise AssertionError("out-of-scope query must not be embedded")
-
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        FailingEmbeddingProvider(),
-    )
-
-    response = store.search("Berapa tarif pajak kendaraan?", top_k=1)
-
-    assert response.should_refuse
-    assert response.refusal_reason == "out_of_scope_query"
-    assert response.results == []
-
-
-def test_production_pinecone_filter_excludes_unpublished_and_stale_sources() -> None:
-    assert _pinecone_filter(
-        {},
-        allow_unpublished=False,
-        include_historical=False,
-    ) == {
-        "legal_status": {"$in": ["active", "amended"]},
-        "publication_status": {"$eq": "published"},
-        "source_verification_status": {"$eq": "verified"},
-        "legal_review_status": {"$eq": "verified"},
-        "is_current": {"$eq": True},
-    }
-
-
-def test_explicit_historical_filter_keeps_verification_gate_without_current_gate() -> None:
-    result = _pinecone_filter(
-        {},
-        allow_unpublished=False,
-        include_historical=True,
-    )
-
-    assert result["publication_status"] == {"$eq": "published"}
-    assert result["legal_review_status"] == {"$eq": "verified"}
-    assert "is_current" not in result
-    assert "legal_status" not in result
-
-
-def test_pinecone_filter_applies_explicit_regulation_number_as_hard_filter() -> None:
-    result = _pinecone_filter(
-        {"regulation_type": "Permenaker", "number": 6, "year": 2016},
-        allow_unpublished=False,
-        include_historical=False,
-    )
-
-    assert result["regulation_type"] == {"$eq": "Permenaker"}
-    assert result["number"] == {"$eq": 6}
-    assert result["year"] == {"$eq": 2016}
 
 
 class FakeOpenRouterClient:
@@ -648,35 +47,34 @@ class FakeOpenRouterClient:
 
 
 def retrieval_response() -> RetrievalResponse:
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
+    from app.services.ingestion.embeddings import HashEmbeddingProvider
+    from app.services.retrieval.engine import RetrievalEngine
+
+    provider = HashEmbeddingProvider()
+    text = "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi."
+    document = RetrievalDocument(
+        chunk_id="chunk-1",
+        document_id="PP-35-2021",
+        text=text,
+        chapter=None,
+        section=None,
+        article="Pasal 15",
+        paragraph="Ayat (1)",
+        page_start=12,
+        page_end=12,
+        token_count=8,
+        topics=["pkwt"],
+        legal_status="active",
+        source_url="https://peraturan.bpk.go.id/",
+        embedding=provider.embed([text])[0],
+        metadata={
+            "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
+            "short_title": "PP 35/2021",
+        },
     )
-    store._index = SimpleNamespace(
-        query=lambda **_: SimpleNamespace(
-            matches=[
-                SimpleNamespace(
-                    id="chunk-1",
-                    score=0.91,
-                    metadata={
-                        "chunk_id": "chunk-1",
-                        "document_id": "PP-35-2021",
-                        "text": "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
-                        "article": "Pasal 15",
-                        "page_start": 12,
-                        "page_end": 12,
-                        "token_count": 8,
-                        "topics": ["pkwt"],
-                        "legal_status": "active",
-                        "source_url": "https://peraturan.bpk.go.id/",
-                        "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
-                        "short_title": "PP 35/2021",
-                    },
-                )
-            ]
-        )
+    return RetrievalEngine(documents=[document]).search(
+        "Apakah pekerja PKWT memperoleh kompensasi?", top_k=1
     )
-    return store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
 
 
 def test_clean_answer_text_preserves_paragraphs_and_compact_lists() -> None:
@@ -1313,152 +711,10 @@ def test_openrouter_provider_failure_is_localized(query: str, expected: str) -> 
     assert answer.debug["failure_category"] == "provider_failure"
 
 
-@pytest.mark.usefixtures("verify_test_schema")
-def test_chat_ask_can_use_configured_pinecone_path(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    with state.lock:
-        state.request_counts.clear()
-    monkeypatch.setattr(settings, "vector_store", "pinecone")
-    monkeypatch.setattr(settings, "llm_provider", "local")
-    monkeypatch.setattr(
-        "app.api.routes_chat.pinecone_store_from_settings",
-        lambda *_, **__: SimpleNamespace(
-            search=lambda question, top_k, min_final_score, **kwargs: retrieval_response(),
-        ),
-    )
-
-    response = TestClient(app).post(
-        "/chat/ask",
-        headers={"X-KerjaPedia-Guest-ID": "00000000-0000-4000-8000-000000000002"},
-        json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["answer"]["citations"][0]["chunk_id"] == "chunk-1"
-    assert asdict(retrieval_response())["results"][0]["document"]["chunk_id"] == "chunk-1"
-
-
-def _ranked_pkwt_chunk() -> RankedChunk:
-    document = RetrievalDocument(
-        chunk_id="chunk-1",
-        document_id="PP-35-2021",
-        text="Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
-        chapter="BAB II",
-        section="PKWT",
-        article="Pasal 15",
-        paragraph="Ayat (1)",
-        page_start=12,
-        page_end=12,
-        token_count=8,
-        topics=["pkwt"],
-        legal_status="active",
-        source_url="https://peraturan.bpk.go.id/",
-        embedding_model="test-embedding",
-        embedding=[1.0] + [0.0] * 1023,
-        metadata={"title": "PP 35/2021", "short_title": "PP 35/2021"},
-    )
-    return RankedChunk(
-        document=document,
-        lexical_score=0.5,
-        semantic_score=0.6,
-        fusion_score=0.02,
-        rerank_score=0.4,
-        final_score=0.4,
-        match_reasons=[],
-    )
-
-
-def test_pinecone_model_rerank_failure_falls_back_open(monkeypatch: pytest.MonkeyPatch) -> None:
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-        reranker_provider="pinecone",
-    )
-    monkeypatch.setattr(
-        store,
-        "_pinecone_client",
-        lambda: (_ for _ in ()).throw(RuntimeError("reranker down")),
-    )
-    ranked = [_ranked_pkwt_chunk()]
-
-    result, cross_encoder_ok = store._model_rerank("kompensasi PKWT", ranked)
-
-    assert cross_encoder_ok is False
-    assert result == ranked
-
-
-def test_pinecone_model_rerank_failure_fail_closed_raises(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-        reranker_provider="pinecone",
-        fail_closed=True,
-    )
-    monkeypatch.setattr(
-        store,
-        "_pinecone_client",
-        lambda: (_ for _ in ()).throw(RuntimeError("reranker down")),
-    )
-
-    with pytest.raises(RuntimeError, match="reranker is unavailable"):
-        store._model_rerank("kompensasi PKWT", [_ranked_pkwt_chunk()])
-
-
-def test_pinecone_search_warns_when_cross_encoder_unavailable(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class FakeIndex:
-        def query(self, **kwargs):
-            return SimpleNamespace(
-                matches=[
-                    SimpleNamespace(
-                        id="chunk-1",
-                        score=0.91,
-                        metadata={
-                            "chunk_id": "chunk-1",
-                            "document_id": "PP-35-2021",
-                            "text": "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
-                            "article": "Pasal 15",
-                            "paragraph": "Ayat (1)",
-                            "page_start": 12,
-                            "page_end": 12,
-                            "token_count": 8,
-                            "topics": ["pkwt"],
-                            "legal_status": "active",
-                            "source_url": "https://peraturan.bpk.go.id/",
-                            "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
-                            "short_title": "PP 35/2021",
-                            "regulation_type": "PP",
-                            "year": 2021,
-                        },
-                    )
-                ]
-            )
-
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-        reranker_provider="pinecone",
-    )
-    store._index = FakeIndex()
-    monkeypatch.setattr(
-        store,
-        "_pinecone_client",
-        lambda: (_ for _ in ()).throw(RuntimeError("reranker down")),
-    )
-
-    response = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=1)
-
-    assert not response.should_refuse
-    assert "cross_encoder_rerank_unavailable" in response.warnings
-    assert response.results[0].document.chunk_id == "chunk-1"
-
-
 def _three_chunk_retrieval() -> RetrievalResponse:
+    from app.services.ingestion.embeddings import HashEmbeddingProvider
+    from app.services.retrieval.engine import RetrievalEngine
+
     texts = [
         ("chunk-1", "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.", "Pasal 15"),
         (
@@ -1472,36 +728,33 @@ def _three_chunk_retrieval() -> RetrievalResponse:
             "Pasal 77",
         ),
     ]
-    store = PineconeRetrievalStore(
-        PineconeConfig(api_key="test-key"),
-        StaticEmbeddingProvider(),
-    )
-    store._index = SimpleNamespace(
-        query=lambda **_: SimpleNamespace(
-            matches=[
-                SimpleNamespace(
-                    id=chunk_id,
-                    score=0.90 - index * 0.01,
-                    metadata={
-                        "chunk_id": chunk_id,
-                        "document_id": "PP-35-2021",
-                        "text": text,
-                        "article": article,
-                        "page_start": 12,
-                        "page_end": 12,
-                        "token_count": 8,
-                        "topics": ["pkwt"],
-                        "legal_status": "active",
-                        "source_url": "https://peraturan.bpk.go.id/",
-                        "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
-                        "short_title": "PP 35/2021",
-                    },
-                )
-                for index, (chunk_id, text, article) in enumerate(texts)
-            ]
+    provider = HashEmbeddingProvider()
+    documents = [
+        RetrievalDocument(
+            chunk_id=chunk_id,
+            document_id="PP-35-2021",
+            text=text,
+            chapter=None,
+            section=None,
+            article=article,
+            paragraph=None,
+            page_start=12,
+            page_end=12,
+            token_count=8,
+            topics=["pkwt"],
+            legal_status="active",
+            source_url="https://peraturan.bpk.go.id/",
+            embedding=provider.embed([text])[0],
+            metadata={
+                "title": "Peraturan Pemerintah Nomor 35 Tahun 2021",
+                "short_title": "PP 35/2021",
+            },
         )
+        for chunk_id, text, article in texts
+    ]
+    return RetrievalEngine(documents=documents).search(
+        "Apakah pekerja PKWT memperoleh kompensasi?", top_k=3
     )
-    return store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=3)
 
 
 def test_openrouter_prompt_contains_only_citable_chunks_and_history() -> None:

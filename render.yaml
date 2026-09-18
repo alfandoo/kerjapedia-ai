@@ -45,7 +45,7 @@ services:
       - key: GROQ_MAX_RETRIES
         value: "2"
       - key: GROQ_MAX_TOKENS
-        value: "3000"
+        value: "6000"
 
       # Redis
       - key: REDIS_URL
@@ -54,38 +54,21 @@ services:
       # Vector Store
       - key: VECTOR_STORE
         value: upstash_vector
-      - key: TOP_K
-        value: "5"
-      - key: PINECONE_API_KEY
-        sync: false
-      - key: PINECONE_INDEX_NAME
-        value: kerjapedia
-      - key: PINECONE_NAMESPACE
-        value: production
-      - key: PINECONE_CLOUD
-        value: aws
-      - key: PINECONE_REGION
-        value: us-east-1
 
-      # Upstash Vector
+      # Upstash Vector (hosted hybrid: text-embedding-3-small + BM25).
+      # URL/token are dashboard-managed secrets; never hardcode values here.
       - key: UPSTASH_VECTOR_URL
-        value: "https://gorgeous-mustang-26578-us1-vector.upstash.io"
+        sync: false
       - key: UPSTASH_VECTOR_TOKEN
-        value: "ABoFMGdvcmdlb3VzLW11c3RhbmctMjY1NzgtdXMxYWRtaW5aVFkyWWpZMVltWXRabUpoWWkwMFpqYzBMV0poWlRrdFltRmxObUV3T1RrNU5qRTA="
+        sync: false
       - key: UPSTASH_VECTOR_DIMENSION
-        value: "1024"
+        value: "1536"
       - key: UPSTASH_VECTOR_NAMESPACE
         value: production
 
-      # Embedding
+      # Embedding (local artifact pipeline only)
       - key: EMBEDDING_PROVIDER
-        value: pinecone_inference
-      - key: EMBEDDING_MODEL
-        value: multilingual-e5-large
-      - key: EMBEDDING_MODEL_REVISION
-        value: provider-managed
-      - key: EMBEDDING_DIMENSION
-        value: "1024"
+        value: hash
       - key: INGESTION_EMBEDDING_TIMEOUT_SECONDS
         value: "300"
       - key: INGESTION_EMBEDDING_BATCH_SIZE
@@ -94,8 +77,6 @@ services:
       # App
       - key: APP_ENV
         value: production
-      - key: APP_URL
-        sync: false
       - key: CORS_ORIGINS
         value: "https://kerjapedia-ai.vercel.app"
 
@@ -115,11 +96,7 @@ services:
       - key: EMAIL_OTP_EXPIRY_MINUTES
         value: "15"
 
-      # Reranker
-      - key: RERANKER_PROVIDER
-        value: pinecone
-      - key: RERANKER_MODEL
-        value: bge-reranker-v2-m3
+      # Reranker: heuristic (built in, no extra service)
 
       # Claim verifier (LLM-backed in production; deterministic is dev-only)
       - key: CLAIM_VERIFIER_PROVIDER

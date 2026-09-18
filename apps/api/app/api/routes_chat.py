@@ -41,12 +41,8 @@ from app.services.answering.memory_hardening import (
     build_history_turns,
     build_memory_context,
 )
-from app.services.answering.prompts import PROMPT_VERSION_ID
 from app.services.idempotency import IdempotencyStore, valid_idempotency_key
-from app.services.providers import (
-    answer_generator_from_settings,
-    pinecone_store_from_settings,
-)
+from app.services.providers import answer_generator_from_settings
 from app.services.retrieval.engine import RetrievalEngine
 from app.services.retrieval.governance import load_retrieval_governance
 from app.services.retrieval.store import load_artifact_documents_snapshot
@@ -260,20 +256,11 @@ def _retrieve(memory: MemoryContext, top_k: int, session: Session):
     )
     # Release the read transaction before calling external retrieval providers.
     session.rollback()
-    if settings.vector_store == "pinecone":
-        if settings.app_env.lower() == "production" and not governance.active_namespace:
-            raise RuntimeError("No validated active RAG index release is available.")
-        if settings.app_env.lower() == "production" and not governance.release_consistent:
-            raise RuntimeError("The active RAG release is stale and must be replaced.")
-        expected_models = {
-            "embedding": settings.embedding_model,
-            "reranker": settings.reranker_model,
-            "generator": settings.openrouter_model,
-            "verifier": settings.claim_verifier_model,
-            "prompt": PROMPT_VERSION_ID,
-        }
-        if settings.app_env.lower() == "production" and governance.active_models != expected_models:
-            raise RuntimeError("The active RAG release model provenance does not match runtime.")
+    if settings.vector_store not in ("upstash_vector", "artifact"):
+        raise RuntimeError(
+            f"Unsupported VECTOR_STORE: {settings.vector_store!r}. "
+            "Supported stores: upstash_vector, artifact."
+        )
     from app.services.providers import upstash_vector_store_from_settings
 
     if settings.vector_store == "upstash_vector":
@@ -294,26 +281,6 @@ def _retrieve(memory: MemoryContext, top_k: int, session: Session):
             retrieval,
             index_release_id=governance.active_release_id,
             index_namespace=settings.upstash_vector_namespace,
-        )
-    else:
-        retrieval = pinecone_store_from_settings(
-            settings,
-            namespace=governance.active_namespace,
-            relationship_index=governance.relationship_index,
-            allow_unpublished=settings.rag_allow_unpublished,
-        ).search(
-            memory.original_question,
-            top_k=top_k,
-            min_final_score=governance.min_final_score,
-            retrieval_query=memory.retrieval_query,
-            context_topics=memory.context_topics,
-            context_document_ids=memory.context_document_ids,
-            context_articles=memory.context_articles,
-        )
-        return replace(
-            retrieval,
-            index_release_id=governance.active_release_id,
-            index_namespace=governance.active_namespace,
         )
     eligible_versions = tuple(sorted(governance.eligible_versions.items()))
     if settings.rag_allow_unpublished and not eligible_versions:
@@ -632,10 +599,22 @@ def _server_rag_trace(guardrail, memory, retrieval, answer) -> dict:
         },
         "pipeline": {
             "vector_store": settings.vector_store,
-            "embedding_model": settings.embedding_model,
-            "generator_model": settings.openrouter_model,
+            "embedding_model": (
+                "upstash-hosted:text-embedding-3-small"
+                if settings.vector_store == "upstash_vector"
+                else "local-hash-embedding-v1"
+            ),
+            "generator_model": (
+                settings.groq_model
+                if settings.llm_provider == "groq"
+                else (
+                    settings.openrouter_model
+                    if settings.llm_provider == "openrouter"
+                    else "local"
+                )
+            ),
             "verifier_model": settings.claim_verifier_model,
-            "reranker_model": settings.reranker_model,
+            "reranker_model": "heuristic",
             "prompt_version": answer.prompt_version_id,
             "answer_version": answer.answer_version,
             "index_release_id": retrieval.index_release_id if retrieval else None,
