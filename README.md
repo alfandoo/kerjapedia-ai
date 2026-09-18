@@ -7,7 +7,8 @@ KerjaPedia AI adalah asisten regulasi ketenagakerjaan Indonesia berbasis Retriev
 Project sudah memiliki MVP RAG lokal dan jalur RAG industri berbasis provider:
 
 - Mode lokal/offline: artifact ingestion + hash embedding + answer composer deterministik.
-- Mode industri: Pinecone vector database + local BGE-M3 embedding + Groq chat completions.
+- Mode industri (aktif): Upstash Vector hybrid index + hosted embedding + Groq/OpenRouter chat completions.
+- Mode legacy/baseline: Pinecone vector database + local BGE-M3 embedding (dipertahankan untuk rollback dan perbandingan evaluasi).
 
 Dokumen produk utama tersedia di `docs/PRD_KerjaPedia_AI.md`, roadmap pengerjaan tersedia di `docs/project/ROADMAP.md`, dan arsitektur RAG provider tersedia di `docs/RAG_PIPELINE.md`.
 
@@ -16,8 +17,8 @@ Dokumen produk utama tersedia di `docs/PRD_KerjaPedia_AI.md`, roadmap pengerjaan
 - Frontend: Next.js
 - Backend API: Python FastAPI
 - Database: PostgreSQL
-- Vector store: Pinecone untuk mode industri, artifact lokal untuk development/test
-- Embedding: BGE-M3 lokal untuk mode industri, hash embedding untuk development/test
+- Vector store: Upstash Vector untuk mode industri, Pinecone untuk baseline legacy, artifact lokal untuk development/test
+- Embedding: hosted oleh Upstash (open-ai/text-embedding-3-small + BM25) untuk mode industri; BGE-M3 lokal hanya untuk baseline Pinecone; hash embedding untuk development/test
 - LLM provider: Groq untuk mode industri, local answer composer untuk development/test
 
 ## Struktur Folder
@@ -52,17 +53,38 @@ Service lokal:
 Untuk mode industri, isi minimal variabel berikut di `.env`:
 
 ```bash
-VECTOR_STORE=pinecone
-PINECONE_API_KEY=...
-PINECONE_INDEX_NAME=kerjapedia
-PINECONE_NAMESPACE=production
-EMBEDDING_PROVIDER=bge_m3
-EMBEDDING_MODEL=BAAI/bge-m3
-EMBEDDING_DIMENSION=1024
+VECTOR_STORE=upstash_vector
+UPSTASH_VECTOR_REST_URL=...
+UPSTASH_VECTOR_REST_TOKEN=...
+UPSTASH_VECTOR_NAMESPACE=production
 LLM_PROVIDER=groq
 GROQ_API_KEY=...
 GROQ_MODEL=openai/gpt-oss-120b
 ```
+
+### Upstash Vector Setup
+
+Index dibuat di Upstash Console dengan konfigurasi:
+
+- Index Type: `HYBRID`
+- Dense Embedding: `open-ai/text-embedding-3-small`
+- Sparse Embedding: `BM25`
+- Similarity Metric: `COSINE`
+
+Document embedding dan query embedding dilakukan oleh Upstash. Aplikasi
+mengirim raw chunk text saat indexing (`scripts/index_upstash.py`) dan raw
+query text saat retrieval — tidak diperlukan lagi self-hosted dense
+embedding (BGE-M3), embedding di Google Colab, manual query embedding, atau
+GPU untuk dense embedding. Reranker, context construction, generation, dan
+evaluasi tidak berubah.
+
+```bash
+copy .env.example .env
+```
+
+Lalu isi `UPSTASH_VECTOR_REST_URL` dan `UPSTASH_VECTOR_REST_TOKEN` dari
+Upstash Console. Nama legacy `UPSTASH_VECTOR_URL` / `UPSTASH_VECTOR_TOKEN`
+tetap diterima.
 
 Matikan service lokal:
 
@@ -149,11 +171,36 @@ cd apps/api
 
 Retrieval lokal membaca artifact di `storage/ingestion/`. Lihat `docs/RETRIEVAL.md` untuk detail scoring dan ranking.
 
-Retrieval Pinecone:
+Retrieval Upstash (hybrid, hosted embedding):
+
+```bash
+cd apps/api
+.venv\Scripts\python -m app.services.retrieval.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store upstash_vector
+```
+
+Retrieval Pinecone (baseline legacy):
 
 ```bash
 cd apps/api
 .venv\Scripts\python -m app.services.retrieval.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store pinecone
+```
+
+### Indexing Upstash
+
+Indexing membaca pre-embedding chunks yang sudah ada
+(`storage/ingestion/preembedding/exports/chunks.jsonl`) — tanpa parsing
+PDF ulang dan tanpa embedding lokal:
+
+```bash
+apps\api\.venv\Scripts\python scripts\index_upstash.py --dry-run
+apps\api\.venv\Scripts\python scripts\index_upstash.py --limit 100
+apps\api\.venv\Scripts\python scripts\index_upstash.py
+```
+
+Sanity test retrieval:
+
+```bash
+apps\api\.venv\Scripts\python scripts\test_upstash_retrieval.py "Siapa yang berhak memperoleh THR?"
 ```
 
 ### Answer Generation Lokal
@@ -182,6 +229,28 @@ cd apps/api
 Evaluasi CLI membandingkan mode development pada 150 pertanyaan seed. Promotion release
 membutuhkan minimal 300 pertanyaan human-verified dengan development/held-out split dan
 evaluation run yang terikat ke namespace release. Lihat `docs/EVALUATION.md`.
+
+### Evaluasi Baseline vs Upstash (fair experiment)
+
+Dataset evaluasi (`evaluation/golden_questions.json`) tidak diubah. Yang
+berubah hanya backend embedding/index/retrieval; dokumen, chunking,
+metadata, reranker, dan context construction dipertahankan sama:
+
+| Metric | Baseline (Pinecone + BGE-M3) | Upstash Hybrid |
+|---|---|---|
+| Recall@5 | ... | ... |
+| Precision@5 | ... | ... |
+| Hit Rate | ... | ... |
+| MRR | ... | ... |
+| nDCG@10 | ... | ... |
+
+1. Jalankan evaluasi artifact/baseline dengan command evaluasi di atas.
+2. Index chunks ke Upstash (`scripts/index_upstash.py`), lalu uji retrieval
+   (`scripts/test_upstash_retrieval.py` dan retrieval CLI
+   `--vector-store upstash_vector`).
+3. Bandingkan per tipe query: semantic, exact keyword (nomor peraturan /
+   pasal), Bahasa Indonesia vs Inggris, short vs long query — untuk melihat
+   kontribusi dense (`text-embedding-3-small`) vs sparse (BM25).
 
 ### Pre-commit
 

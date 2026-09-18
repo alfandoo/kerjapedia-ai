@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,10 +36,18 @@ class Settings(BaseSettings):
     pinecone_upsert_batch_size: int = 100
     pinecone_write_timeout_seconds: float = 60.0
     pinecone_write_max_retries: int = 3
-    upstash_vector_url: str = ""
-    upstash_vector_token: str = ""
+    upstash_vector_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("upstash_vector_url", "upstash_vector_rest_url"),
+    )
+    upstash_vector_token: str = Field(
+        default="",
+        validation_alias=AliasChoices("upstash_vector_token", "upstash_vector_rest_token"),
+    )
     upstash_vector_dimension: int = 1536
     upstash_vector_namespace: str = "production"
+    upstash_batch_size: int = 100
+    upstash_retrieval_top_k: int = 20
     ingestion_target_tokens: int = 350
     ingestion_max_tokens: int = 550
     ingestion_overlap_tokens: int = 60
@@ -137,6 +145,10 @@ class Settings(BaseSettings):
             )
         if not 1 <= self.pinecone_upsert_batch_size <= 100:
             raise ValueError("PINECONE_UPSERT_BATCH_SIZE must be between 1 and 100.")
+        if not 1 <= self.upstash_batch_size <= 1000:
+            raise ValueError("UPSTASH_BATCH_SIZE must be between 1 and 1000.")
+        if not 1 <= self.upstash_retrieval_top_k <= 100:
+            raise ValueError("UPSTASH_RETRIEVAL_TOP_K must be between 1 and 100.")
         if self.pinecone_write_timeout_seconds <= 0:
             raise ValueError("PINECONE_WRITE_TIMEOUT_SECONDS must be positive.")
         if self.pinecone_write_max_retries < 0:
@@ -179,9 +191,14 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Production BGE-M3 embeddings require EMBEDDING_DIMENSION=1024."
             )
-        if self.vector_store == "upstash_vector" and self.embedding_dimension != 1536:
+        # Upstash hosted embedding: dense/sparse vectors are produced
+        # server-side (open-ai/text-embedding-3-small + BM25), so the local
+        # EMBEDDING_* settings are intentionally not validated here. The
+        # expected index configuration is verified at runtime via index info.
+        if self.vector_store == "upstash_vector" and self.embedding_dimension not in (1024, 1536):
             raise ValueError(
-                "Production text-embedding-3-small requires EMBEDDING_DIMENSION=1536."
+                "EMBEDDING_DIMENSION is unused by the Upstash hosted path; "
+                "leave it at 1024 or 1536."
             )
         if (
             self.embedding_provider != "pinecone_inference"

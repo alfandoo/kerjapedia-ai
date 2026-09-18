@@ -6,7 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from app.core.config import settings
-from app.services.providers import pinecone_store_from_settings
+from app.services.providers import pinecone_store_from_settings, upstash_vector_store_from_settings
 from app.services.retrieval.engine import RetrievalEngine
 from app.services.retrieval.relationships import relationship_index_for_manifest
 from app.services.retrieval.store import load_artifact_documents
@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--vector-store",
-        choices=["artifact", "pinecone"],
+        choices=["artifact", "pinecone", "upstash_vector"],
         default=None,
         help="Retrieval backend. Defaults to VECTOR_STORE.",
     )
@@ -42,6 +42,8 @@ def main() -> None:
     vector_store = args.vector_store or settings.vector_store
     if vector_store == "pinecone":
         response = pinecone_store_from_settings(settings).search(args.query, top_k=args.top_k)
+    elif vector_store == "upstash_vector":
+        response = upstash_vector_store_from_settings(settings).search(args.query, top_k=args.top_k)
     else:
         documents = load_artifact_documents(storage_root)
         manifest = project_root / "dataset" / "metadata.json"

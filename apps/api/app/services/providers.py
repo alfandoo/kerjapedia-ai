@@ -8,8 +8,8 @@ from app.services.answering.generator import AnswerGenerator
 from app.services.answering.openrouter_generator import OpenRouterAnswerGenerator
 from app.services.ingestion.embeddings import EmbeddingProvider, build_embedding_provider
 from app.services.retrieval.pinecone_store import PineconeConfig, PineconeRetrievalStore
-from app.services.retrieval.upstash_vector_store import UpstashVectorConfig, UpstashVectorStore
 from app.services.retrieval.relationships import RelationshipIndex
+from app.services.retrieval.upstash_vector_store import UpstashVectorConfig, UpstashVectorStore
 
 _provider_lock = Lock()
 _embedding_cache: dict[tuple, EmbeddingProvider] = {}
@@ -187,7 +187,6 @@ def upstash_vector_store_from_settings(
             token=settings.upstash_vector_token,
             dimension=settings.upstash_vector_dimension,
             namespace=settings.upstash_vector_namespace,
-            pinecone_api_key=settings.pinecone_api_key or "",
         ),
         reranker_provider=settings.reranker_provider,
         reranker_model=settings.reranker_model,
@@ -283,4 +282,5 @@ def reset_provider_caches() -> None:
     with _provider_lock:
         _embedding_cache.clear()
         _pinecone_cache.clear()
+        _upstash_cache.clear()
         _answer_cache.clear()

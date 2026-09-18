@@ -463,8 +463,10 @@ def reembed_to_upstash(
 ) -> dict:
     """Read all chunks from PostgreSQL and upsert to Upstash Vector.
 
-    Dense: text-embedding-3-small (1536d) via OpenAI
-    Sparse: BM25 lexical scoring
+    Raw chunk text is sent to Upstash, which produces dense vectors with its
+    hosted ``open-ai/text-embedding-3-small`` model and sparse vectors with
+    hosted BM25. The application performs no local embedding on this path
+    (no ``model.encode()``, no direct OpenAI embedding calls).
     """
     if not settings.upstash_vector_url or not settings.upstash_vector_token:
         raise HTTPException(

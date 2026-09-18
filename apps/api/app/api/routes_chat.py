@@ -284,10 +284,16 @@ def _retrieve(memory: MemoryContext, top_k: int, session: Session):
         ).search(
             memory.original_question,
             top_k=top_k,
+            min_final_score=governance.min_final_score,
             retrieval_query=memory.retrieval_query,
             context_topics=memory.context_topics,
             context_document_ids=memory.context_document_ids,
             context_articles=memory.context_articles,
+        )
+        return replace(
+            retrieval,
+            index_release_id=governance.active_release_id,
+            index_namespace=settings.upstash_vector_namespace,
         )
     else:
         retrieval = pinecone_store_from_settings(
