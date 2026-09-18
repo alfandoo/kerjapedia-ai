@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     openrouter_fallback_models: str = ""
     openrouter_transient_max_retries: int = 2
     openrouter_transient_backoff_seconds: float = 2.0
+    groq_api_key: str | None = None
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_timeout_seconds: float = 30.0
+    groq_max_retries: int = 2
+    groq_max_tokens: int = 3000
     # Measured 2026-09: with ~2.5k-token grounded prompts, gpt-oss-120b exhausts
     # 1200 completion tokens (finish_reason=length, empty content) before
     # finishing the answer+claims JSON. 3000 completes reliably.
@@ -171,6 +176,8 @@ class Settings(BaseSettings):
             )
         if self.llm_provider == "openrouter" and not self.openrouter_api_key:
             raise ValueError("OPENROUTER_API_KEY is required for the OpenRouter LLM provider.")
+        if self.llm_provider == "groq" and not self.groq_api_key:
+            raise ValueError("GROQ_API_KEY is required for the Groq LLM provider.")
         if self.vector_store not in ("pinecone", "upstash_vector"):
             raise ValueError("VECTOR_STORE must be pinecone or upstash_vector in production.")
         if self.vector_store == "pinecone" and self.pinecone_index_name != "kerjapedia":
@@ -206,8 +213,8 @@ class Settings(BaseSettings):
             and self.embedding_model_revision in {"", "main", "unversioned"}
         ):
             raise ValueError("Production requires a pinned EMBEDDING_MODEL_REVISION.")
-        if self.llm_provider != "openrouter":
-            raise ValueError("LLM_PROVIDER=openrouter is required in production.")
+        if self.llm_provider not in ("openrouter", "groq"):
+            raise ValueError("LLM_PROVIDER=openrouter or groq is required in production.")
         if (
             self.reranker_provider != "pinecone"
             or self.reranker_model != "bge-reranker-v2-m3"
@@ -215,8 +222,10 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Production requires Pinecone bge-reranker-v2-m3 reranking."
             )
-        if self.claim_verifier_provider != "openrouter":
-            raise ValueError("CLAIM_VERIFIER_PROVIDER=openrouter is required in production.")
+        if self.claim_verifier_provider not in ("openrouter", "groq"):
+            raise ValueError(
+                "CLAIM_VERIFIER_PROVIDER=openrouter or groq is required in production."
+            )
         if not self.claim_verifier_model:
             raise ValueError("CLAIM_VERIFIER_MODEL is required in production.")
         if not self.rag_fail_closed:

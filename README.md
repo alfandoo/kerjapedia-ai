@@ -216,8 +216,21 @@ Answer generation Groq:
 
 ```bash
 cd apps/api
-.venv\Scripts\python -m app.services.answering.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store pinecone --llm-provider groq
+.venv\Scripts\python -m app.services.answering.cli "Apakah pekerja PKWT memperoleh kompensasi?" --vector-store upstash_vector --llm-provider groq
 ```
+
+Groq memakai endpoint yang kompatibel OpenAI (`openai/gpt-oss-120b`) dengan
+latensi jauh lebih rendah daripada routing gratis OpenRouter. Buat API key di
+`https://console.groq.com/keys`, lalu isi `.env`:
+
+```bash
+LLM_PROVIDER=groq
+GROQ_API_KEY=...
+GROQ_MODEL=openai/gpt-oss-120b
+```
+
+`CLAIM_VERIFIER_PROVIDER` dapat diisi `groq` (verifikasi LLM di Groq) atau
+`deterministic` (verifikasi lokal instan tanpa API call).
 
 ### Evaluasi RAG
 

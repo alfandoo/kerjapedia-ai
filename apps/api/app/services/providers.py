@@ -5,6 +5,7 @@ from threading import Lock
 
 from app.core.config import Settings
 from app.services.answering.generator import AnswerGenerator
+from app.services.answering.groq_generator import GroqAnswerGenerator
 from app.services.answering.openrouter_generator import OpenRouterAnswerGenerator
 from app.services.ingestion.embeddings import EmbeddingProvider, build_embedding_provider
 from app.services.retrieval.pinecone_store import PineconeConfig, PineconeRetrievalStore
@@ -224,6 +225,10 @@ def answer_generator_from_settings(
         settings.openrouter_timeout_seconds,
         settings.openrouter_max_retries,
         settings.openrouter_max_tokens,
+        settings.groq_model,
+        settings.groq_timeout_seconds,
+        settings.groq_max_retries,
+        settings.groq_max_tokens,
         settings.claim_verifier_provider,
         settings.claim_verifier_model,
         settings.rag_fail_closed,
@@ -254,6 +259,24 @@ def answer_generator_from_settings(
             transient_max_retries=settings.openrouter_transient_max_retries,
             transient_backoff_seconds=settings.openrouter_transient_backoff_seconds,
             fallback_models=tuple(settings.openrouter_fallback_model_list),
+            max_citations=settings.max_citations,
+            max_context_chunk_chars=settings.max_context_chunk_chars,
+            context_model_window=settings.context_model_window,
+            context_reserved_output_tokens=settings.context_reserved_output_tokens,
+            context_safety_margin_tokens=settings.context_safety_margin_tokens,
+        )
+    elif llm_provider == "groq":
+        if not settings.groq_api_key:
+            raise RuntimeError("GROQ_API_KEY is required for LLM_PROVIDER=groq.")
+        generator = GroqAnswerGenerator(
+            api_key=settings.groq_api_key,
+            model_name=settings.groq_model,
+            timeout_seconds=settings.groq_timeout_seconds,
+            max_retries=settings.groq_max_retries,
+            max_tokens=settings.groq_max_tokens,
+            verifier_provider=settings.claim_verifier_provider,
+            verifier_model=settings.claim_verifier_model,
+            fail_closed=settings.rag_fail_closed,
             max_citations=settings.max_citations,
             max_context_chunk_chars=settings.max_context_chunk_chars,
             context_model_window=settings.context_model_window,

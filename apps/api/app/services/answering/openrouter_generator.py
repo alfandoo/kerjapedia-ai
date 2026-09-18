@@ -110,6 +110,8 @@ def _is_transient_provider_error(exc: Exception) -> bool:
 
 
 class OpenRouterAnswerGenerator(AnswerGenerator):
+    provider_label = "openrouter"
+
     def __init__(
         self,
         api_key: str,
@@ -231,7 +233,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                     retrieved_chunk_ids=retrieved_chunk_ids,
                     warnings=retrieval.warnings,
                     debug={
-                        "llm_provider": "openrouter",
+                        "llm_provider": self.provider_label,
                         "llm_model": self.model_name,
                         "verifier_model": self.verifier_model,
                         "prompt_version_id": self.prompt_template.prompt_version_id,
@@ -259,7 +261,8 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 failure_category = "provider_failure"
                 provider_failure_type = type(exc).__name__
                 logger.warning(
-                    "openrouter_generation_provider_failure type=%s attempt=%s status=%s",
+                    f"{self.provider_label}_generation_provider_failure "
+                    "type=%s attempt=%s status=%s",
                     provider_failure_type,
                     generation_attempts,
                     _provider_status_code(exc),
@@ -277,7 +280,8 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                     transient_retries += 1
                     backoff = self.transient_backoff_seconds * transient_retries
                     logger.warning(
-                        "openrouter_generation_transient_retry retry=%s backoff_seconds=%s",
+                        f"{self.provider_label}_generation_transient_retry "
+                        "retry=%s backoff_seconds=%s",
                         transient_retries,
                         round(backoff, 2),
                     )
@@ -305,7 +309,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                     dict.fromkeys([*retrieval.warnings, "answer_repaired_by_claim_pruning"])
                 ),
                 debug={
-                    "llm_provider": "openrouter",
+                    "llm_provider": self.provider_label,
                     "llm_model": self.model_name,
                     "verifier_model": self.verifier_model,
                     "failure_category": failure_category,
@@ -334,7 +338,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 claim.support_score for claim in salvaged.claims
             )
             logger.warning(
-                "openrouter_generation_sentence_salvage claims=%s",
+                f"{self.provider_label}_generation_sentence_salvage claims=%s",
                 len(salvaged.claims),
             )
             return AnswerResponse(
@@ -352,7 +356,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                     dict.fromkeys([*retrieval.warnings, SALVAGE_REPAIR_WARNING])
                 ),
                 debug={
-                    "llm_provider": "openrouter",
+                    "llm_provider": self.provider_label,
                     "llm_model": self.model_name,
                     "verifier_model": self.verifier_model,
                     "repair": "sentence_salvage",
@@ -589,7 +593,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             return None
         intro = EXTRACTIVE_INTRO_ID if lang == "id" else EXTRACTIVE_INTRO_EN
         logger.warning(
-            "openrouter_generation_extractive_fallback failure_category=%s excerpts=%s",
+            f"{self.provider_label}_generation_extractive_fallback failure_category=%s excerpts=%s",
             failure_category,
             len(items),
         )
@@ -608,7 +612,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 dict.fromkeys([*retrieval.warnings, EXTRACTIVE_FALLBACK_WARNING])
             ),
             debug={
-                "llm_provider": "openrouter",
+                "llm_provider": self.provider_label,
                 "llm_model": self.model_name,
                 "verifier_model": self.verifier_model,
                 "fallback": "extractive",
@@ -641,7 +645,8 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
     ) -> AnswerResponse:
         lang = _detect_language(query)
         logger.warning(
-            "openrouter_generation_unavailable failure_category=%s provider_failure_type=%s "
+            f"{self.provider_label}_generation_unavailable "
+            "failure_category=%s provider_failure_type=%s "
             "attempts=%s issues=%s query=%.120s",
             failure_category,
             provider_failure_type,
@@ -662,7 +667,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             retrieved_chunk_ids=retrieved_chunk_ids,
             warnings=list(dict.fromkeys([*retrieval.warnings, "answer_generation_unavailable"])),
             debug={
-                "llm_provider": "openrouter",
+                "llm_provider": self.provider_label,
                 "llm_model": self.model_name,
                 "verifier_model": self.verifier_model,
                 "failure_category": failure_category,
@@ -693,7 +698,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         )
         if context_guardrail.flagged_chunk_ids:
             logger.warning(
-                "openrouter_context_injection_flagged chunk_ids=%s",
+                f"{self.provider_label}_context_injection_flagged chunk_ids=%s",
                 context_guardrail.flagged_chunk_ids,
             )
             selected = [
@@ -796,7 +801,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             payload = _parse_json_object(content)
         except AnswerValidationError as exc:
             logger.warning(
-                "openrouter_generation_invalid_json finish_reason=%s preview=%.500s",
+                f"{self.provider_label}_generation_invalid_json finish_reason=%s preview=%.500s",
                 finish_reason,
                 str(content or "")[:500],
             )
@@ -823,7 +828,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         citations: list[Citation],
     ) -> tuple[list[GroundedClaim], dict[str, int]]:
         deterministic = verify_claims_deterministically(claims, citations, query=query)
-        if self.verifier_provider != "openrouter":
+        if self.verifier_provider not in ("openrouter", "groq"):
             return deterministic, {}
         return self._call_claim_verifier(deterministic, citations)
 
@@ -873,10 +878,16 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         try:
             payload = _parse_json_object(completion.choices[0].message.content)
         except AnswerValidationError:
-            logger.warning("openrouter_claim_verifier_invalid_json; using deterministic fallback")
+            logger.warning(
+                "%s_claim_verifier_invalid_json; using deterministic fallback",
+                self.provider_label,
+            )
             return claims, {}
         if not isinstance(payload, dict):
-            logger.warning("openrouter_claim_verifier_invalid_json; using deterministic fallback")
+            logger.warning(
+                "%s_claim_verifier_invalid_json; using deterministic fallback",
+                self.provider_label,
+            )
             return claims, {}
         by_index = {
             int(item["index"]): item
