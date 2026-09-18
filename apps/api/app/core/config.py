@@ -98,7 +98,9 @@ class Settings(BaseSettings):
     groq_model: str = "openai/gpt-oss-120b"
     groq_timeout_seconds: float = 30.0
     groq_max_retries: int = 2
-    groq_max_tokens: int = 3000
+    # Generous on Groq: LPU speed makes large budgets cheap, and reasoning
+    # models need headroom so hidden reasoning does not starve the answer.
+    groq_max_tokens: int = 6000
     # Measured 2026-09: with ~2.5k-token grounded prompts, gpt-oss-120b exhausts
     # 1200 completion tokens (finish_reason=length, empty content) before
     # finishing the answer+claims JSON. 3000 completes reliably.

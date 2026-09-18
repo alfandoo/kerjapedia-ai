@@ -38,8 +38,17 @@ TEMPORARILY_UNAVAILABLE_EN = (
     "Sorry, a verified answer cannot be prepared right now. Please try again shortly "
     "or review the official sources that were found."
 )
+RATE_LIMITED_ID = (
+    "Model AI sedang mencapai batas pemakaian. Silakan tunggu sebentar dan coba lagi. "
+    "Sumber resmi yang ditemukan tetap ditampilkan di bawah."
+)
+RATE_LIMITED_EN = (
+    "The AI model is currently rate-limited. Please wait a moment and try again. "
+    "The official sources found are still shown below."
+)
 EXTRACTIVE_FALLBACK_WARNING = "answer_degraded_extractive"
 SALVAGE_REPAIR_WARNING = "answer_repaired_by_sentence_salvage"
+RATE_LIMITED_WARNING = "llm_rate_limited_retry_shortly"
 _SALVAGE_MAX_CANDIDATES = 3
 _SALVAGE_MAX_CHARS = 6000
 _SALVAGE_MAX_SENTENCES = 12
@@ -82,6 +91,16 @@ _TRANSIENT_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
 def _provider_status_code(exc: Exception) -> int | None:
     status = getattr(exc, "status_code", None)
     return status if isinstance(status, int) else None
+
+
+def _is_json_validate_failed(exc: Exception) -> bool:
+    """True when the provider rejected the model's output as non-JSON.
+
+    Seen on Groq reasoning models as ``json_validate_failed`` with an empty
+    ``failed_generation``: the model spent its budget on hidden reasoning
+    and returned nothing for the validator to check.
+    """
+    return "json_validate_failed" in str(exc)
 
 
 def _is_transient_provider_error(exc: Exception) -> bool:
@@ -262,10 +281,11 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 provider_failure_type = type(exc).__name__
                 logger.warning(
                     f"{self.provider_label}_generation_provider_failure "
-                    "type=%s attempt=%s status=%s",
+                    "type=%s attempt=%s status=%s detail=%.300s",
                     provider_failure_type,
                     generation_attempts,
                     _provider_status_code(exc),
+                    str(exc)[:300],
                 )
                 if provider_failure_type == "BadRequestError" and validation_failures < 1:
                     validation_issues = [
@@ -644,6 +664,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         transient_retries: int = 0,
     ) -> AnswerResponse:
         lang = _detect_language(query)
+        rate_limited = (provider_failure_type or "") == "RateLimitError"
         logger.warning(
             f"{self.provider_label}_generation_unavailable "
             "failure_category=%s provider_failure_type=%s "
@@ -654,9 +675,13 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             "; ".join(validation_issues or [])[:500],
             query,
         )
+        if rate_limited:
+            answer_text = RATE_LIMITED_ID if lang == "id" else RATE_LIMITED_EN
+        else:
+            answer_text = TEMPORARILY_UNAVAILABLE_ID if lang == "id" else TEMPORARILY_UNAVAILABLE_EN
         return AnswerResponse(
             query=query,
-            answer=(TEMPORARILY_UNAVAILABLE_ID if lang == "id" else TEMPORARILY_UNAVAILABLE_EN),
+            answer=answer_text,
             citations=citations,
             confidence=0.0,
             related_documents=build_related_documents(selected),
@@ -665,7 +690,15 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             disclaimer=DISCLAIMER_ID if lang == "id" else DISCLAIMER_EN,
             prompt_version_id=self.prompt_template.prompt_version_id,
             retrieved_chunk_ids=retrieved_chunk_ids,
-            warnings=list(dict.fromkeys([*retrieval.warnings, "answer_generation_unavailable"])),
+            warnings=list(
+                dict.fromkeys(
+                    [
+                        *retrieval.warnings,
+                        "answer_generation_unavailable",
+                        *([RATE_LIMITED_WARNING] if rate_limited else []),
+                    ]
+                )
+            ),
             debug={
                 "llm_provider": self.provider_label,
                 "llm_model": self.model_name,
@@ -784,16 +817,14 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 ),
             ]
         )
-        completion = self._openrouter_client().chat.completions.create(
+        completion = self._create_completion(
             model=self.model_name,
             messages=[
                 {"role": "system", "content": self.prompt_template.system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            response_format={"type": "json_object"},
             temperature=0,
             max_tokens=self.max_tokens,
-            **self._request_options(),
         )
         content = completion.choices[0].message.content
         finish_reason = getattr(completion.choices[0], "finish_reason", None)
@@ -838,7 +869,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         citations: list[Citation],
     ) -> tuple[list[GroundedClaim], dict[str, int]]:
         evidence = {citation.chunk_id: citation.quote for citation in citations}
-        completion = self._openrouter_client().chat.completions.create(
+        completion = self._create_completion(
             model=self.verifier_model,
             messages=[
                 {
@@ -870,10 +901,8 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                     ),
                 },
             ],
-            response_format={"type": "json_object"},
             temperature=0,
             max_tokens=600,
-            **self._request_options(),
         )
         try:
             payload = _parse_json_object(completion.choices[0].message.content)
@@ -927,6 +956,51 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         if not self.fallback_models:
             return {}
         return {"extra_body": {"models": list(self.fallback_models)}}
+
+    def _response_formats_to_try(self) -> list[dict[str, str] | None]:
+        """Response formats attempted in order for one completion.
+
+        ``None`` means plain mode (no ``response_format``): the shared
+        client-side parser still extracts the first balanced JSON object.
+        """
+        return [{"type": "json_object"}]
+
+    def _create_completion(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+    ):
+        """Create a completion, falling back to plain mode on validator reject."""
+        formats = self._response_formats_to_try()
+        for position, fmt in enumerate(formats):
+            kwargs: dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                **self._request_options(),
+            }
+            if fmt is not None:
+                kwargs["response_format"] = fmt
+            try:
+                return self._openrouter_client().chat.completions.create(**kwargs)
+            except Exception as exc:
+                if (
+                    fmt is not None
+                    and position + 1 < len(formats)
+                    and _is_json_validate_failed(exc)
+                ):
+                    logger.warning(
+                        f"{self.provider_label}_json_mode_fallback_to_plain "
+                        "detail=%.200s",
+                        str(exc)[:200],
+                    )
+                    continue
+                raise
+        raise AssertionError("unreachable response format loop")
 
     def _openrouter_client(self):
         if self._client is None:

@@ -43,7 +43,16 @@ class GroqAnswerGenerator(OpenRouterAnswerGenerator):
 
     def _request_options(self) -> dict[str, Any]:
         # Groq has no OpenRouter-style automatic model fallback parameter.
-        return {}
+        # reasoning_effort=low keeps the reasoning model from spending its
+        # token budget on hidden reasoning and returning empty output
+        # (which Groq rejects server-side as json_validate_failed).
+        return {"reasoning_effort": "low"}
+
+    def _response_formats_to_try(self) -> list[dict[str, str] | None]:
+        # If Groq's server-side JSON validator rejects an empty generation,
+        # retry once in plain mode; the shared client-side parser still
+        # extracts the first balanced JSON object from prose.
+        return [{"type": "json_object"}, None]
 
     def _openrouter_client(self):
         if self._client is None:
