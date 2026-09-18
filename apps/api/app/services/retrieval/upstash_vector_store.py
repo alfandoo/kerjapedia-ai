@@ -40,7 +40,7 @@ class UpstashVectorConfig:
     url: str
     token: str
     dimension: int = 1024
-    namespace: str = "production"
+    namespace: str = ""
     pinecone_api_key: str = ""
 
 
@@ -70,7 +70,7 @@ class UpstashVectorStore:
         expansion_max: int = 4,
         expansion_score_decay: float = 0.85,
     ) -> None:
-        from upstash_vector import Index
+        import httpx
 
         self.config = config
         self.reranker_provider = reranker_provider
@@ -89,10 +89,16 @@ class UpstashVectorStore:
         self.expansion_max = expansion_max
         self.expansion_score_decay = expansion_score_decay
 
-        self._index = Index(url=config.url, token=config.token)
+        self._upstash_client = httpx.Client(
+            base_url=config.url,
+            headers={
+                "Authorization": f"Bearer {config.token}",
+                "Content-Type": "application/json",
+            },
+            timeout=60.0,
+        )
         self._pinecone_client = None
         if config.pinecone_api_key:
-            import httpx
             self._pinecone_client = httpx.Client(
                 base_url="https://api.pinecone.io",
                 headers={
@@ -140,9 +146,6 @@ class UpstashVectorStore:
         - text: str (will be embedded by Pinecone Inference API)
         - metadata: dict
         """
-        from upstash_vector import Vector
-        from upstash_vector.types import SparseVector
-
         upserted = 0
         for start in range(0, len(chunks), batch_size):
             batch = chunks[start : start + batch_size]
@@ -153,19 +156,18 @@ class UpstashVectorStore:
             vectors = []
             for i, chunk in enumerate(batch):
                 sparse_dict = self._bm25_sparse(chunk["text"])
-                vectors.append(
-                    Vector(
-                        id=chunk["chunk_id"],
-                        vector=dense_vectors[i],
-                        sparse_vector=SparseVector(
-                            indices=list(sparse_dict.keys()),
-                            values=list(sparse_dict.values()),
-                        ),
-                        metadata=chunk.get("metadata", {}),
-                    )
-                )
+                vectors.append({
+                    "id": chunk["chunk_id"],
+                    "vector": dense_vectors[i],
+                    "sparseVector": {
+                        "indices": list(sparse_dict.keys()),
+                        "values": list(sparse_dict.values()),
+                    },
+                    "metadata": chunk.get("metadata", {}),
+                })
 
-            self._index.upsert(vectors=vectors)
+            resp = self._upstash_client.post("/upsert", json=vectors)
+            resp.raise_for_status()
             upserted += len(batch)
 
         return upserted
@@ -178,36 +180,46 @@ class UpstashVectorStore:
         filter_metadata: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Query Upstash Vector with hybrid dense+sparse search."""
-        from upstash_vector import SparseVector
-
         dense_vector = self._embed_query([query_text])[0]
         sparse_dict = self._bm25_sparse(query_text)
-        sparse = SparseVector(
-            indices=list(sparse_dict.keys()),
-            values=list(sparse_dict.values()),
-        )
 
+        payload = {
+            "vector": dense_vector,
+            "sparseVector": {
+                "indices": list(sparse_dict.keys()),
+                "values": list(sparse_dict.values()),
+            },
+            "topK": top_k,
+            "includeMetadata": True,
+            "includeData": False,
+        }
         ns = namespace or self.config.namespace
-        response = self._index.query(
-            vector=dense_vector,
-            sparse_vector=sparse,
-            top_k=top_k,
-            include_metadata=True,
-            include_data=False,
-        )
+        query_url = f"/query" if not ns or ns == "" else f"/query/{ns}"
+        resp = self._upstash_client.post(query_url, json=payload)
+        resp.raise_for_status()
+        response = resp.json()
 
+        matches = response.get("result", []) if isinstance(response, dict) else response or []
         results = []
-        for match in (response or []):
-            results.append({
-                "id": match.id,
-                "score": match.score,
-                "metadata": match.metadata or {},
-            })
+        for match in matches:
+            if isinstance(match, dict):
+                results.append({
+                    "id": match.get("id", ""),
+                    "score": match.get("score", 0.0),
+                    "metadata": match.get("metadata") or {},
+                })
+            else:
+                results.append({
+                    "id": match.id,
+                    "score": match.score,
+                    "metadata": match.metadata or {},
+                })
         return results
 
     def delete_namespace(self, namespace: str | None = None) -> None:
         ns = namespace or self.config.namespace
-        self._index.delete(delete_all=True, namespace=ns)
+        resp = self._upstash_client.delete(f"/namespace/{ns}")
+        resp.raise_for_status()
 
     def search(
         self,
@@ -292,11 +304,13 @@ class UpstashVectorStore:
         ranked: list[RankedChunk] = []
         for doc in candidates:
             ls = normalized_lexical.get(doc.chunk_id, 0.0)
-            rs = rerank_score(
-                understanding.normalized_query,
+            rs, reasons = rerank_score(
+                understanding,
                 doc,
-                provider=self.reranker_provider,
-                model=self.reranker_model,
+                ls,
+                0.0,
+                ls,
+                weights=active_rerank_weights,
             )
             final = (
                 active_rerank_weights.lexical * ls
@@ -309,35 +323,36 @@ class UpstashVectorStore:
                 fusion_score=ls,
                 rerank_score=rs,
                 final_score=final,
-                match_reasons=[],
+                match_reasons=reasons,
             ))
 
         ranked.sort(key=lambda r: r.final_score, reverse=True)
-        ranked = drop_heading_only_chunks(ranked)
-        warnings = build_warnings(ranked, understanding)
-        ranked = apply_query_focus_adjustments(ranked, understanding)
-        ranked = apply_relationship_adjustments(
-            ranked, self.relationship_index, understanding
+        ranked = apply_relationship_adjustments(ranked, self.relationship_index)
+        ranked = apply_query_focus_adjustments(
+            ranked,
+            understanding.normalized_retrieval_query,
         )
+        ranked = drop_heading_only_chunks(ranked)
         ranked = mmr_select(
             ranked,
-            lambda_per_document=self.mmr_max_per_document,
-            lambda_per_article=self.mmr_max_per_article,
-            diversity_lambda=self.diversity_lambda,
+            lambda_param=self.diversity_lambda,
+            max_per_document=self.mmr_max_per_document,
+            max_per_article=self.mmr_max_per_article,
         )
-        ranked = expand_context(
-            ranked,
-            by_id,
-            max_expansion=self.expansion_max,
+        selected = expand_context(
+            ranked[:top_k],
+            candidates,
+            max_expansions=self.expansion_max,
             score_decay=self.expansion_score_decay,
-        )
-        ranked = ranked[:top_k]
+        )[:top_k]
+        warnings = build_warnings(selected, self.relationship_index)
+        should_refuse = not selected
 
         return RetrievalResponse(
             query=understanding,
-            results=ranked,
+            results=selected,
             warnings=warnings,
-            should_refuse=False,
+            should_refuse=should_refuse,
             refusal_reason=None,
             timing=timing,
         )
