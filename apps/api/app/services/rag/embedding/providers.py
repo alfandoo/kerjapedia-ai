@@ -99,5 +99,3 @@ class HashEmbeddingProvider:
 
     def embed_sparse(self, texts: list[str]) -> list[dict[int, float]]:
         return [{} for _ in texts]
-
-

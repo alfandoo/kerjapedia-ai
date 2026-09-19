@@ -508,7 +508,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
         >
           <CloseIcon />
         </button>
-        <div className="max-h-[min(660px,calc(100svh-40px))] overflow-y-auto px-8 pb-[30px] pt-[52px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[760px]:max-h-[calc(100svh_-_24px_-_env(safe-area-inset-bottom))] max-[760px]:px-[22px] max-[760px]:pb-[22px] max-[760px]:pt-[54px]">
+        <div className="modal-scroll max-h-[min(660px,calc(100svh-40px))] overflow-y-auto px-8 pb-[30px] pt-[52px] max-[760px]:max-h-[calc(100svh_-_24px_-_env(safe-area-inset-bottom))] max-[760px]:px-[22px] max-[760px]:pb-[22px] max-[760px]:pt-[54px]">
           {step !== "verify" ? (
             <>
               <header className="text-center">

@@ -2,9 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { MessageSquare, MoreHorizontal, Pencil, Pin, Plus, Trash2 } from "lucide-react";
+import { MessageSquare, MoreHorizontal, Pencil, Pin, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,7 +75,7 @@ function ConversationTitleButton({ title, isActive, onSelect }: ConversationTitl
     <Button
       type="button"
       variant="ghost"
-      className="min-h-11 min-w-0 justify-start rounded-none border-0 px-0.5 text-left shadow-none hover:bg-transparent"
+      className="min-h-8 min-w-0 justify-start rounded-none border-0 px-0.5 text-left shadow-none hover:bg-transparent"
       aria-current={isActive ? "page" : undefined}
       title={title}
       onPointerEnter={updateOverflowDistance}
@@ -120,6 +129,7 @@ export function ConversationHistory({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [confirmDeleteItem, setConfirmDeleteItem] = useState<ConversationSummary | null>(null);
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
@@ -145,10 +155,6 @@ export function ConversationHistory({
 
   async function removeConversation(item: ConversationSummary) {
     if (!onConversationDelete) return;
-    const confirmed = window.confirm(
-      `${translate("sidebar.deleteConfirm")} “${item.title}”? ${translate("sidebar.deleteWarning")}`
-    );
-    if (!confirmed) return;
     setPendingId(item.conversation_id);
     try {
       await onConversationDelete(item.conversation_id);
@@ -156,6 +162,7 @@ export function ConversationHistory({
       return;
     } finally {
       setPendingId(null);
+      setConfirmDeleteItem(null);
     }
   }
 
@@ -170,24 +177,27 @@ export function ConversationHistory({
       )}
       aria-label={translate("sidebar.chatHistory")}
     >
-      {showTitle ? (
-        <div className="mb-1 px-0.5">
-          <h2 className="truncate text-xs font-semibold text-sidebar-foreground">
-            {translate("sidebar.chatHistory")}
-          </h2>
+      {showTitle || showNewConversation ? (
+        <div className="mb-1 flex min-h-9 items-center gap-1 px-0.5">
+          {showTitle ? (
+            <h2 className="min-w-0 flex-1 truncate text-xs font-semibold text-sidebar-foreground">
+              {translate("sidebar.chatHistory")}
+            </h2>
+          ) : null}
+          {showNewConversation ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 border-0 text-sidebar-foreground/70 shadow-none hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              onClick={onNewConversation}
+              title={translate("sidebar.newChat")}
+              aria-label={translate("sidebar.newChat")}
+            >
+              <Pencil className="size-4" />
+            </Button>
+          ) : null}
         </div>
-      ) : null}
-
-      {showNewConversation ? (
-        <Button
-          className="mb-2 h-10 w-full justify-start"
-          variant="outline"
-          type="button"
-          onClick={onNewConversation}
-        >
-          <Plus data-icon="inline-start" />
-          {translate("sidebar.newChat")}
-        </Button>
       ) : null}
 
       <div
@@ -217,7 +227,7 @@ export function ConversationHistory({
             <span className="sr-only">{translate("sidebar.loadingHistory")}</span>
             <Skeleton className="h-3 w-16" />
             {Array.from({ length: 6 }, (_, index) => (
-              <Skeleton key={index} className="h-9 w-full rounded-lg" />
+              <Skeleton key={index} className="h-8 w-full rounded-lg" />
             ))}
           </div>
         ) : null}
@@ -306,7 +316,7 @@ export function ConversationHistory({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="pointer-events-none size-11 border-0 text-sidebar-foreground/70 opacity-0 shadow-none transition hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 max-[760px]:pointer-events-auto max-[760px]:opacity-100"
+                        className="pointer-events-none size-8 border-0 text-sidebar-foreground/70 opacity-0 shadow-none transition hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 max-[760px]:pointer-events-auto max-[760px]:opacity-100"
                         aria-label={
                           isPinned ? translate("history.unpinChat") : translate("history.pinChat")
                         }
@@ -322,7 +332,7 @@ export function ConversationHistory({
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="pointer-events-none size-11 border-0 shadow-none opacity-0 transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 max-[760px]:pointer-events-auto max-[760px]:opacity-100"
+                            className="pointer-events-none size-8 border-0 shadow-none opacity-0 transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 max-[760px]:pointer-events-auto max-[760px]:opacity-100"
                             aria-label={`${translate("sidebar.actionsFor")} ${item.title}`}
                           >
                             <MoreHorizontal />
@@ -342,7 +352,7 @@ export function ConversationHistory({
                             <DropdownMenuItem
                               variant="destructive"
                               disabled={pendingId === item.conversation_id}
-                              onSelect={() => void removeConversation(item)}
+                              onSelect={() => setConfirmDeleteItem(item)}
                             >
                               <Trash2 />
                               {translate("sidebar.delete")}
@@ -358,6 +368,41 @@ export function ConversationHistory({
           </ul>
         ) : null}
       </div>
+      <Dialog
+        open={confirmDeleteItem !== null}
+        onOpenChange={(open) => {
+          if (!open && pendingId === null) setConfirmDeleteItem(null);
+        }}
+      >
+        <DialogContent
+          className="w-[calc(100vw_-_2rem)] gap-3 sm:max-w-[320px]"
+          showCloseButton={pendingId === null}
+        >
+          <DialogHeader>
+            <DialogTitle>{translate("sidebar.deleteConfirm")}</DialogTitle>
+            <DialogDescription>
+              “{confirmDeleteItem?.title}”? {translate("sidebar.deleteWarning")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="ghost" disabled={pendingId !== null}>
+                {translate("sidebar.cancel")}
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={pendingId !== null}
+              onClick={() => {
+                if (confirmDeleteItem) void removeConversation(confirmDeleteItem);
+              }}
+            >
+              {translate("sidebar.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

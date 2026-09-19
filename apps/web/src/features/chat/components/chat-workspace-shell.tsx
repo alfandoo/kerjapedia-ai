@@ -508,7 +508,7 @@ export function ChatWorkspaceShell({
             <nav className="-mx-3 grid gap-0.5 pt-2" aria-label="Kategori chat">
               <button
                 type="button"
-                className="flex min-h-11 items-center justify-start gap-1.5 rounded-lg px-2.5 text-left text-xs text-sidebar-foreground transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                className="flex min-h-8 items-center justify-start gap-1.5 rounded-lg px-2.5 text-left text-xs text-sidebar-foreground transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                 aria-expanded={pinnedExpanded}
                 aria-controls="pinned-history"
                 onClick={() => setPinnedExpanded((expanded) => !expanded)}
@@ -542,7 +542,7 @@ export function ChatWorkspaceShell({
               ) : null}
               <button
                 type="button"
-                className="flex min-h-11 items-center justify-start gap-1.5 rounded-lg px-2.5 text-left text-xs font-semibold text-sidebar-foreground transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                className="flex min-h-8 items-center justify-start gap-1.5 rounded-lg px-2.5 text-left text-xs font-semibold text-sidebar-foreground transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                 aria-expanded={chatsExpanded}
                 aria-controls="chat-history"
                 onClick={() => setChatsExpanded((expanded) => !expanded)}

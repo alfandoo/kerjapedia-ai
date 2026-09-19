@@ -192,4 +192,3 @@ def test_embedding_service_rejects_an_oversized_direct_batch() -> None:
             timeout_seconds=1,
             retry_policy=RetryPolicy(),
         )
-
