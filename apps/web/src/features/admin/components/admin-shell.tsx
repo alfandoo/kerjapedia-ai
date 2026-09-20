@@ -4,13 +4,11 @@ import { readPreference, writePreference } from "@/lib/preference-cookie";
 
 import Link from "next/link";
 import { toast } from "sonner";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   Activity,
-  ArrowRight,
-  ShieldCheck,
   ChevronLeft,
   Database,
   FileUp,
@@ -32,7 +30,6 @@ import { ScaleIcon } from "@/components/icons";
 import { useStoredSession, useSessionReady } from "@/features/auth";
 import { signOut } from "@/features/admin/api";
 import { cn } from "@/lib/utils";
-import accessStyles from "./admin-access.module.css";
 import sidebarStyles from "./admin-sidebar.module.css";
 
 type AdminShellProps = { children: ReactNode };
@@ -62,10 +59,6 @@ const adminNavGroups: {
       { href: "/admin/observability", label: "Observability", icon: Activity },
     ],
   },
-  {
-    label: "Sistem",
-    items: [{ href: "/admin/settings", label: "Pengaturan", icon: Settings }],
-  },
 ];
 
 const allNavItems = adminNavGroups.flatMap((group) => group.items);
@@ -81,6 +74,7 @@ function useIsClient() {
 export function AdminShell({ children }: AdminShellProps) {
   const isClient = useIsClient();
   const pathname = usePathname();
+  const router = useRouter();
   const session = useStoredSession();
   const sessionReady = useSessionReady();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -132,6 +126,15 @@ export function AdminShell({ children }: AdminShellProps) {
     }
   }
 
+  const shouldRedirectToLogin =
+    isClient && sessionReady && (!session || !session.user.roles.includes("admin"));
+
+  useEffect(() => {
+    if (shouldRedirectToLogin) {
+      router.replace("/login-admin");
+    }
+  }, [router, shouldRedirectToLogin]);
+
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
@@ -151,37 +154,8 @@ export function AdminShell({ children }: AdminShellProps) {
     };
   }, []);
 
-  if (!isClient || !sessionReady) {
+  if (!isClient || !sessionReady || shouldRedirectToLogin) {
     return null;
-  }
-
-  if (!session || !session.user.roles.includes("admin")) {
-    return (
-      <main className={accessStyles.screen}>
-        <div className={accessStyles.content}>
-          <div className={accessStyles.brand}>
-            <ScaleIcon className="size-5" aria-hidden="true" />
-            <span>KerjaPedia AI</span>
-          </div>
-          <div className={accessStyles.panel}>
-            <div className={accessStyles.icon}>
-              <ShieldCheck size={28} aria-hidden="true" />
-            </div>
-            <p className={accessStyles.eyebrow}>Konsol admin</p>
-            <h1 className={accessStyles.title}>Akses admin diperlukan</h1>
-            <p className={accessStyles.description}>
-              {session
-                ? "Akun Anda belum memiliki akses admin. Masuk dengan akun admin untuk mengelola dokumen dan pengaturan KerjaPedia AI."
-                : "Masuk dengan akun admin untuk mengelola dokumen dan pengaturan KerjaPedia AI."}
-            </p>
-            <Link href="/login-admin" className={accessStyles.primary}>
-              <span>Masuk sebagai admin</span>
-              <ArrowRight size={18} aria-hidden="true" />
-            </Link>
-          </div>
-        </div>
-      </main>
-    );
   }
 
   const isActive = (href: string) =>
