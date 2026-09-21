@@ -47,6 +47,12 @@ Thumbs.db
 .opencode/
 AGENTS.md
 
+# Deployment (personal infra, not needed in repo)
+compose.yaml
+compose.production.yaml
+skills-lock.json
+.gitattributes
+
 # Evaluation artifacts (regenerable)
 evaluation/*.json
 
