@@ -44,4 +44,9 @@
   border: 1px solid #b8d5cc;
   border-radius: 12px;
   background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.metric:hover {
+  border-color: #8fbfaa;
+  box-shadow: 0 2px 8px rgba(27, 67, 50, 0.06);
 }

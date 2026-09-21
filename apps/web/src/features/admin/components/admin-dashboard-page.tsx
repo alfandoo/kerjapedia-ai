@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EmptyState, PageHeader, StatusBadge } from "./primitives";
 import { AlertIcon, DatabaseIcon, ThumbsDownIcon, ThumbsUpIcon } from "@/components/icons";
-import { BadgeCheck, FileUp, Files, MessageSquareText, RefreshCw, Users } from "lucide-react";
+import { BadgeCheck, ChevronRight, FileUp, Files, MessageSquareText, RefreshCw, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { clearStoredSession, fetchAdminStats } from "@/features/admin/api";
 import type { AdminStats } from "@/features/admin/types";
@@ -67,9 +67,9 @@ function DashboardSkeleton() {
         <Skeleton className="h-8 w-56" />
         <Skeleton className="h-4 w-72" />
       </div>
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Skeleton key={index} className="h-[128px] rounded-xl" />
+          <Skeleton key={index} className="h-[136px] rounded-xl" />
         ))}
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
@@ -230,17 +230,17 @@ export function AdminDashboardPage() {
   const kpiFooters: { text: string; dot: string }[] = [
     { text: `${docPercent}% telah diterbitkan`, dot: "bg-forest" },
     {
-      text: reviewPending > 0 ? `${reviewPending} menunggu review` : "Tidak ada antrean tinjauan",
+      text: reviewPending > 0 ? `${reviewPending} menunggu review` : "Tidak ada antrean",
       dot: reviewPending > 0 ? "bg-amber" : "bg-forest",
     },
-    { text: `${stats.conversations} total percakapan`, dot: "bg-teal" },
+    { text: `${stats.conversations} percakapan aktif`, dot: "bg-teal" },
     { text: `${stats.feedback.total} feedback masuk`, dot: "bg-forest/60" },
   ];
   const kpiCards = [
-    { key: "documents", label: "Total dokumen", icon: Files, tone: "text-forest" },
-    { key: "published", label: "Dokumen terbit", icon: BadgeCheck, tone: "text-teal" },
-    { key: "users", label: "Pengguna terdaftar", icon: Users, tone: "text-javanese" },
-    { key: "messages", label: "Total pesan", icon: MessageSquareText, tone: "text-forest/70" },
+    { key: "documents", label: "Total dokumen", icon: Files },
+    { key: "published", label: "Dokumen terbit", icon: BadgeCheck },
+    { key: "users", label: "Pengguna terdaftar", icon: Users },
+    { key: "messages", label: "Total pertanyaan", icon: MessageSquareText },
   ] as const;
 
   const otherDocs = Math.max(0, stats.documents.total - reviewPending - failedDocs);
@@ -322,30 +322,30 @@ export function AdminDashboardPage() {
         </Link>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {kpiCards.map((card, index) => {
           const Icon = card.icon;
           const foot = kpiFooters[index];
           return (
             <div key={card.key} className={styles.metric}>
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[13px] font-medium text-muted-text">{card.label}</p>
-                <span className="flex size-8 items-center justify-center rounded-lg bg-teal-soft/70 text-forest">
-                  <Icon
-                    strokeWidth={1.75}
-                    className={cn("size-4.5 shrink-0 transition-colors", card.tone)}
-                  />
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-muted-text">{card.label}</p>
+                  <p className="mt-2 font-mono text-[30px] leading-none font-bold tracking-tight text-forest tabular-nums">
+                    {new Intl.NumberFormat("id-ID").format(kpiValues[card.key])}
+                  </p>
+                </div>
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-teal-soft/70">
+                  <Icon strokeWidth={1.75} className="size-5 text-forest" />
                 </span>
               </div>
-              <p className="mt-3 font-mono text-[30px] leading-none font-bold tracking-tight text-forest tabular-nums">
-                {new Intl.NumberFormat("id-ID").format(kpiValues[card.key])}
-              </p>
               <div className="mt-4 flex items-center gap-2 border-t border-teal-soft pt-3">
                 <span
                   aria-hidden="true"
                   className={cn("size-1.5 shrink-0 rounded-full", foot.dot)}
                 />
-                <span className="text-xs leading-relaxed text-muted-text">{foot.text}</span>
+                <span className="flex-1 text-xs leading-relaxed text-muted-text">{foot.text}</span>
+                <ChevronRight className="size-4 shrink-0 text-muted-text/50" />
               </div>
             </div>
           );
