@@ -3,6 +3,7 @@ import { fetchWithAuthRetry } from "@/features/auth";
 import type {
   AdminMetrics,
   AdminOverview,
+  DailyUsagePoint,
   AdminRelationship,
   AdminStats,
   AdminSettings,
@@ -28,6 +29,18 @@ export async function fetchAdminStats(signal?: AbortSignal): Promise<AdminStats>
     signal
   );
   return parseJsonResponse<AdminStats>(response);
+}
+
+export async function fetchDailyUsage(
+  days = 30,
+  signal?: AbortSignal
+): Promise<{ days: number; points: DailyUsagePoint[] }> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/usage/daily?days=${days}`,
+    { headers: adminHeaders() },
+    signal
+  );
+  return parseJsonResponse<{ days: number; points: DailyUsagePoint[] }>(response);
 }
 
 export async function fetchAdminMetrics(signal?: AbortSignal): Promise<AdminMetrics> {
@@ -59,6 +72,18 @@ export async function fetchAuditLogs(
     signal
   );
   return parseJsonResponse<{ entries: AuditLogEntry[]; total: number }>(response);
+}
+
+export async function fetchRecentAuditLogs(
+  limit = 5,
+  signal?: AbortSignal
+): Promise<AuditLogEntry[]> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/audit-logs?limit=${limit}`,
+    { headers: adminHeaders() },
+    signal
+  );
+  return parseJsonResponse<AuditLogEntry[]>(response);
 }
 
 export async function fetchAdminOverview(signal?: AbortSignal): Promise<AdminOverview> {

@@ -38,6 +38,13 @@
   background: #2c5b44;
   color: #ffffff;
 }
+.topbar.topbar {
+  border-bottom: 1px solid #e5e5e5;
+}
+.topbar.topbar input[type="search"],
+.topbar.topbar input[type="search"]:focus {
+  background-color: #f2f5f3 !important;
+}
 .navigation {
   overscroll-behavior-y: contain;
   scrollbar-gutter: stable;

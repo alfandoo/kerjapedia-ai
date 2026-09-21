@@ -5,10 +5,19 @@ import { readPreference, writePreference } from "@/lib/preference-cookie";
 import Link from "next/link";
 import { toast } from "sonner";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   Activity,
+  Bell,
+  ChevronDown,
   ChevronLeft,
   Database,
   FileUp,
@@ -22,13 +31,13 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ScrollText,
+  Search,
   Settings,
-  User,
 } from "lucide-react";
 
 import { ScaleIcon } from "@/components/icons";
 import { useStoredSession, useSessionReady } from "@/features/auth";
-import { signOut } from "@/features/admin/api";
+import { fetchAdminStats, signOut } from "@/features/admin/api";
 import { cn } from "@/lib/utils";
 import sidebarStyles from "./admin-sidebar.module.css";
 
@@ -79,6 +88,8 @@ export function AdminShell({ children }: AdminShellProps) {
   const sessionReady = useSessionReady();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [headerQuery, setHeaderQuery] = useState("");
+  const [attentionCount, setAttentionCount] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => typeof window !== "undefined" && readPreference("kp-admin-sidebar") === "collapsed"
   );
@@ -136,6 +147,23 @@ export function AdminShell({ children }: AdminShellProps) {
   }, [router, shouldRedirectToLogin]);
 
   useEffect(() => {
+    if (!session) return;
+    const controller = new AbortController();
+    fetchAdminStats(controller.signal)
+      .then((stats) => {
+        setAttentionCount(stats.documents.needs_review + stats.documents.failed);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [session]);
+
+  function submitHeaderSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = headerQuery.trim();
+    router.push(query ? `/documents?q=${encodeURIComponent(query)}` : "/documents");
+  }
+
+  useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       setDropdownOpen(false);
@@ -162,8 +190,10 @@ export function AdminShell({ children }: AdminShellProps) {
     href === "/documents"
       ? pathname === "/documents"
       : pathname === href || pathname.startsWith(`${href}/`);
-  const currentSection =
-    [...allNavItems].reverse().find((item) => isActive(item.href))?.label ?? "Admin";
+  const currentItem = [...allNavItems].reverse().find((item) => isActive(item.href));
+  const currentSection = currentItem?.label ?? "Admin";
+  const SectionIcon =
+    currentItem?.icon ?? (pathname.startsWith("/admin/settings") ? Settings : LayoutDashboard);
 
   async function handleLogout() {
     try {
@@ -275,11 +305,16 @@ export function AdminShell({ children }: AdminShellProps) {
 
       <div
         className={cn(
-          "flex min-w-0 flex-1 flex-col bg-arsip",
+          "flex min-w-0 flex-1 flex-col bg-[#f2f5f3]",
           sidebarCollapsed ? "lg:pl-[76px]" : "lg:pl-[248px]"
         )}
       >
-        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-line bg-white px-4 lg:px-6">
+        <header
+          className={cn(
+            sidebarStyles.topbar,
+            "sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 bg-white px-4 lg:px-6"
+          )}
+        >
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
@@ -304,6 +339,7 @@ export function AdminShell({ children }: AdminShellProps) {
               </button>
             )}
             <nav aria-label="Lokasi halaman" className="flex min-w-0 items-center gap-2 text-sm">
+              <SectionIcon aria-hidden="true" className="size-[18px] shrink-0 text-muted-text" />
               <span className="hidden font-mono text-[11px] tracking-[0.18em] text-muted-text uppercase sm:inline">
                 Admin
               </span>
@@ -313,20 +349,69 @@ export function AdminShell({ children }: AdminShellProps) {
               <span className="truncate font-semibold text-tinta">{currentSection}</span>
             </nav>
           </div>
+          <form
+            role="search"
+            onSubmit={submitHeaderSearch}
+            className="mx-2 hidden w-full flex-1 justify-end md:flex"
+          >
+            <div className="relative w-full max-w-sm">
+              <Search
+                aria-hidden="true"
+                className="absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-text"
+              />
+              <input
+                type="search"
+                value={headerQuery}
+                onChange={(event) => setHeaderQuery(event.target.value)}
+                placeholder="Cari dokumen, evaluasi, atau pengguna..."
+                aria-label="Cari dokumen, evaluasi, atau pengguna"
+                className="h-10 w-full rounded-full border border-[#e5e5e5] bg-[#f2f5f3] pr-4 pl-11 text-sm text-tinta transition outline-none placeholder:text-muted-text/80 focus:border-forest/50 focus:bg-white"
+              />
+            </div>
+          </form>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Link
+              href="/documents"
+              aria-label={
+                attentionCount > 0
+                  ? `${attentionCount} dokumen perlu perhatian`
+                  : "Notifikasi dokumen"
+              }
+              className="relative flex size-11 items-center justify-center rounded-full text-tinta transition hover:bg-surface-soft"
+            >
+              <Bell aria-hidden="true" className="size-5" />
+              {attentionCount > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute top-1 right-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 font-mono text-[10px] font-bold text-white"
+                >
+                  {attentionCount > 99 ? "99+" : attentionCount}
+                </span>
+              ) : null}
+            </Link>
           <div className="relative shrink-0" ref={dropdownRef}>
             <button
               type="button"
-              className="flex h-10 items-center gap-2.5 rounded-xl border border-line bg-white px-2.5 transition hover:border-javanese/30"
+              className="flex h-11 items-center gap-2.5 rounded-full pr-2 pl-1.5 transition hover:bg-surface-soft"
               onClick={() => setDropdownOpen(!dropdownOpen)}
               aria-expanded={dropdownOpen}
               aria-haspopup="menu"
             >
-              <span className="flex size-7 items-center justify-center rounded-lg bg-javanese text-white">
-                <User className="size-4" />
+              <span
+                aria-hidden="true"
+                className="flex size-8 items-center justify-center rounded-full bg-javanese text-[11px] font-bold text-white"
+              >
+                {session.user.name
+                  .trim()
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((word) => word[0]?.toUpperCase() ?? "")
+                  .join("") || "?"}
               </span>
               <span className="max-w-40 truncate text-sm font-medium text-tinta">
                 {session.user.name}
               </span>
+              <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted-text" />
             </button>
             {dropdownOpen && (
               <div
@@ -353,6 +438,7 @@ export function AdminShell({ children }: AdminShellProps) {
                 </button>
               </div>
             )}
+          </div>
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">

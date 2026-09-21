@@ -4,6 +4,7 @@ import json
 import re
 import time
 from dataclasses import asdict
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -261,6 +262,62 @@ def admin_stats(session: DbSession, _: AdminUser) -> dict:
     return result
 
 
+@router.get("/usage/daily")
+def admin_usage_daily(
+    session: DbSession,
+    _: AdminUser,
+    days: int = Query(default=30, ge=1, le=90),
+) -> dict:
+    """Per-day usage trend for the dashboard (zero-filled, oldest first)."""
+    today = now_utc().date()
+    start_day = today - timedelta(days=days - 1)
+    start_at = datetime.combine(start_day, datetime.min.time()).replace(tzinfo=UTC)
+
+    message_rows = (
+        session.query(
+            sa_func.date(Message.created_at).label("day"),
+            sa_func.count(Message.message_id),
+        )
+        .filter(Message.role == "user", Message.created_at >= start_at)
+        .group_by(sa_func.date(Message.created_at))
+        .all()
+    )
+    conversation_rows = (
+        session.query(
+            sa_func.date(Conversation.created_at).label("day"),
+            sa_func.count(Conversation.conversation_id),
+        )
+        .filter(Conversation.created_at >= start_at)
+        .group_by(sa_func.date(Conversation.created_at))
+        .all()
+    )
+    active_rows = (
+        session.query(
+            DailyUsage.usage_date,
+            sa_func.count(sa_func.distinct(DailyUsage.user_key)),
+        )
+        .filter(DailyUsage.usage_date >= start_day)
+        .group_by(DailyUsage.usage_date)
+        .all()
+    )
+
+    messages_by_day = {str(row[0]): int(row[1]) for row in message_rows}
+    conversations_by_day = {str(row[0]): int(row[1]) for row in conversation_rows}
+    active_by_day = {str(row[0]): int(row[1]) for row in active_rows}
+
+    points = []
+    for offset in range(days):
+        day = start_day + timedelta(days=offset)
+        key = day.isoformat()
+        points.append(
+            {
+                "date": key,
+                "messages": messages_by_day.get(key, 0),
+                "conversations": conversations_by_day.get(key, 0),
+                "active_users": active_by_day.get(key, 0),
+            }
+        )
+    return {"days": days, "points": points}
 
 
 def _metrics_histogram(rows: list[tuple]) -> dict[str, dict[str, float | None]]:

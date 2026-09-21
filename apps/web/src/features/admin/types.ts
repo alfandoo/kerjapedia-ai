@@ -239,6 +239,13 @@ export type AdminMetrics = {
   };
 };
 
+export type DailyUsagePoint = {
+  date: string;
+  messages: number;
+  conversations: number;
+  active_users: number;
+};
+
 export type AdminSettings = {
   app_name: string;
   app_version: string;

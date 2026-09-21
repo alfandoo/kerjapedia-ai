@@ -15,7 +15,11 @@
 }
 .dashboard header {
   background: #ffffff !important;
-  border-color: #dce7e0 !important;
+  border-color: #e5e5e5 !important;
+}
+.dashboard.dashboard section,
+.dashboard.dashboard header {
+  border-color: #e5e5e5 !important;
 }
 .dashboard a:focus-visible,
 .dashboard button:focus-visible {
@@ -41,12 +45,12 @@
 .metric {
   min-width: 0;
   padding: 20px;
-  border: 1px solid #b8d5cc;
+  border: 1px solid #e5e5e5;
   border-radius: 12px;
   background: #ffffff;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .metric:hover {
-  border-color: #8fbfaa;
-  box-shadow: 0 2px 8px rgba(27, 67, 50, 0.06);
+  border-color: #d4d4d4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
