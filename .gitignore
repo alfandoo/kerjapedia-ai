@@ -45,6 +45,7 @@ Thumbs.db
 # AI tool configs (personal, not needed in repo)
 .agents/
 .codex/
+.opencode/
 
 # Evaluation artifacts (regenerable)
 evaluation/*.json
