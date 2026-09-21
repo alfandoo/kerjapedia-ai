@@ -447,3 +447,86 @@ def test_calibrate_threshold_prefers_higher_on_ties() -> None:
 
     assert _calibrate_threshold_from_scores(pairs) == 0.9
     assert _calibrate_threshold_from_scores([]) == 1.0
+
+
+class _FakeUpstashStore:
+    def __init__(self, document: RetrievalDocument) -> None:
+        self.document = document
+        self.calls: list[dict] = []
+
+    def search(self, query: str, top_k: int = 5, min_final_score: float = 0.0):
+        from app.services.retrieval.query import understand_query
+        from app.services.retrieval.schemas import RankedChunk, RetrievalResponse
+
+        self.calls.append({"query": query, "top_k": top_k})
+        ranked = RankedChunk(
+            document=self.document,
+            lexical_score=0.5,
+            semantic_score=0.9,
+            fusion_score=0.8,
+            rerank_score=0.85,
+            final_score=0.85,
+            match_reasons=["test"],
+        )
+        return RetrievalResponse(
+            query=understand_query(query),
+            results=[ranked],
+            warnings=[],
+            should_refuse=False,
+            refusal_reason=None,
+        )
+
+
+def _upstash_question() -> EvaluationQuestion:
+    return EvaluationQuestion(
+        question_id="EVAL-UPSTASH-001",
+        category="pkwt",
+        question="Apakah pekerja PKWT memperoleh kompensasi?",
+        expected_answer="Pekerja PKWT memperoleh kompensasi.",
+        expected_document_ids=["PP-35-2021"],
+        expected_articles=["Pasal 15"],
+        expected_topics=["pkwt"],
+        should_refuse=False,
+    )
+
+
+def test_run_experiment_upstash_mode_uses_live_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.config import settings as app_settings
+
+    document = make_document(
+        "chunk-1",
+        "PP-35-2021",
+        "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi.",
+        ["pkwt"],
+        "Pasal 15",
+    )
+    fake = _FakeUpstashStore(document)
+    monkeypatch.setattr(
+        "app.services.providers.upstash_vector_store_from_settings",
+        lambda settings: fake,
+    )
+    monkeypatch.setattr(app_settings, "upstash_vector_url", "https://x")
+    monkeypatch.setattr(app_settings, "upstash_vector_token", "t")
+
+    report = run_experiment([_upstash_question()], [], "upstash", top_k=5)
+
+    assert report.mode == "upstash"
+    assert len(fake.calls) == 1
+    assert fake.calls[0]["query"] == "Apakah pekerja PKWT memperoleh kompensasi?"
+    (result,) = report.results
+    assert result.recall_at_5 == 1.0
+    assert result.reciprocal_rank == 1.0
+
+
+def test_run_experiment_upstash_mode_requires_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.config import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "upstash_vector_url", "")
+    monkeypatch.setattr(app_settings, "upstash_vector_token", "")
+
+    with pytest.raises(RuntimeError, match="UPSTASH_VECTOR_URL"):
+        run_experiment([_upstash_question()], [], "upstash", top_k=5)

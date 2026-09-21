@@ -75,7 +75,7 @@ export function AdminEvaluation() {
 
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [runDatasetId, setRunDatasetId] = useState("");
-  const [runModes, setRunModes] = useState<string[]>(["hybrid", "rerank"]);
+  const [runModes, setRunModes] = useState<string[]>(["upstash"]);
   const [runTopK, setRunTopK] = useState("5");
   const [submitting, setSubmitting] = useState(false);
   const [runError, setRunError] = useState("");
@@ -87,6 +87,7 @@ export function AdminEvaluation() {
     detailRef.current = detail;
   });
   const pollBusy = useRef(false);
+  const rateLimitCooldownUntil = useRef(0);
   const lastStatuses = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -215,6 +216,7 @@ export function AdminEvaluation() {
 
   const refreshActive = useCallback(async () => {
     if (pollBusy.current || document.hidden) return;
+    if (Date.now() < rateLimitCooldownUntil.current) return;
     pollBusy.current = true;
     try {
       const liveDetail = detailRef.current;
@@ -235,7 +237,12 @@ export function AdminEvaluation() {
       }
       setRuns(summaries);
       if (freshDetail) setDetail(freshDetail);
-    } catch {
+    } catch (error) {
+      // 429 from the API rate limiter: back off polling for a while instead
+      // of hammering the budget. The background run itself is unaffected.
+      if (error instanceof Error && error.message.includes("429")) {
+        rateLimitCooldownUntil.current = Date.now() + 30000;
+      }
       // keep stale data; next tick retries
     } finally {
       pollBusy.current = false;
@@ -250,7 +257,7 @@ export function AdminEvaluation() {
 
   useEffect(() => {
     if (!needsPoll) return;
-    const id = window.setInterval(() => void refreshActive(), 5000);
+    const id = window.setInterval(() => void refreshActive(), 10000);
     return () => window.clearInterval(id);
   }, [needsPoll, refreshActive]);
 
@@ -539,6 +546,10 @@ export function AdminEvaluation() {
                   [
                     "Re-rank",
                     "Mengurutkan ulang kandidat menggunakan final score setelah penilaian relevansi lanjutan.",
+                  ],
+                  [
+                    "Upstash Hybrid",
+                    "Mengukur index produksi live (Upstash hosted dense + BM25). Butuh kredensial Upstash di backend; tidak memakai dokumen artifact lokal.",
                   ],
                 ].map(([label, description]) => (
                   <div key={label} className="min-w-0 border-l-2 border-line pl-4">

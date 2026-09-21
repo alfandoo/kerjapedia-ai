@@ -20,9 +20,10 @@ export const modeLabel: Record<string, string> = {
   dense: "Dense",
   hybrid: "Hybrid",
   rerank: "Rerank",
+  upstash: "Upstash Hybrid",
 };
 
-export const modeOrder = ["baseline", "dense", "hybrid", "rerank"];
+export const modeOrder = ["baseline", "dense", "hybrid", "rerank", "upstash"];
 
 export function sortModes(metrics: Record<string, EvaluationMetricSet>): string[] {
   return Object.keys(metrics).sort((a, b) => modeOrder.indexOf(a) - modeOrder.indexOf(b));

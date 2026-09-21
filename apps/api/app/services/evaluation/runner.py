@@ -25,19 +25,39 @@ from app.services.retrieval.engine import RetrievalEngine
 from app.services.retrieval.reranker import DEFAULT_RERANK_WEIGHTS, RerankWeights
 from app.services.retrieval.schemas import RankedChunk, RetrievalDocument, RetrievalResponse
 
-EXPERIMENT_MODES: tuple[ExperimentMode, ...] = ("baseline", "dense", "hybrid", "rerank")
+EXPERIMENT_MODES: tuple[ExperimentMode, ...] = ("baseline", "dense", "hybrid", "rerank", "upstash")
 _MODE_SCORE = {
     "baseline": "lexical_score",
     "dense": "semantic_score",
     "hybrid": "fusion_score",
     "rerank": "final_score",
+    "upstash": "final_score",
 }
 _REFUSAL_THRESHOLDS = {
     "baseline": 0.01,
     "dense": 0.05,
     "hybrid": 0.005,
     "rerank": 0.08,
+    "upstash": 0.0,
 }
+
+
+def _upstash_search(query: str, top_k: int) -> RetrievalResponse:
+    """Live retrieval against the Upstash HYBRID index (hosted embeddings).
+
+    Pure ranking measurement: no minimum-score gate, so an empty candidate
+    set is the only refusal. Missing credentials raise an actionable error
+    that surfaces as the run failure message.
+    """
+    from app.core.config import settings
+    from app.services.providers import upstash_vector_store_from_settings
+
+    if not settings.upstash_vector_url or not settings.upstash_vector_token:
+        raise RuntimeError(
+            "Upstash evaluation needs UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN."
+        )
+    store = upstash_vector_store_from_settings(settings)
+    return store.search(query, top_k=max(top_k, 10), min_final_score=0.0)
 
 
 ProgressCallback = Callable[[int, int], None]
@@ -82,7 +102,10 @@ def run_experiment(
     results: list[QuestionEvaluation] = []
 
     for index, question in enumerate(questions):
-        retrieval = engine.search(question.question, top_k=max(top_k, len(documents)))
+        if mode == "upstash":
+            retrieval = _upstash_search(question.question, top_k)
+        else:
+            retrieval = engine.search(question.question, top_k=max(top_k, len(documents)))
         ranked = _rank(retrieval.results, mode)
         selected = ranked[: max(top_k, 10)]
         score_name = _MODE_SCORE[mode]
@@ -274,11 +297,18 @@ def evaluate_retrieval_modes(
     each mode re-ranks the same result list by its own score column.
     """
     engine = RetrievalEngine(documents=documents, top_k=max(top_k, len(documents)))
-    searches = [
+    base_searches = [
         engine.search(question.question, top_k=max(top_k, len(documents))) for question in questions
     ]
     experiments = []
     for mode in modes:
+        # Upstash measures its own live candidates; artifact modes re-rank
+        # one shared engine result list by their own score column.
+        searches = (
+            [_upstash_search(question.question, top_k) for question in questions]
+            if mode == "upstash"
+            else base_searches
+        )
         recalls_5: list[float] = []
         recalls_10: list[float] = []
         ranks: list[float] = []

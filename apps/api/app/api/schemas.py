@@ -391,6 +391,6 @@ class EvaluationRunRequest(ApiModel):
     dataset_id: str = Field(min_length=3, max_length=120)
     release_id: str | None = Field(default=None, min_length=3, max_length=160)
     top_k: int = Field(default=5, ge=1, le=10)
-    experiment_modes: list[Literal["baseline", "dense", "hybrid", "rerank"]] = Field(
+    experiment_modes: list[Literal["baseline", "dense", "hybrid", "rerank", "upstash"]] = Field(
         default_factory=lambda: ["baseline", "dense", "hybrid", "rerank"]
     )

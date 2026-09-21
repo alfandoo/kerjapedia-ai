@@ -14,6 +14,10 @@ from app.services.ingestion.uploads import load_uploads_manifest, merge_document
 def project_root() -> Path:
     if settings.project_root:
         return settings.project_root
+    here = Path(__file__).resolve()
+    for parent in [here.parent, *here.parents]:
+        if (parent / "apps" / "api" / "app" / "main.py").exists():
+            return parent
     return Path(__file__).resolve().parents[2]
 
 
