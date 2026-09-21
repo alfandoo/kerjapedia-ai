@@ -325,6 +325,29 @@ class UpstashVectorStore:
     # ------------------------------------------------------------------
     # Full retrieval pipeline (shared rerank/postprocess, unchanged)
     # ------------------------------------------------------------------
+    def search_candidates(
+        self,
+        query: str,
+        *,
+        retrieval_query: str | None = None,
+        context_topics: tuple[str, ...] = (),
+        context_document_ids: tuple[str, ...] = (),
+        context_articles: tuple[str, ...] = (),
+        rerank_weights: RerankWeights | None = None,
+    ) -> RetrievalResponse:
+        """Return scored candidates before MMR and context expansion."""
+        return self.search(
+            query,
+            top_k=self.semantic_limit,
+            min_final_score=0.0,
+            retrieval_query=retrieval_query,
+            context_topics=context_topics,
+            context_document_ids=context_document_ids,
+            context_articles=context_articles,
+            rerank_weights=rerank_weights,
+            _return_candidate_pool=True,
+        )
+
     def search(
         self,
         query: str,
@@ -336,6 +359,7 @@ class UpstashVectorStore:
         context_document_ids: tuple[str, ...] = (),
         context_articles: tuple[str, ...] = (),
         rerank_weights: RerankWeights | None = None,
+        _return_candidate_pool: bool = False,
     ) -> RetrievalResponse:
         understanding = understand_query(
             query,
@@ -444,18 +468,23 @@ class UpstashVectorStore:
             understanding.normalized_retrieval_query,
         )
         ranked = drop_heading_only_chunks(ranked)
-        ranked = mmr_select(
-            ranked,
-            lambda_param=self.diversity_lambda,
-            max_per_document=self.mmr_max_per_document,
-            max_per_article=self.mmr_max_per_article,
-        )
-        selected = expand_context(
-            ranked[:top_k],
-            candidates,
-            max_expansions=self.expansion_max,
-            score_decay=self.expansion_score_decay,
-        )[:top_k]
+        if _return_candidate_pool:
+            selected = ranked
+            expansions_added = 0
+        else:
+            ranked = mmr_select(
+                ranked,
+                lambda_param=self.diversity_lambda,
+                max_per_document=self.mmr_max_per_document,
+                max_per_article=self.mmr_max_per_article,
+            )
+            selected = expand_context(
+                ranked[:top_k],
+                candidates,
+                max_expansions=self.expansion_max,
+                score_decay=self.expansion_score_decay,
+            )[:top_k]
+            expansions_added = len(selected) - len(ranked[:top_k])
         timing["postprocessing"] = round((time.perf_counter() - t_post) * 1000, 1)
         timing["total_retrieval"] = round((time.perf_counter() - t_start) * 1000, 1)
         warnings = build_warnings(selected, self.relationship_index)
@@ -464,7 +493,7 @@ class UpstashVectorStore:
             "candidates_count": len(candidates),
             "ranked_count": len(ranked),
             "selected_count": len(selected),
-            "expansions_added": len(selected) - len(ranked[:top_k]),
+            "expansions_added": expansions_added,
         }
         return RetrievalResponse(
             query=understanding,

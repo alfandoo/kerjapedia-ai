@@ -11,13 +11,11 @@ import logging
 from datetime import timedelta
 
 from app.api.state import now_utc
-from app.api.utils import storage_root
 from app.db.session import create_session
 from app.models.business import EvaluationDataset, EvaluationRun
 from app.services.evaluation.policy import RELEASE_QUALITY_GATES
 from app.services.evaluation.runner import run_experiments
 from app.services.evaluation.schemas import EvaluationQuestion
-from app.services.retrieval.store import load_artifact_documents
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +24,14 @@ STUCK_RUN_MAX_AGE = timedelta(hours=3)
 
 
 def evaluate_quality_gates(experiments: list, metrics: dict) -> tuple[dict, bool]:
-    primary_mode = experiments[0]["mode"] if experiments else "rerank"
+    experiment_modes = [experiment["mode"] for experiment in experiments]
+    primary_mode = (
+        "rerank"
+        if "rerank" in experiment_modes
+        else experiment_modes[0]
+        if experiment_modes
+        else "rerank"
+    )
     primary_metrics = metrics.get(primary_mode, {})
     results = {}
     for gate_name, threshold in RELEASE_QUALITY_GATES.items():
@@ -52,9 +57,9 @@ def execute_evaluation_run(run_id: str, modes: list[str], top_k: int) -> None:
         if release_id:
             raise RuntimeError(
                 "Release-bound evaluation runs were retired with the Pinecone "
-                "pipeline. Re-run without a release_id (artifact modes)."
+                "pipeline. Re-run without a release_id (Upstash live only)."
             )
-        report = _run_artifact(run_id, dataset_id, modes, top_k)
+        report = _run_upstash(run_id, dataset_id, modes, top_k)
     except Exception as exc:
         logger.exception("evaluation run failed run_id=%s", run_id)
         with create_session() as session:
@@ -100,14 +105,13 @@ def _progress_reporter(run_id: str):
     return report
 
 
-def _run_artifact(run_id: str, dataset_id: str, modes: list[str], top_k: int) -> dict:
+def _run_upstash(run_id: str, dataset_id: str, modes: list[str], top_k: int) -> dict:
     with create_session() as session:
         dataset = session.get(EvaluationDataset, dataset_id)
         if dataset is None:
             raise RuntimeError("Evaluation dataset was not found.")
         questions = [EvaluationQuestion.from_dict(item) for item in dataset.questions]
-    documents = load_artifact_documents(storage_root())
-    return run_experiments(questions, documents, modes, top_k, _progress_reporter(run_id))
+    return run_experiments(questions, [], modes, top_k, _progress_reporter(run_id))
 
 
 def fail_stuck_runs() -> int:

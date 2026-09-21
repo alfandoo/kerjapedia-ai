@@ -5,6 +5,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from app.models.business import EvaluationDataset
+from app.services.evaluation.policy import RELEASE_QUALITY_GATES
 from app.services.evaluation.tasks import evaluate_quality_gates, execute_evaluation_run
 
 
@@ -117,6 +118,19 @@ def test_quality_gates_missing_metric_fails():
     assert not all_passed
     assert set(gates) != set()
     assert all(result["passed"] is False for result in gates.values())
+
+
+def test_quality_gates_use_reranker_as_live_upstash_final_output():
+    passing = {name: threshold for name, threshold in RELEASE_QUALITY_GATES.items()}
+    failing = {name: 0.0 for name in RELEASE_QUALITY_GATES}
+
+    gates, all_passed = evaluate_quality_gates(
+        [{"mode": "baseline"}, {"mode": "rerank"}],
+        {"baseline": failing, "rerank": passing},
+    )
+
+    assert all_passed
+    assert all(result["passed"] is True for result in gates.values())
 
 
 @pytest.mark.parametrize("status", ["pending", "running"])

@@ -26,6 +26,12 @@ from app.services.retrieval.reranker import DEFAULT_RERANK_WEIGHTS, RerankWeight
 from app.services.retrieval.schemas import RankedChunk, RetrievalDocument, RetrievalResponse
 
 EXPERIMENT_MODES: tuple[ExperimentMode, ...] = ("baseline", "dense", "hybrid", "rerank", "upstash")
+UPSTASH_RANKING_MODES: tuple[ExperimentMode, ...] = (
+    "baseline",
+    "dense",
+    "hybrid",
+    "rerank",
+)
 _MODE_SCORE = {
     "baseline": "lexical_score",
     "dense": "semantic_score",
@@ -60,6 +66,17 @@ def _upstash_search(query: str, top_k: int) -> RetrievalResponse:
     return store.search(query, top_k=max(top_k, 10), min_final_score=0.0)
 
 
+def _upstash_candidate_search(query: str) -> RetrievalResponse:
+    """Return the scored live candidate pool before MMR/final selection."""
+    from app.core.config import settings
+    from app.services.providers import upstash_vector_store_from_settings
+
+    if not settings.upstash_vector_url or not settings.upstash_vector_token:
+        raise RuntimeError("Upstash evaluation needs UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN.")
+    store = upstash_vector_store_from_settings(settings)
+    return store.search_candidates(query)
+
+
 ProgressCallback = Callable[[int, int], None]
 """Called as ``callback(completed, total)`` after each evaluated question."""
 
@@ -67,10 +84,31 @@ ProgressCallback = Callable[[int, int], None]
 def run_experiments(
     questions: list[EvaluationQuestion],
     documents: list[RetrievalDocument],
-    modes: list[ExperimentMode] | tuple[ExperimentMode, ...] = EXPERIMENT_MODES,
+    modes: list[ExperimentMode] | tuple[ExperimentMode, ...] = UPSTASH_RANKING_MODES,
     top_k: int = 5,
     on_progress: ProgressCallback | None = None,
 ) -> dict:
+    selected_modes = tuple(modes)
+    if "upstash" in selected_modes:
+        if selected_modes != ("upstash",):
+            raise ValueError("Upstash live evaluation cannot be mixed with artifact modes.")
+        searches = [_upstash_candidate_search(question.question) for question in questions]
+        total = len(questions) * len(UPSTASH_RANKING_MODES)
+        reports = []
+        for mode_index, mode in enumerate(UPSTASH_RANKING_MODES):
+            base = mode_index * len(questions)
+
+            def report_mode(completed: int, _total: int, _base: int = base) -> None:
+                if on_progress is not None:
+                    on_progress(_base + completed, total)
+
+            reports.append(_evaluate_searches(questions, searches, mode, top_k, report_mode))
+        return {
+            "question_count": len(questions),
+            "top_k": top_k,
+            "experiments": [asdict(report) for report in reports],
+        }
+
     total = len(questions) * len(modes)
     reports = []
     for mode_index, mode in enumerate(modes):
@@ -97,15 +135,28 @@ def run_experiment(
 ) -> ExperimentReport:
     if mode not in EXPERIMENT_MODES:
         raise ValueError(f"Unsupported experiment mode: {mode}")
-    engine = RetrievalEngine(documents=documents, top_k=max(top_k, len(documents)))
+    if mode == "upstash":
+        searches = [_upstash_search(question.question, top_k) for question in questions]
+    else:
+        engine = RetrievalEngine(documents=documents, top_k=max(top_k, len(documents)))
+        searches = [
+            engine.search(question.question, top_k=max(top_k, len(documents)))
+            for question in questions
+        ]
+    return _evaluate_searches(questions, searches, mode, top_k, on_progress)
+
+
+def _evaluate_searches(
+    questions: list[EvaluationQuestion],
+    searches: list[RetrievalResponse],
+    mode: ExperimentMode,
+    top_k: int,
+    on_progress: ProgressCallback | None = None,
+) -> ExperimentReport:
     generator = AnswerGenerator()
     results: list[QuestionEvaluation] = []
 
-    for index, question in enumerate(questions):
-        if mode == "upstash":
-            retrieval = _upstash_search(question.question, top_k)
-        else:
-            retrieval = engine.search(question.question, top_k=max(top_k, len(documents)))
+    for index, (question, retrieval) in enumerate(zip(questions, searches, strict=True)):
         ranked = _rank(retrieval.results, mode)
         selected = ranked[: max(top_k, 10)]
         score_name = _MODE_SCORE[mode]

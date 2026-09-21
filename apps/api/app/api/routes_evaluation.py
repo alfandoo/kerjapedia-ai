@@ -15,6 +15,7 @@ from app.api.state import now_utc
 from app.api.utils import project_root
 from app.models.business import EvaluationDataset, EvaluationQuestionReview, EvaluationRun
 from app.services.evaluation.dataset import load_evaluation_dataset
+from app.services.evaluation.runner import UPSTASH_RANKING_MODES
 from app.services.evaluation.schemas import EvaluationQuestion
 from app.services.evaluation.tasks import execute_evaluation_run
 
@@ -150,16 +151,10 @@ def create_evaluation_run(
             status_code=status.HTTP_410_GONE,
             detail=(
                 "Release-bound evaluation runs were retired with the Pinecone "
-                "pipeline. Re-run without a release_id (artifact modes)."
+                "pipeline. Re-run without a release_id (Upstash live only)."
             ),
         )
-    development_count = sum(1 for question in questions if question.split == "development")
-    held_out_count = sum(1 for question in questions if question.split == "test")
-    progress_total = (
-        (development_count + held_out_count)
-        if payload.release_id
-        else len(questions) * len(payload.experiment_modes)
-    )
+    progress_total = len(questions) * len(UPSTASH_RANKING_MODES)
     run_id = f"evalrun_{uuid4().hex}"
     run = EvaluationRun(
         run_id=run_id,

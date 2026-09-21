@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, FlaskConical, Gauge, Play, RefreshCw } from "lucide-react";
+import { ChevronDown, FlaskConical, Gauge, Play, RefreshCw } from "lucide-react";
 import { Toaster, toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,6 @@ import type {
 import {
   RunDetailDialog,
   modeLabel,
-  modeOrder,
   ModeMetricsCard,
   formatDateTime,
   pct,
@@ -75,7 +74,6 @@ export function AdminEvaluation() {
 
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [runDatasetId, setRunDatasetId] = useState("");
-  const [runModes, setRunModes] = useState<string[]>(["upstash"]);
   const [runTopK, setRunTopK] = useState("5");
   const [submitting, setSubmitting] = useState(false);
   const [runError, setRunError] = useState("");
@@ -142,19 +140,8 @@ export function AdminEvaluation() {
     }
   }
 
-  function toggleMode(mode: string) {
-    setRunModes((current) =>
-      current.includes(mode) ? current.filter((item) => item !== mode) : [...current, mode]
-    );
-  }
-
   async function startRun() {
-    if (
-      runBusy.current ||
-      submitting ||
-      !runModes.length ||
-      !datasets.some((item) => item.dataset_id === runDatasetId)
-    )
+    if (runBusy.current || submitting || !datasets.some((item) => item.dataset_id === runDatasetId))
       return;
     runBusy.current = true;
     setRunError("");
@@ -162,7 +149,7 @@ export function AdminEvaluation() {
     try {
       const next = await createEvaluationRun({
         dataset_id: runDatasetId,
-        experiment_modes: runModes,
+        experiment_modes: ["upstash"],
         top_k: Number(runTopK),
       });
       lastStatuses.current[next.run_id] = next.status;
@@ -533,23 +520,16 @@ export function AdminEvaluation() {
                 {[
                   [
                     "Baseline",
-                    "Mengurutkan hasil berdasarkan kecocokan kata atau istilah (lexical score), sebagai pembanding awal.",
+                    "Mengurutkan kandidat Upstash berdasarkan kecocokan kata atau istilah (lexical score).",
                   ],
                   [
                     "Dense",
-                    "Mengurutkan hasil berdasarkan kemiripan makna (semantic score), sehingga tidak harus memakai kata yang sama.",
+                    "Mengurutkan kandidat Upstash berdasarkan kemiripan makna (semantic score).",
                   ],
+                  ["Hybrid", "Menggabungkan peringkat lexical dan semantic melalui fusion score."],
                   [
-                    "Hybrid",
-                    "Menggabungkan peringkat lexical dan semantic melalui fusion score untuk memanfaatkan keduanya.",
-                  ],
-                  [
-                    "Re-rank",
-                    "Mengurutkan ulang kandidat menggunakan final score setelah penilaian relevansi lanjutan.",
-                  ],
-                  [
-                    "Upstash Hybrid",
-                    "Mengukur index produksi live (Upstash hosted dense + BM25). Butuh kredensial Upstash di backend; tidak memakai dokumen artifact lokal.",
+                    "Re-ranker",
+                    "Mengurutkan ulang kandidat menggunakan final score setelah penilaian relevansi.",
                   ],
                 ].map(([label, description]) => (
                   <div key={label} className="min-w-0 border-l-2 border-line pl-4">
@@ -614,8 +594,8 @@ export function AdminEvaluation() {
           <DialogHeader>
             <DialogTitle>Jalankan evaluasi</DialogTitle>
             <DialogDescription>
-              Pilih dataset dan mode pencarian yang ingin dibandingkan. Hasil menyusul: halaman
-              boleh ditinggal, progres dipantau dari riwayat.
+              Pilih dataset dan jumlah hasil. Empat strategi ranking dibandingkan dari candidate
+              pool Upstash yang sama.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -643,38 +623,25 @@ export function AdminEvaluation() {
               </Select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Mode eksperimen</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {modeOrder.map((mode) => {
-                  const selected = runModes.includes(mode);
-                  return (
-                    <button
-                      type="button"
-                      key={mode}
-                      aria-pressed={selected}
-                      disabled={submitting}
-                      onClick={() => toggleMode(mode)}
-                      className={cn(
-                        "flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors",
-                        selected
-                          ? "border-forest bg-teal-soft text-forest"
-                          : "border-line text-muted-text hover:bg-surface-soft"
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
-                          selected ? "border-forest bg-forest text-white" : "border-muted-text/30"
-                        )}
-                      >
-                        {selected ? <Check className="size-3" /> : null}
-                      </span>
-                      {modeLabel[mode] ?? mode}
-                    </button>
-                  );
-                })}
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-tinta">Sumber retrieval</p>
+              <div className="rounded-lg border border-line bg-surface-soft px-4 py-3">
+                <p className="text-sm font-semibold text-forest">Upstash live</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-text">
+                  Hosted dense embedding dan BM25 dari index produksi aktif.
+                </p>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-tinta">Strategi yang dibandingkan</p>
+              <ul className="divide-y divide-line rounded-lg border border-line bg-white px-4">
+                {["Baseline", "Dense", "Hybrid", "Re-ranker"].map((mode) => (
+                  <li key={mode} className="py-2.5 text-sm text-tinta">
+                    {mode}
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className="space-y-1.5">
@@ -696,11 +663,6 @@ export function AdminEvaluation() {
                 Belum ada dataset. Muat golden questions terlebih dahulu.
               </div>
             )}
-            {!runModes.length && (
-              <p role="status" className="text-xs text-amber">
-                Pilih minimal satu mode untuk menjalankan evaluasi.
-              </p>
-            )}
           </div>
           <DialogFooter className="mx-0 mb-0 mt-2 rounded-none border-line bg-transparent px-0 pb-0 pt-4">
             <Button variant="outline" className="min-h-11" onClick={() => setRunDialogOpen(false)}>
@@ -708,7 +670,7 @@ export function AdminEvaluation() {
             </Button>
             <Button
               className="min-h-11 bg-javanese text-white hover:bg-forest"
-              disabled={runModes.length === 0 || !runDatasetId || submitting}
+              disabled={!runDatasetId || submitting}
               onClick={() => void startRun()}
             >
               <FlaskConical />

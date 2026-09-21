@@ -277,6 +277,40 @@ def test_search_normalizes_results_and_preserves_metadata() -> None:
     assert all(call.get("vector") is None for call in fake.query_calls)
 
 
+def test_search_candidates_preserves_pool_before_mmr_caps() -> None:
+    store = make_store()
+    fake = FakeIndex()
+    record = transform_chunk(sample_record())
+
+    def fake_query(**kwargs):
+        fake.query_calls.append(kwargs)
+        return [
+            {
+                "id": f"{record['chunk_id']}-{index}",
+                "score": 0.95 - index * 0.05,
+                "metadata": {
+                    **record["metadata"],
+                    "chunk_id": f"{record['chunk_id']}-{index}",
+                },
+                "data": f"{record['text']} Bagian {index}.",
+            }
+            for index in range(4)
+        ]
+
+    fake.query = fake_query  # type: ignore[method-assign]
+    store._index = fake  # type: ignore[attr-defined]
+    search_candidates = getattr(store, "search_candidates", None)
+
+    assert callable(search_candidates)
+    candidates = search_candidates("Apakah pekerja PKWT memperoleh kompensasi?")
+    selected = store.search("Apakah pekerja PKWT memperoleh kompensasi?", top_k=4)
+
+    assert len(candidates.results) == 4
+    assert candidates.context_metrics["ranked_count"] == 4
+    assert selected.context_metrics["ranked_count"] == 2
+    assert len(selected.results) < len(candidates.results)
+
+
 def test_search_governance_drops_unpublished_when_disallowed() -> None:
     store = make_store(allow_unpublished=False)
     fake = FakeIndex()

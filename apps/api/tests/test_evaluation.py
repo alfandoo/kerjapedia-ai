@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from app.api.schemas import EvaluationDatasetRequest
+from app.api.schemas import EvaluationDatasetRequest, EvaluationRunRequest
 from app.services.answering.schemas import AnswerResponse, Citation
 from app.services.evaluation.dataset import load_evaluation_dataset
 from app.services.evaluation.metrics import (
@@ -15,7 +15,7 @@ from app.services.evaluation.metrics import (
 )
 from app.services.evaluation.runner import (
     DEFAULT_WEIGHT_SWEEP,
-    EXPERIMENT_MODES,
+    UPSTASH_RANKING_MODES,
     _calibrate_threshold_from_scores,
     run_experiment,
     run_experiments,
@@ -43,6 +43,21 @@ def test_evaluation_dataset_rejects_duplicate_questions() -> None:
 
     with pytest.raises(ValidationError, match="question_id values must be unique"):
         EvaluationDatasetRequest(name="Duplicate dataset", questions=[question, question])
+
+
+def test_evaluation_run_defaults_to_upstash_live_suite() -> None:
+    request = EvaluationRunRequest(dataset_id="evalset_live", top_k=5)
+
+    assert request.experiment_modes == ["upstash"]
+
+
+def test_evaluation_run_rejects_artifact_modes() -> None:
+    with pytest.raises(ValidationError):
+        EvaluationRunRequest(
+            dataset_id="evalset_live",
+            top_k=5,
+            experiment_modes=["baseline"],
+        )
 
 
 def golden_dataset_path() -> Path:
@@ -279,7 +294,7 @@ def test_experiment_comparison_contains_all_modes() -> None:
 
     report = run_experiments(questions, documents)
 
-    assert [item["mode"] for item in report["experiments"]] == list(EXPERIMENT_MODES)
+    assert [item["mode"] for item in report["experiments"]] == list(UPSTASH_RANKING_MODES)
     assert all("citation_correctness" in item["metrics"] for item in report["experiments"])
 
 
@@ -450,31 +465,59 @@ def test_calibrate_threshold_prefers_higher_on_ties() -> None:
 
 
 class _FakeUpstashStore:
-    def __init__(self, document: RetrievalDocument) -> None:
+    def __init__(
+        self,
+        document: RetrievalDocument,
+        candidates: list[tuple[RetrievalDocument, tuple[float, float, float, float]]] | None = None,
+    ) -> None:
         self.document = document
+        self.candidates = candidates
         self.calls: list[dict] = []
+        self.candidate_calls: list[str] = []
 
     def search(self, query: str, top_k: int = 5, min_final_score: float = 0.0):
         from app.services.retrieval.query import understand_query
-        from app.services.retrieval.schemas import RankedChunk, RetrievalResponse
+        from app.services.retrieval.schemas import RetrievalResponse
 
         self.calls.append({"query": query, "top_k": top_k})
-        ranked = RankedChunk(
-            document=self.document,
-            lexical_score=0.5,
-            semantic_score=0.9,
-            fusion_score=0.8,
-            rerank_score=0.85,
-            final_score=0.85,
-            match_reasons=["test"],
-        )
+        ranked = self._ranked_candidates()
         return RetrievalResponse(
             query=understand_query(query),
-            results=[ranked],
+            results=ranked,
             warnings=[],
             should_refuse=False,
             refusal_reason=None,
         )
+
+    def search_candidates(self, query: str):
+        from app.services.retrieval.query import understand_query
+        from app.services.retrieval.schemas import RetrievalResponse
+
+        self.candidate_calls.append(query)
+        return RetrievalResponse(
+            query=understand_query(query),
+            results=self._ranked_candidates(),
+            warnings=[],
+            should_refuse=False,
+            refusal_reason=None,
+        )
+
+    def _ranked_candidates(self):
+        from app.services.retrieval.schemas import RankedChunk
+
+        candidates = self.candidates or [(self.document, (0.5, 0.9, 0.8, 0.85))]
+        return [
+            RankedChunk(
+                document=document,
+                lexical_score=lexical,
+                semantic_score=semantic,
+                fusion_score=fusion,
+                rerank_score=final,
+                final_score=final,
+                match_reasons=["test"],
+            )
+            for document, (lexical, semantic, fusion, final) in candidates
+        ]
 
 
 def _upstash_question() -> EvaluationQuestion:
@@ -518,6 +561,56 @@ def test_run_experiment_upstash_mode_uses_live_index(
     (result,) = report.results
     assert result.recall_at_5 == 1.0
     assert result.reciprocal_rank == 1.0
+
+
+def test_run_experiments_upstash_compares_all_rankers_with_one_live_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.config import settings as app_settings
+
+    score_rows = [
+        ("baseline", (0.95, 0.10, 0.10, 0.10)),
+        ("dense", (0.10, 0.95, 0.20, 0.20)),
+        ("hybrid", (0.20, 0.20, 0.95, 0.30)),
+        ("rerank", (0.30, 0.30, 0.30, 0.95)),
+    ]
+    candidates = [
+        (
+            make_document(
+                f"chunk-{name}",
+                f"DOC-{name.upper()}",
+                f"Dokumen kandidat untuk mode {name}.",
+                [name],
+                "Pasal 15",
+            ),
+            scores,
+        )
+        for name, scores in score_rows
+    ]
+    fake = _FakeUpstashStore(candidates[0][0], candidates)
+    monkeypatch.setattr(
+        "app.services.providers.upstash_vector_store_from_settings",
+        lambda settings: fake,
+    )
+    monkeypatch.setattr(app_settings, "upstash_vector_url", "https://x")
+    monkeypatch.setattr(app_settings, "upstash_vector_token", "t")
+
+    report = run_experiments([_upstash_question()], [], ["upstash"], top_k=1)
+
+    assert [item["mode"] for item in report["experiments"]] == [
+        "baseline",
+        "dense",
+        "hybrid",
+        "rerank",
+    ]
+    assert [item["results"][0]["retrieved_chunk_ids"][0] for item in report["experiments"]] == [
+        "chunk-baseline",
+        "chunk-dense",
+        "chunk-hybrid",
+        "chunk-rerank",
+    ]
+    assert fake.candidate_calls == ["Apakah pekerja PKWT memperoleh kompensasi?"]
+    assert fake.calls == []
 
 
 def test_run_experiment_upstash_mode_requires_credentials(

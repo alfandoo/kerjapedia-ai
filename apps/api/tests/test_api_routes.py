@@ -139,9 +139,7 @@ def _mock_supabase_auth(
     monkeypatch.setattr("app.services.supabase.get_supabase_anon", lambda: mock_client)
     monkeypatch.setattr("app.services.supabase.get_supabase", lambda: mock_client)
     if suppress_mail:
-        monkeypatch.setattr(
-            "app.services.mailer.send_verification_email", lambda to, code: None
-        )
+        monkeypatch.setattr("app.services.mailer.send_verification_email", lambda to, code: None)
 
     if insert_profile:
         with create_session() as session:
@@ -1118,9 +1116,38 @@ def test_evaluation_dataset_and_experiment_run(
     )
     assert reviewed.status_code == 200
     assert reviewed.json()["verified_by"] != "unknown"
+    execution: dict = {}
+
+    def fake_run_experiments(questions, documents, modes, top_k, on_progress):
+        execution.update(
+            {
+                "question_count": len(questions),
+                "documents": documents,
+                "modes": modes,
+                "top_k": top_k,
+            }
+        )
+        on_progress(4, 4)
+        metrics = {
+            "recall_at_5": 1.0,
+            "recall_at_10": 1.0,
+            "citation_precision": 1.0,
+            "refusal_recall": 1.0,
+            "refusal_precision": 1.0,
+            "language_accuracy": 1.0,
+        }
+        return {
+            "question_count": len(questions),
+            "top_k": top_k,
+            "experiments": [
+                {"mode": mode, "metrics": metrics, "per_topic": {}, "results": []}
+                for mode in ("baseline", "dense", "hybrid", "rerank")
+            ],
+        }
+
     monkeypatch.setattr(
-        "app.services.evaluation.tasks.load_artifact_documents",
-        lambda _: [make_document()],
+        "app.services.evaluation.tasks.run_experiments",
+        fake_run_experiments,
     )
     run = client.post(
         "/evaluation/runs",
@@ -1128,7 +1155,6 @@ def test_evaluation_dataset_and_experiment_run(
         json={
             "dataset_id": dataset.json()["dataset_id"],
             "top_k": 5,
-            "experiment_modes": ["baseline", "dense", "hybrid", "rerank"],
         },
     )
 
@@ -1144,6 +1170,12 @@ def test_evaluation_dataset_and_experiment_run(
     assert finished["status"] == "completed"
     assert set(finished["metrics"]) == {"baseline", "dense", "hybrid", "rerank"}
     assert finished["metrics"]["rerank"]["recall_at_5"] == 1.0
+    assert execution == {
+        "question_count": 1,
+        "documents": [],
+        "modes": ["upstash"],
+        "top_k": 5,
+    }
     detail = client.get(f"/evaluation/runs/{created['run_id']}", headers=headers)
     assert detail.json()["status"] == "completed"
     assert detail.json()["report"]["question_count"] == 1
