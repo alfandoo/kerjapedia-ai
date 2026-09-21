@@ -1,6 +1,6 @@
 # KerjaPedia AI
 
-Asisten regulasi ketenagakerjaan Indonesia berbasis Retrieval-Augmented Generation (RAG). Membantu pengguna mencari, memahami, dan memverifikasi jawaban berdasarkan dokumen resmi dari Database Peraturan BPK.
+An AI-powered assistant for Indonesian employment regulations, built with Retrieval-Augmented Generation (RAG). Helps users search, understand, and verify answers from official regulation documents sourced from the Indonesian Audit Board (BPK) database.
 
 **Live:** [kerjapedia-web.vercel.app](https://kerjapedia-web.vercel.app)
 
@@ -18,22 +18,22 @@ Asisten regulasi ketenagakerjaan Indonesia berbasis Retrieval-Augmented Generati
 
 ## Features
 
-- Chat dengan retrieval regulasi ketenagakerjaan Indonesia
-- Citation tracking (pasal, ayat, halaman, sumber)
+- Chat with regulation retrieval for Indonesian employment law
+- Citation tracking (article, clause, page, source)
 - Admin dashboard (document management, evaluation, feedback)
 - Hybrid search (dense + sparse embedding)
 - Heuristic reranker
 - Claim verification (LLM-backed)
 - Multi-language support (ID/EN)
 
-## Struktur Folder
+## Project Structure
 
 ```
-apps/web/          Frontend Next.js
-apps/api/          Backend FastAPI
-dataset/           Metadata regulasi (PDF di-ignore)
-docs/              Dokumentasi produk & teknis
-evaluation/        Scripts evaluasi RAG
+apps/web/          Next.js frontend
+apps/api/          FastAPI backend
+dataset/           Regulation metadata (PDFs ignored)
+docs/              Product & technical documentation
+evaluation/        RAG evaluation scripts
 scripts/           Utility scripts
 ```
 
@@ -43,7 +43,7 @@ scripts/           Utility scripts
 
 - Node.js 18+
 - Python 3.11+
-- Docker (untuk Redis)
+- Docker (for Redis)
 
 ### Setup
 
@@ -54,7 +54,7 @@ cd kerjapedia-ai
 
 # Copy environment
 cp .env.example .env
-# Isi variabel yang diperlukan (lihat .env.example)
+# Fill in required variables (see .env.example)
 
 # Start Redis
 docker compose up -d
@@ -77,7 +77,7 @@ Backend: `http://127.0.0.1:8000/docs`
 
 ### Environment Variables
 
-Minimal untuk mode industri:
+Minimal for production mode:
 
 ```bash
 VECTOR_STORE=upstash_vector
@@ -87,7 +87,7 @@ LLM_PROVIDER=groq
 GROQ_API_KEY=
 ```
 
-Lihat `.env.example` untuk daftar lengkap.
+See `.env.example` for the full list.
 
 ## Testing
 
@@ -106,7 +106,7 @@ pytest
 
 ## Deployment
 
-Auto-deploy on push to `main`:
+Auto-deploys on push to `main`:
 
 - **Frontend** → Vercel
 - **Backend** → Render
@@ -115,7 +115,7 @@ Auto-deploy on push to `main`:
 git push origin main
 ```
 
-Lihat `docs/DEPLOYMENT.md` untuk panduan lengkap.
+See `docs/DEPLOYMENT.md` for the full guide.
 
 ## Cost
 
@@ -128,7 +128,7 @@ Lihat `docs/DEPLOYMENT.md` untuk panduan lengkap.
 | Groq | Free tier | $0-5/month |
 | **Total** | | **$0-5/month** |
 
-## Dokumentasi
+## Documentation
 
 - [PRD](docs/PRD_KerjaPedia_AI.md) - Product Requirements
 - [Architecture](docs/ARCHITECTURE.md) - System design
@@ -139,6 +139,6 @@ Lihat `docs/DEPLOYMENT.md` untuk panduan lengkap.
 - [Evaluation](docs/EVALUATION.md) - RAG evaluation
 - [Testing](docs/TESTING.md) - Test coverage
 
-## Catatan Hukum
+## Disclaimer
 
-KerjaPedia AI bukan pengganti advokat, konsultan hukum, mediator hubungan industrial, atau instansi pemerintah. Jawaban harus selalu berbasis sumber resmi dan menyertakan citation yang dapat diverifikasi.
+KerjaPedia AI is not a substitute for legal counsel, industrial relations mediators, or government agencies. Answers should always be based on official sources with verifiable citations.
