@@ -154,7 +154,7 @@ export function AdminShell({ children }: AdminShellProps) {
     };
   }, []);
 
-  if (!isClient || !sessionReady || shouldRedirectToLogin) {
+  if (!isClient || !sessionReady || !session || shouldRedirectToLogin) {
     return null;
   }
 
