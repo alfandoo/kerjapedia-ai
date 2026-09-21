@@ -41,3 +41,13 @@ tmp/
 Thumbs.db
 .vscode/
 .idea/
+
+# AI tool configs (personal, not needed in repo)
+.agents/
+.codex/
+
+# Evaluation artifacts (regenerable)
+evaluation/*.json
+
+# Dataset PDFs (use Git LFS or external storage)
+dataset/*.pdf
