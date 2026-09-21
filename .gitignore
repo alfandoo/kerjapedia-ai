@@ -14,6 +14,7 @@ __pycache__/
 # Build outputs
 .next/
 .next-*/
+.worktrees/
 .vercel/
 task8-next-build/
 dist/
