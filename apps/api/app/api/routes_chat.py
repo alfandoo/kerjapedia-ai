@@ -972,10 +972,13 @@ def ask_question_stream(
         )
     conversation = _get_or_create_conversation(payload, active_user, session)
     pending_turn = _begin_turn(conversation, payload, session)
-    reset_stage_accumulator()
     trace_id = f"rag_{uuid4().hex}"
 
     async def event_stream():
+        # Reset here (not in the handler above): the generator below may run
+        # in a different task than the handler, and the stage accumulator is
+        # task-local. Observe/drain calls below must share this task's context.
+        reset_stage_accumulator()
         started_at = time.perf_counter()
         stored = False
         failure_code = "stream_cancelled"

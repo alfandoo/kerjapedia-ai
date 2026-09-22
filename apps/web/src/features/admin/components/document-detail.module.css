@@ -14,10 +14,10 @@
   --muted-foreground: #607267;
   --accent: #e5f1e9;
   --accent-foreground: #183e2c;
-  --border: #d5e5da;
-  --input: #c3d8ca;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
   --ring: #286246;
-  --line: #d5e5da;
+  --line: #e5e5e5;
   --surface-soft: #edf5ef;
   --muted-text: #607267;
   --tinta-pena: #183e2c;
@@ -33,12 +33,12 @@
 .popup.popup {
   background: #ffffff !important;
   color: #183e2c !important;
-  border: 1px solid #d5e5da !important;
+  border: 1px solid #e5e5e5 !important;
 }
 .modal.modal [data-slot="sheet-header"],
 .modal.modal [data-slot="sheet-footer"] {
-  background: #f2f8f4 !important;
-  border-color: #d5e5da !important;
+  background: #ffffff !important;
+  border-color: #e5e5e5 !important;
 }
 .modal.modal [data-slot="sheet-title"] {
   color: #183e2c !important;
@@ -48,7 +48,7 @@
 .modal.modal [data-slot="select-trigger"] {
   background: #ffffff !important;
   color: #183e2c !important;
-  border-color: #c3d8ca !important;
+  border-color: #e5e5e5 !important;
 }
 .modal.modal input::placeholder,
 .modal.modal textarea::placeholder {
@@ -87,6 +87,12 @@
   outline: 2px solid #286246;
   outline-offset: 2px;
 }
+.modal.modal [data-variant="ghost"] {
+  background: transparent !important;
+}
+.modal.modal [data-variant="ghost"]:hover {
+  background: #eef1ee !important;
+}
 .popup.popup [data-highlighted] {
   background: #e5f1e9 !important;
   color: #183e2c !important;
@@ -103,7 +109,7 @@
   height: 44px;
   gap: 4px;
   padding: 4px;
-  border: 1px solid #d5e5da;
+  border: 1px solid #e5e5e5;
   border-radius: 10px;
   box-shadow: none !important;
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, FileText, RefreshCw, Search, Upload, X } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, Clock, FileText, RefreshCw, ScrollText, Search, TriangleAlert, Upload, X } from "lucide-react";
 import { Toaster } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -160,28 +160,28 @@ export function AdminDashboard({ initialQuery = "" }: { initialQuery?: string })
       label: "Dokumen",
       value: summary.documents,
       note: "Total regulasi",
-      dot: "bg-javanese/50",
+      icon: ScrollText,
       tone: "text-tinta",
     },
     {
       label: "Terbit",
       value: summary.published,
       note: "Sudah dipublikasikan",
-      dot: "bg-forest",
+      icon: BadgeCheck,
       tone: "text-tinta",
     },
     {
       label: "Review",
       value: summary.needsReview,
       note: "Perlu ditinjau",
-      dot: "bg-amber",
+      icon: Clock,
       tone: "text-amber",
     },
     {
       label: "Gagal",
       value: summary.failed,
       note: "Pemrosesan gagal",
-      dot: "bg-red",
+      icon: TriangleAlert,
       tone: "text-red",
     },
   ];
@@ -223,81 +223,63 @@ export function AdminDashboard({ initialQuery = "" }: { initialQuery?: string })
             title="Dokumen"
             description="Kelola dokumen regulasi yang menjadi sumber jawaban KerjaPedia AI."
             actions={
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11"
-                  aria-label="Muat ulang daftar dokumen"
-                  onClick={() => {
-                    setIsLoading(true);
-                    setReloadKey((value) => value + 1);
-                  }}
-                >
-                  <RefreshCw /> Muat ulang
-                </Button>
-                <Button
-                  asChild
-                  className="h-11 bg-javanese px-5 text-sm font-bold text-white shadow-[0_2px_12px_rgba(27,67,50,0.22)] hover:bg-javanese-deep"
-                >
-                  <Link href="/admin/upload">
-                    <Upload strokeWidth={2} /> Upload dokumen
-                  </Link>
-                </Button>
-              </div>
+              <Button
+                asChild
+                className="h-11 bg-javanese px-5 text-sm font-bold text-white shadow-[0_2px_12px_rgba(27,67,50,0.22)] hover:bg-javanese-deep"
+              >
+                <Link href="/admin/upload">
+                  <Upload strokeWidth={2} /> Upload dokumen
+                </Link>
+              </Button>
             }
           />
 
-          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {summaryCells.map((cell) => {
-              const active =
-                cell.label === "Dokumen"
-                  ? statusFilter === "all" && publicationFilter === "all"
-                  : cell.label === "Terbit"
-                    ? publicationFilter === "published" && statusFilter === "all"
-                    : statusFilter === (cell.label === "Gagal" ? "failed" : "needs_review") &&
-                      publicationFilter === "all";
+              const CellIcon = cell.icon;
               return (
-                <button
+                <div
                   key={cell.label}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => {
-                    setStatusFilter(
-                      cell.label === "Gagal"
-                        ? "failed"
-                        : cell.label === "Review"
-                          ? "needs_review"
-                          : "all"
-                    );
-                    setPublicationFilter(cell.label === "Terbit" ? "published" : "all");
-                    setSearch("");
-                    setPage(1);
-                  }}
-                  className={cn(
-                    "flex flex-col items-start gap-0.5 bg-white px-5 py-4 text-left",
-                    styles.summary,
-                    active && styles.summaryActive
-                  )}
+                  className="rounded-xl border border-[#e5e5e5] bg-white px-5 py-4 shadow-[0_1px_3px_rgba(27,67,50,0.06)]"
                 >
-                  <p className="flex items-center gap-1.5 font-mono text-xl font-bold text-tinta tabular-nums">
-                    <span aria-hidden="true" className={cn("size-1.5 rounded-full", cell.dot)} />
-                    <span className={cell.tone}>{cell.value}</span>
-                  </p>
-                  <p className="text-sm font-medium">{cell.label}</p>
-                  <p className="text-xs text-muted-text">{cell.note}</p>
-                </button>
+                  <span className="flex items-start gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                      <CellIcon strokeWidth={1.75} className="size-5 text-forest" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-medium text-muted-text">
+                        {cell.label}
+                      </span>
+                      <span
+                        className={cn(
+                          "mt-0.5 block font-mono text-[26px] leading-none font-bold tracking-tight whitespace-nowrap tabular-nums",
+                          cell.tone
+                        )}
+                      >
+                        {new Intl.NumberFormat("id-ID").format(cell.value)}
+                      </span>
+                      <span className="mt-1 block truncate text-[11px] text-muted-text">
+                        {cell.note}
+                      </span>
+                    </span>
+                  </span>
+                </div>
               );
             })}
           </div>
 
-          <Card>
+          <Card className="border-[#e5e5e5] shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
             <CardHeader className="flex flex-wrap items-start justify-between gap-3 space-y-0">
-              <div className="space-y-1.5">
-                <CardTitle>Daftar dokumen</CardTitle>
-                <CardDescription>
-                  Menampilkan {filteredDocuments.length} dari {documents.length} dokumen
-                </CardDescription>
+              <div className="flex items-center gap-3">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                  <ScrollText aria-hidden="true" className="size-4 text-forest" />
+                </span>
+                <div className="space-y-1.5">
+                  <CardTitle>Daftar dokumen</CardTitle>
+                  <CardDescription>
+                    Menampilkan {filteredDocuments.length} dari {documents.length} dokumen
+                  </CardDescription>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -510,7 +492,7 @@ export function AdminDashboard({ initialQuery = "" }: { initialQuery?: string })
               </Table>
 
               {filteredDocuments.length > 0 ? (
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e5e5e5] pt-4">
                   <p className="text-xs text-muted-text tabular-nums">
                     Menampilkan {rangeStart} sampai {rangeEnd} dari {filteredDocuments.length}{" "}
                     dokumen

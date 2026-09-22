@@ -1,6 +1,6 @@
 /* Fixed admin palette for processing status and controls. */
 .ingestion.ingestion {
-  --line: #d7e5dc;
+  --line: #e5e5e5;
   --muted-text: #607267;
   --surface-soft: #f2f7f3;
   --teal-soft: #e5f1e9;
@@ -40,7 +40,7 @@
 .detailModal.detailModal[role="dialog"] {
   background: #fff !important;
   color: #183e2c !important;
-  border: 1px solid #d7e5dc;
+  border: 1px solid #e5e5e5;
   --tinta: #183e2c;
   --forest: #286246;
   --javanese: #286246;

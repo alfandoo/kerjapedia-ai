@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, FlaskConical, Gauge, Play, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, FlaskConical, Gauge, History, Play, RefreshCw } from "lucide-react";
 import { Toaster, toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -32,14 +32,6 @@ import {
   seedEvaluationDataset,
 } from "@/features/admin/api";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
 import styles from "./admin-ingestion.module.css";
 import type {
   EvaluationDataset,
@@ -291,7 +283,10 @@ export function AdminEvaluation() {
           <Skeleton className="h-64 w-full" />
         </div>
       ) : loadError ? (
-        <div role="alert" className="rounded-xl border border-line bg-white p-6">
+        <div
+          role="alert"
+          className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-[0_1px_3px_rgba(27,67,50,0.06)]"
+        >
           <p className="text-sm text-red">Data evaluasi belum dapat dimuat.</p>
           <Button
             variant="outline"
@@ -315,12 +310,19 @@ export function AdminEvaluation() {
 
           {/* Latest run comparison */}
           {latestRun ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-3">
-                  Perbandingan mode terakhir
-                  <StatusBadge tone="info">{formatDateTime(latestRun.created_at)}</StatusBadge>
-                </CardTitle>
+            <Card className="border-[#e5e5e5] shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
+              <CardHeader className="border-b border-[#e5e5e5]">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                    <Gauge aria-hidden="true" className="size-4 text-forest" />
+                  </span>
+                  <div className="min-w-0">
+                    <CardTitle className="flex flex-wrap items-center gap-3">
+                      Perbandingan mode terakhir
+                      <StatusBadge tone="info">{formatDateTime(latestRun.created_at)}</StatusBadge>
+                    </CardTitle>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -333,12 +335,19 @@ export function AdminEvaluation() {
           ) : null}
 
           {/* History */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3">
-                Riwayat evaluasi
-                <StatusBadge tone="neutral">{runs.length} evaluasi</StatusBadge>
-              </CardTitle>
+          <Card className="overflow-hidden border-[#e5e5e5] shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
+            <CardHeader className="border-b border-[#e5e5e5]">
+              <div className="flex items-center gap-3">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                  <History aria-hidden="true" className="size-4 text-forest" />
+                </span>
+                <div className="min-w-0">
+                  <CardTitle className="flex flex-wrap items-center gap-3">
+                    Riwayat evaluasi
+                    <StatusBadge tone="neutral">{runs.length} evaluasi</StatusBadge>
+                  </CardTitle>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {runs.length === 0 ? (
@@ -353,91 +362,80 @@ export function AdminEvaluation() {
                 </div>
               ) : (
                 <div>
-                  <Table aria-label="Riwayat evaluasi" className="min-w-[650px]">
-                    <TableHeader className="bg-surface-soft">
-                      <TableRow>
-                        {["Dataset", "Mode", "Recall@5 terbaik", "Waktu", "Tindakan"].map(
-                          (label) => (
-                            <TableHead key={label} scope="col" className="px-4 text-muted-text">
-                              {label}
-                            </TableHead>
-                          )
-                        )}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {runs.slice(start, start + pageSize).map((run) => {
-                        const values = Object.values(run.metrics)
-                          .map((metric) => metric.recall_at_5)
-                          .filter(Number.isFinite);
-                        const bestRecall = values.length ? Math.max(...values) : null;
-                        return (
-                          <TableRow key={run.run_id} className="border-line">
-                            <TableCell className="max-w-64 whitespace-normal px-4 py-4">
-                              <p className="font-medium text-tinta">
+                  <ul
+                    aria-label="Riwayat evaluasi"
+                    className="divide-y divide-dashed divide-[#e5e5e5]"
+                  >
+                    {runs.slice(start, start + pageSize).map((run) => {
+                      const values = Object.values(run.metrics)
+                        .map((metric) => metric.recall_at_5)
+                        .filter(Number.isFinite);
+                      const bestRecall = values.length ? Math.max(...values) : null;
+                      return (
+                        <li key={run.run_id}>
+                          <button
+                            type="button"
+                            onClick={() => void openDetail(run)}
+                            aria-label={`Detail evaluasi ${run.run_id}`}
+                            className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-soft sm:px-5"
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold text-tinta">
                                 {datasetName(run.dataset_id)}
-                              </p>
-                              <p
+                              </span>
+                              <span
                                 title={run.run_id}
-                                className="mt-1 truncate font-mono text-xs text-muted-text"
+                                className="mt-0.5 block truncate font-mono text-xs text-muted-text"
                               >
                                 {run.run_id}
-                              </p>
+                              </span>
                               {isActiveRun(run.status) ? (
-                                <p className="mt-1 text-xs text-muted-text tabular-nums">
+                                <span className="mt-0.5 block text-xs text-muted-text tabular-nums">
                                   {run.status === "pending" ? "Antre" : "Berjalan"} ·{" "}
                                   {run.progress_completed} dari {run.progress_total} pertanyaan
-                                </p>
+                                </span>
                               ) : run.status === "failed" ? (
-                                <p
+                                <span
                                   title={run.error ?? undefined}
-                                  className="mt-1 line-clamp-2 text-xs text-red"
+                                  className="mt-0.5 line-clamp-2 block text-xs text-red"
                                 >
                                   Gagal{run.error ? `: ${run.error}` : ""}
-                                </p>
-                              ) : null}
-                            </TableCell>
-                            <TableCell className="px-4">
-                              <div className="flex flex-wrap gap-1">
-                                {sortModes(run.metrics).map((mode) => (
-                                  <StatusBadge key={mode} tone="neutral">
-                                    {modeLabel[mode] ?? mode}
-                                  </StatusBadge>
-                                ))}
-                              </div>
-                            </TableCell>
-                            <TableCell
+                                </span>
+                              ) : (
+                                <span className="mt-0.5 flex flex-wrap gap-1">
+                                  {sortModes(run.metrics).map((mode) => (
+                                    <StatusBadge key={mode} tone="neutral">
+                                      {modeLabel[mode] ?? mode}
+                                    </StatusBadge>
+                                  ))}
+                                </span>
+                              )}
+                            </span>
+                            <span
                               className={cn(
-                                "px-4 font-mono",
+                                "shrink-0 font-mono text-sm font-semibold tabular-nums",
                                 bestRecall === null ? "text-muted-text" : scoreColor(bestRecall)
                               )}
                             >
                               {pct(bestRecall)}
-                            </TableCell>
-                            <TableCell className="px-4 text-xs text-muted-text">
+                            </span>
+                            <span className="hidden w-28 shrink-0 text-right text-xs text-muted-text tabular-nums sm:block">
                               {formatDateTime(run.created_at)}
-                            </TableCell>
-                            <TableCell className="px-4">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="min-h-11"
-                                onClick={() => void openDetail(run)}
-                                aria-label={`Detail evaluasi ${run.run_id}`}
-                              >
-                                Detail
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-xs text-muted-text">
+                            </span>
+                            <ChevronRight
+                              aria-hidden="true"
+                              className="size-4 shrink-0 text-muted-text/50"
+                            />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e5e5e5] px-4 py-3 text-xs text-muted-text">
                     <label className="flex items-center gap-2">
                       Baris per halaman
                       <select
-                        className="min-h-11 rounded-md border border-line bg-white px-2 text-tinta"
+                        className="min-h-11 rounded-md border border-[#e5e5e5] bg-white px-2 text-tinta"
                         value={pageSize}
                         onChange={(event) => {
                           setPageSize(Number(event.target.value));
@@ -463,9 +461,10 @@ export function AdminEvaluation() {
                         disabled={currentPage === 1}
                         onClick={() => setPage(currentPage - 1)}
                       >
+                        <ChevronLeft aria-hidden="true" className="size-4" />
                         Sebelumnya
                       </Button>
-                      <span>
+                      <span className="tabular-nums">
                         {currentPage} / {pageCount}
                       </span>
                       <Button
@@ -476,6 +475,7 @@ export function AdminEvaluation() {
                         onClick={() => setPage(currentPage + 1)}
                       >
                         Berikutnya
+                        <ChevronRight aria-hidden="true" className="size-4" />
                       </Button>
                     </nav>
                   </div>
@@ -486,7 +486,7 @@ export function AdminEvaluation() {
         </>
       )}
       {runError && !runDialogOpen ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e5e5] bg-white p-4 shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
           <p role="alert" className="text-sm text-tinta">
             {runError}
           </p>
@@ -495,114 +495,30 @@ export function AdminEvaluation() {
           </Button>
         </div>
       ) : null}
-      <details className="group rounded-xl border border-line bg-white">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 marker:hidden sm:px-6 [&::-webkit-details-marker]:hidden">
-          <div>
-            <h2 id="evaluation-guide-title" className="text-base font-semibold text-tinta">
-              Memahami mode dan metrik
-            </h2>
-            <p className="mt-1 text-sm text-muted-text">
-              Gunakan panduan ini untuk membaca hasil perbandingan evaluasi.
-            </p>
-          </div>
-          <ChevronDown
-            aria-hidden="true"
-            className="size-5 shrink-0 text-muted-text transition-transform group-open:rotate-180"
-          />
-        </summary>
-        <div className="px-5 pb-5 sm:px-6 sm:pb-6">
-          <div className="mt-1 space-y-6">
-            <div>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-text">
-                Retrieval modes
-              </h3>
-              <dl className="grid gap-x-8 gap-y-5 md:grid-cols-2">
-                {[
-                  [
-                    "Baseline",
-                    "Mengurutkan kandidat Upstash berdasarkan kecocokan kata atau istilah (lexical score).",
-                  ],
-                  [
-                    "Dense",
-                    "Mengurutkan kandidat Upstash berdasarkan kemiripan makna (semantic score).",
-                  ],
-                  ["Hybrid", "Menggabungkan peringkat lexical dan semantic melalui fusion score."],
-                  [
-                    "Re-ranker",
-                    "Mengurutkan ulang kandidat menggunakan final score setelah penilaian relevansi.",
-                  ],
-                ].map(([label, description]) => (
-                  <div key={label} className="min-w-0 border-l-2 border-line pl-4">
-                    <dt className="text-sm font-semibold text-tinta">{label}</dt>
-                    <dd className="mt-1 text-sm leading-relaxed text-muted-text">{description}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-            <div>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-text">
-                Evaluation metrics
-              </h3>
-              <dl className="grid gap-x-8 gap-y-5 md:grid-cols-2">
-                {[
-                  [
-                    "Recall@5",
-                    "Proporsi dokumen acuan relevan yang ditemukan dalam lima hasil teratas.",
-                  ],
-                  [
-                    "MRR (Mean Reciprocal Rank)",
-                    "Rata-rata kebalikan posisi hasil relevan pertama. Posisi pertama bernilai 1; posisi kedua bernilai 0,5.",
-                  ],
-                  [
-                    "Citation correctness",
-                    "Kesesuaian kutipan dengan dokumen dan pasal acuan pada dataset evaluasi.",
-                  ],
-                  [
-                    "Faithfulness",
-                    "Dukungan sumber terhadap klaim jawaban. Perhitungan memakai skor dukungan klaim, atau kecocokan kata dengan kutipan jika data klaim tidak tersedia.",
-                  ],
-                  [
-                    "Refusal accuracy",
-                    "Ketepatan keputusan menjawab atau menolak dibandingkan jawaban acuan dalam dataset.",
-                  ],
-                  [
-                    "Hard-negative recall@5",
-                    "Recall@5 khusus pertanyaan yang ditandai hard negative: kasus sulit dengan sumber pengecoh yang tampak relevan.",
-                  ],
-                ].map(([label, description]) => (
-                  <div key={label} className="min-w-0 border-l-2 border-line pl-4">
-                    <dt className="text-sm font-semibold text-tinta">{label}</dt>
-                    <dd className="mt-1 text-sm leading-relaxed text-muted-text">{description}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          </div>
-          <p className="mt-6 rounded-lg bg-surface-soft px-4 py-3 text-xs leading-relaxed text-muted-text">
-            Semakin tinggi nilai metrik di atas, semakin baik hasil pada dataset ini. Nilai tersebut
-            bukan persentase kepastian jawaban. Top K menentukan jumlah hasil yang diambil; pilih
-            minimal 5 untuk membandingkan Recall@5 dengan lima hasil penuh.
-          </p>
-        </div>
-      </details>
-
       {/* Run dialog */}
       <Dialog open={runDialogOpen} onOpenChange={setRunDialogOpen}>
         <DialogContent
           className={`admin-theme ${styles.ingestion} ${styles.detailModal} max-h-[85dvh] overflow-y-auto p-6 sm:max-w-lg`}
         >
           <DialogHeader>
-            <DialogTitle>Jalankan evaluasi</DialogTitle>
-            <DialogDescription>
-              Pilih dataset dan jumlah hasil. Empat strategi ranking dibandingkan dari candidate
-              pool Upstash yang sama.
-            </DialogDescription>
+            <div className="flex items-center gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                <FlaskConical aria-hidden="true" className="size-5 text-forest" />
+              </span>
+              <div className="min-w-0">
+                <DialogTitle>Jalankan evaluasi</DialogTitle>
+                <DialogDescription>
+                  Pilih dataset dan jumlah hasil. Empat strategi ranking dibandingkan dari
+                  candidate pool Upstash yang sama.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           <div className="space-y-4">
             {runError && (
               <p
                 role="alert"
-                className="rounded-lg border border-line bg-red-soft p-3 text-sm text-red"
+                className="rounded-lg border border-red/25 bg-red-soft p-3 text-sm text-red"
               >
                 {runError}
               </p>
@@ -625,7 +541,7 @@ export function AdminEvaluation() {
 
             <div className="space-y-2">
               <p className="text-sm font-medium text-tinta">Sumber retrieval</p>
-              <div className="rounded-lg border border-line bg-surface-soft px-4 py-3">
+              <div className="rounded-lg border border-[#e5e5e5] bg-surface-soft px-4 py-3">
                 <p className="text-sm font-semibold text-forest">Upstash live</p>
                 <p className="mt-1 text-xs leading-relaxed text-muted-text">
                   Hosted dense embedding dan BM25 dari index produksi aktif.
@@ -635,7 +551,7 @@ export function AdminEvaluation() {
 
             <div className="space-y-2">
               <p className="text-sm font-medium text-tinta">Strategi yang dibandingkan</p>
-              <ul className="divide-y divide-line rounded-lg border border-line bg-white px-4">
+              <ul className="divide-y divide-dashed divide-[#e5e5e5] rounded-lg border border-[#e5e5e5] bg-white px-4">
                 {["Baseline", "Dense", "Hybrid", "Re-ranker"].map((mode) => (
                   <li key={mode} className="py-2.5 text-sm text-tinta">
                     {mode}
@@ -664,7 +580,7 @@ export function AdminEvaluation() {
               </div>
             )}
           </div>
-          <DialogFooter className="mx-0 mb-0 mt-2 rounded-none border-line bg-transparent px-0 pb-0 pt-4">
+          <DialogFooter className="mx-0 mb-0 mt-2 rounded-none border-[#e5e5e5] bg-transparent px-0 pb-0 pt-4">
             <Button variant="outline" className="min-h-11" onClick={() => setRunDialogOpen(false)}>
               Batal
             </Button>

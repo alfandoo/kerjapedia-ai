@@ -9,6 +9,8 @@ import {
   FileText,
   Loader2,
   PlayCircle,
+  Tag,
+  TriangleAlert,
   Upload,
   X,
 } from "lucide-react";
@@ -215,7 +217,10 @@ export function AdminUpload() {
         title="Upload PDF"
         description="Unggah PDF resmi, pilih topiknya, lalu proses dokumen untuk ditinjau sebelum diterbitkan."
         actions={
-          <Button asChild variant="outline" className="min-h-11">
+          <Button
+            asChild
+            className="h-11 bg-javanese px-5 text-sm font-bold text-white shadow-[0_2px_12px_rgba(27,67,50,0.22)] hover:bg-javanese-deep"
+          >
             <Link href="/documents">
               <ArrowLeft /> Daftar dokumen
             </Link>
@@ -243,7 +248,7 @@ export function AdminUpload() {
                 <span
                   className={cn(
                     "h-px w-3 sm:w-8 transition-colors",
-                    completed ? "bg-forest" : "bg-line"
+                    completed ? "bg-forest" : "bg-[#e5e5e5]"
                   )}
                 />
               )}
@@ -289,7 +294,7 @@ export function AdminUpload() {
                 ? "border-forest bg-teal-soft/50 scale-[1.01]"
                 : file
                   ? "border-forest/40 bg-white"
-                  : "border-line bg-white hover:border-forest/40 hover:bg-surface-soft/50"
+                  : "border-[#e5e5e5] bg-white hover:border-forest/40 hover:bg-surface-soft/50"
             )}
             onDragEnter={(event) => {
               event.preventDefault();
@@ -381,9 +386,10 @@ export function AdminUpload() {
           {uploadError ? (
             <div
               role="alert"
-              className="rounded-xl border border-red/25 bg-red-soft px-4 py-3 text-sm text-red"
+              className="flex items-start gap-2.5 rounded-xl border border-red/25 bg-red-soft px-4 py-3 text-sm text-red"
             >
-              {uploadError}
+              <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              <span>{uploadError}</span>
             </div>
           ) : null}
         </div>
@@ -391,10 +397,14 @@ export function AdminUpload() {
         {/* Right - config & actions */}
         <div className="space-y-4">
           {/* Topic selector */}
-          <Card>
+          <Card className="border-[#e5e5e5] shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
             <CardContent className="space-y-4 p-5">
               <div className="space-y-1.5">
-                <Label htmlFor="upload-topic" className="text-sm font-semibold">
+                <Label
+                  htmlFor="upload-topic"
+                  className="inline-flex items-center gap-2 text-sm font-semibold"
+                >
+                  <Tag aria-hidden="true" className="size-4 text-forest" />
                   Topik regulasi
                 </Label>
                 <p className="text-xs text-muted-text">
@@ -415,7 +425,7 @@ export function AdminUpload() {
               </Select>
               {selectedTopic && <p className="text-xs text-muted-text">{selectedTopic.desc}</p>}
 
-              <div className="border-t border-line pt-3">
+              <div className="border-t border-[#e5e5e5] pt-3">
                 <p className="text-xs font-medium text-tinta">Yang akan terjadi:</p>
                 <ul className="mt-2 space-y-1.5">
                   {[
@@ -445,18 +455,18 @@ export function AdminUpload() {
           {/* Upload button */}
           {!uploaded && (
             <Button
-              className={`${styles.primary} w-full bg-javanese text-white hover:bg-forest`}
+              className="min-h-11 w-full rounded-xl bg-javanese text-sm font-semibold text-white shadow-[0_2px_12px_rgba(27,67,50,0.22)] hover:bg-javanese-deep"
               size="lg"
               disabled={!file || !topic || submitting}
               onClick={() => void handleUpload()}
             >
               {submitting ? (
                 <>
-                  <Loader2 className="animate-spin motion-reduce:animate-none" /> Mengunggah…
+                  <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> Mengunggah…
                 </>
               ) : (
                 <>
-                  <Upload /> Unggah PDF
+                  <Upload className="size-4" /> Unggah PDF
                 </>
               )}
             </Button>
@@ -464,7 +474,7 @@ export function AdminUpload() {
 
           {/* Uploaded - ready for ingestion */}
           {uploaded && !ingestDone && (
-            <Card className="border-forest/25 bg-teal-soft/30">
+            <Card className="border-forest/25 bg-teal-soft/30 shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
               <CardContent className="space-y-3 p-5">
                 <div className="flex items-center gap-2.5">
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-forest text-white">
@@ -480,18 +490,18 @@ export function AdminUpload() {
                   </div>
                 </div>
                 <Button
-                  className={`${styles.primary} w-full bg-javanese text-white hover:bg-forest`}
+                  className="min-h-11 w-full rounded-xl bg-javanese text-sm font-semibold text-white shadow-[0_2px_12px_rgba(27,67,50,0.22)] hover:bg-javanese-deep"
                   size="lg"
                   disabled={ingesting}
                   onClick={() => void handleIngest()}
                 >
                   {ingesting ? (
                     <>
-                      <Loader2 className="animate-spin motion-reduce:animate-none" /> Memproses…
+                      <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> Memproses…
                     </>
                   ) : (
                     <>
-                      <PlayCircle /> Proses dokumen
+                      <PlayCircle className="size-4" /> Proses dokumen
                     </>
                   )}
                 </Button>
@@ -502,9 +512,10 @@ export function AdminUpload() {
                 )}
                 <Link
                   href="/admin/ingestion"
-                  className="block text-center text-xs font-semibold text-forest underline underline-offset-4"
+                  className="inline-flex w-full items-center justify-center gap-1.5 text-center text-xs font-semibold text-forest underline underline-offset-4"
                 >
                   Lihat status pemrosesan
+                  <ArrowRight aria-hidden="true" className="size-3.5" />
                 </Link>
               </CardContent>
             </Card>
@@ -512,7 +523,7 @@ export function AdminUpload() {
 
           {/* Done */}
           {ingestDone && (
-            <Card className="border-forest/25 bg-teal-soft/30">
+            <Card className="border-forest/25 bg-teal-soft/30 shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
               <CardContent className="space-y-4 p-5 text-center">
                 <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-forest text-white">
                   <CheckCircle2 className="size-6" />
@@ -534,6 +545,7 @@ export function AdminUpload() {
                     className="min-h-11 w-full text-muted-text"
                     onClick={clearFile}
                   >
+                    <Upload aria-hidden="true" />
                     Upload lagi
                   </Button>
                 </div>

@@ -6,8 +6,13 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  FileSearch,
+  FileText,
   FlaskConical,
+  Hash,
+  Info,
   Loader2,
+  MessageSquareQuote,
   Search,
 } from "lucide-react";
 
@@ -113,14 +118,18 @@ export function AdminRetrieval() {
         description="Uji pertanyaan, periksa sumber yang ditemukan, dan bandingkan skor relevansinya."
       />
 
-      <div className="grid items-start gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid items-stretch gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
         {/* Left - config */}
-        <div className="space-y-4">
-          <Card>
+        <div className="flex min-w-0 flex-col gap-4">
+          <Card className="flex-1 border-[#e5e5e5] shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
             <CardContent className="space-y-4 pt-5">
               {/* Question */}
               <div className="space-y-1.5">
-                <Label htmlFor="retrieval-question" className="text-sm font-semibold">
+                <Label
+                  htmlFor="retrieval-question"
+                  className="inline-flex items-center gap-2 text-sm font-semibold"
+                >
+                  <MessageSquareQuote aria-hidden="true" className="size-4 text-forest" />
                   Pertanyaan uji
                 </Label>
                 <Textarea
@@ -135,8 +144,12 @@ export function AdminRetrieval() {
 
               {/* Top K + Run */}
               <div className="flex items-end gap-3">
-                <div className="w-24 shrink-0 space-y-1.5">
-                  <Label htmlFor="retrieval-count" className="text-sm font-semibold">
+                <div className="w-32 shrink-0 space-y-1.5">
+                  <Label
+                    htmlFor="retrieval-count"
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold whitespace-nowrap"
+                  >
+                    <Hash aria-hidden="true" className="size-4 shrink-0 text-forest" />
                     Jumlah hasil
                   </Label>
                   <Input
@@ -182,7 +195,7 @@ export function AdminRetrieval() {
               {showFilters && (
                 <div
                   id="retrieval-filters"
-                  className="space-y-3 rounded-lg border border-line bg-surface-soft/50 p-3"
+                  className="space-y-3 rounded-lg border border-[#e5e5e5] bg-surface-soft/50 p-3"
                 >
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
@@ -230,7 +243,7 @@ export function AdminRetrieval() {
                 <p
                   role={failed ? "alert" : "status"}
                   className={cn(
-                    "rounded-lg px-3 py-2 text-xs",
+                    "flex items-start gap-2 rounded-lg px-3 py-2 text-xs",
                     failed
                       ? "bg-red-soft text-red"
                       : hasRun && !warnings.length
@@ -240,7 +253,16 @@ export function AdminRetrieval() {
                           : "bg-surface-soft text-muted-text"
                   )}
                 >
-                  {status}
+                  {failed ? (
+                    <AlertTriangle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                  ) : hasRun && !warnings.length ? (
+                    <CheckCircle2 aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                  ) : hasRun ? (
+                    <AlertTriangle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                  ) : (
+                    <Info aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                  )}
+                  <span>{status}</span>
                 </p>
               )}
             </CardContent>
@@ -252,11 +274,18 @@ export function AdminRetrieval() {
               className={`admin-theme ${styles.ingestion} ${styles.detailModal} max-h-[85dvh] overflow-y-auto p-6 sm:max-w-xl`}
             >
               <DialogHeader className="pr-8">
-                <DialogTitle>Detail sumber</DialogTitle>
-                <DialogDescription>
-                  {selected?.short_title} {selected?.article} · Halaman {selected?.page_start}–
-                  {selected?.page_end}
-                </DialogDescription>
+                <div className="flex items-center gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                    <FileText aria-hidden="true" className="size-5 text-forest" />
+                  </span>
+                  <div className="min-w-0">
+                    <DialogTitle>Detail sumber</DialogTitle>
+                    <DialogDescription>
+                      {selected?.short_title} {selected?.article} · Halaman{" "}
+                      {selected?.page_start}–{selected?.page_end}
+                    </DialogDescription>
+                  </div>
+                </div>
               </DialogHeader>
               {selected && (
                 <div className="space-y-4">
@@ -304,28 +333,36 @@ export function AdminRetrieval() {
         </div>
 
         {/* Right - results */}
-        <Card className="min-w-0 h-fit">
-          <CardHeader>
-            <CardTitle className="flex flex-wrap items-center gap-3">
-              Hasil retrieval
-              {hasRun && (
-                <StatusBadge tone="info">
-                  {results.length} sumber · {latency} ms
-                </StatusBadge>
-              )}
-            </CardTitle>
+        <Card className="flex min-w-0 flex-col border-[#e5e5e5] shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
+          <CardHeader className="border-b border-[#e5e5e5]">
+            <div className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                <FlaskConical aria-hidden="true" className="size-4 text-forest" />
+              </span>
+              <div className="min-w-0">
+                <CardTitle className="flex flex-wrap items-center gap-3">
+                  Hasil retrieval
+                  {hasRun && (
+                    <StatusBadge tone="info">
+                      {results.length} sumber · {latency} ms
+                    </StatusBadge>
+                  )}
+                </CardTitle>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             {warnings.length > 0 && (
               <div
                 role="status"
-                className="mx-4 mb-4 rounded-lg bg-amber-soft p-3 text-xs text-amber"
+                className="mx-4 mb-4 flex items-start gap-2 rounded-lg bg-amber-soft p-3 text-xs text-amber"
               >
-                {warnings.join(" · ")}
+                <AlertTriangle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                <span>{warnings.join(" · ")}</span>
               </div>
             )}
             {results.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 py-16 text-center">
                 <span className="flex size-12 items-center justify-center rounded-2xl bg-surface-soft text-muted-text">
                   <FlaskConical className="size-6" />
                 </span>
@@ -347,7 +384,7 @@ export function AdminRetrieval() {
                 </p>
               </div>
             ) : (
-              <ul className="divide-y">
+              <ul className="divide-y divide-dashed divide-[#e5e5e5]">
                 {results.map((result, index) => {
                   const active = result.chunk_id === selectedId;
                   return (
@@ -392,6 +429,7 @@ export function AdminRetrieval() {
                             setDetailOpen(true);
                           }}
                         >
+                          <FileSearch aria-hidden="true" className="size-3.5" />
                           Detail
                         </Button>
                       </div>

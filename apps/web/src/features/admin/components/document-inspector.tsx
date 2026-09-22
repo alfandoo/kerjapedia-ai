@@ -5,15 +5,20 @@ import detailStyles from "./document-detail.module.css";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
+  ArrowLeft,
   BadgeCheck,
   Calendar,
+  Check,
   FileText,
   Hash,
+  History,
+  Info,
   Link as LinkIcon,
+  ListChecks,
   Plus,
-  RefreshCw,
   ShieldCheck,
   Trash2,
+  Upload,
   WholeWord,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,8 +39,6 @@ import { Callout, EmptyState, StatusBadge } from "./primitives";
 import { cn } from "@/lib/utils";
 import {
   clearStoredSession,
-  createIngestionJob,
-  fetchIngestionJob,
   updateAdminDocument,
   updateAdminPublication,
   updateAdminRelationships,
@@ -108,9 +111,12 @@ function ReadinessPanel({ items }: { items: ChecklistItem[] }) {
   const doneCount = items.filter((item) => item.done).length;
   const pct = Math.round((doneCount / items.length) * 100);
   return (
-    <section aria-label="Kesiapan publikasi" className="rounded-xl border border-line bg-white">
-      <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
-        <p className="text-sm font-semibold text-tinta">Kesiapan publikasi</p>
+      <section aria-label="Kesiapan publikasi" className="rounded-xl border border-[#e5e5e5] bg-white">
+      <div className="flex items-center justify-between gap-2 border-b border-[#e5e5e5] px-4 py-2.5">
+        <p className="flex items-center gap-2 text-sm font-semibold text-tinta">
+          <ListChecks aria-hidden="true" className="size-4 text-forest" />
+          Kesiapan publikasi
+        </p>
         <span
           className={cn(
             "font-mono text-xs font-semibold tabular-nums",
@@ -142,7 +148,7 @@ function ReadinessPanel({ items }: { items: ChecklistItem[] }) {
               <span
                 className={cn(
                   "flex size-4 shrink-0 items-center justify-center rounded-full",
-                  item.done ? "bg-teal-soft" : "border border-line bg-muted/40"
+                  item.done ? "bg-teal-soft" : "border border-[#e5e5e5] bg-muted/40"
                 )}
               >
                 {item.done ? (
@@ -174,7 +180,6 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [republishing, setRepublishing] = useState(false);
-  const [reingesting, setReingesting] = useState(false);
 
   function handleAuthFailure(err: unknown): boolean {
     if (!isAuthError(err)) return false;
@@ -345,53 +350,6 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
     }
   }
 
-  const FINAL_JOB_STATUSES = new Set(["completed", "review_required", "failed"]);
-  const POLL_INTERVAL_MS = 3000;
-  const POLL_TIMEOUT_MS = 10 * 60 * 1000;
-
-  async function reingest(force = false) {
-    if (
-      force &&
-      !window.confirm(`Dokumen ${document.document_id} sudah selesai diingest. Paksa ulang?`)
-    )
-      return;
-    onChange({ ...document, ingestion_status: "running" });
-    setReingesting(true);
-    toast.info(force ? "Re-ingest dipaksa ulang..." : "Re-ingest dimulai...", {
-      id: "reingest-progress",
-    });
-    try {
-      const job = await createIngestionJob(document.document_id, force);
-      const pollStart = Date.now();
-      let current = job;
-      while (!FINAL_JOB_STATUSES.has(current.status)) {
-        if (Date.now() - pollStart > POLL_TIMEOUT_MS) {
-          throw new Error("Re-ingest melebihi batas waktu 10 menit.");
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-        try {
-          current = await fetchIngestionJob(job.job_id);
-        } catch (pollError) {
-          if ((pollError as Error)?.name === "AbortError") throw pollError;
-          continue;
-        }
-      }
-      onChange({ ...document, ingestion_status: current.status });
-      toast.success(
-        `Re-ingest selesai dengan status ${ingestionLabels[current.status] ?? current.status}.`,
-        { id: "reingest-progress" }
-      );
-    } catch (err) {
-      onChange(document);
-      if (handleAuthFailure(err)) return;
-      toast.error(`Re-ingest gagal dijalankan: ${describeError(err)}`, {
-        id: "reingest-progress",
-      });
-    } finally {
-      setReingesting(false);
-    }
-  }
-
   const infoCells = [
     {
       icon: FileText,
@@ -440,9 +398,14 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
           Dokumen terpilih
         </SheetDescription>
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <SheetTitle className="text-xl leading-snug">{document.short_title}</SheetTitle>
-            <p className="mt-0.5 font-mono text-xs text-muted-text">{document.document_id}</p>
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+              <FileText aria-hidden="true" className="size-5 text-forest" />
+            </span>
+            <div className="min-w-0">
+              <SheetTitle className="text-xl leading-snug">{document.short_title}</SheetTitle>
+              <p className="mt-0.5 font-mono text-xs text-muted-text">{document.document_id}</p>
+            </div>
           </div>
           <span className="shrink-0 rounded-lg bg-surface-soft px-2.5 py-1 font-mono text-xs font-semibold text-muted-text">
             v{document.version}
@@ -472,7 +435,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
             return (
               <div
                 key={cell.label}
-                className="rounded-lg border border-line bg-surface-soft/50 px-3.5 py-2.5"
+                className="rounded-lg border border-[#e5e5e5] bg-white px-3.5 py-2.5"
               >
                 <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-muted-text uppercase">
                   <Icon className="size-3.5" /> {cell.label}
@@ -485,7 +448,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
           })}
         </div>
 
-        <div className="rounded-xl border border-line bg-surface-soft/50 p-3.5">
+        <div className="rounded-xl border border-[#e5e5e5] bg-white p-3.5">
           <p className="flex items-center gap-1.5 text-sm font-semibold text-tinta">
             <ShieldCheck className="size-4 text-forest" /> Verifikasi sistem
           </p>
@@ -517,13 +480,16 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)}>
           <TabsList className="w-full bg-surface-soft">
-            <TabsTrigger value="metadata" className="flex-1">
+            <TabsTrigger value="metadata" className="flex-1 gap-1.5">
+              <Info aria-hidden="true" className="size-3.5" />
               Metadata
             </TabsTrigger>
-            <TabsTrigger value="relasi" className="flex-1">
+            <TabsTrigger value="relasi" className="flex-1 gap-1.5">
+              <LinkIcon aria-hidden="true" className="size-3.5" />
               Relasi
             </TabsTrigger>
-            <TabsTrigger value="versi" className="flex-1">
+            <TabsTrigger value="versi" className="flex-1 gap-1.5">
+              <History aria-hidden="true" className="size-3.5" />
               Versi
             </TabsTrigger>
           </TabsList>
@@ -583,6 +549,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
               disabled={saving}
               onClick={() => void saveMetadata()}
             >
+              <Check aria-hidden="true" />
               {saving ? "Menyimpan..." : "Simpan perubahan"}
             </Button>
           </TabsContent>
@@ -608,7 +575,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
                     return (
                       <li
                         key={`${relationship.relationship_type}-${relationship.to_document_id}`}
-                        className="group flex items-center gap-3 rounded-lg border border-line bg-white px-3 py-2.5"
+                        className="group flex items-center gap-3 rounded-lg border border-[#e5e5e5] bg-white px-3 py-2.5"
                       >
                         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-soft text-muted-text">
                           <LinkIcon className="size-4" />
@@ -646,7 +613,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
                 />
               )}
 
-              <div className="rounded-xl border border-line bg-surface-soft/50 p-3.5">
+              <div className="rounded-xl border border-[#e5e5e5] bg-white p-3.5">
                 <p className="text-sm font-semibold text-tinta">Tambah hubungan</p>
                 <div className="mt-3 space-y-3">
                   <div className="space-y-1.5">
@@ -659,7 +626,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
                           "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
                           relationshipType === "amended_by"
                             ? "border-javanese bg-javanese text-white"
-                            : "border-line bg-white text-muted-text hover:border-javanese/40 hover:text-tinta"
+                            : "border-[#e5e5e5] bg-white text-muted-text hover:border-javanese/40 hover:text-tinta"
                         )}
                       >
                         Diubah oleh
@@ -671,7 +638,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
                           "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
                           relationshipType === "implements"
                             ? "border-javanese bg-javanese text-white"
-                            : "border-line bg-white text-muted-text hover:border-javanese/40 hover:text-tinta"
+                            : "border-[#e5e5e5] bg-white text-muted-text hover:border-javanese/40 hover:text-tinta"
                         )}
                       >
                         Mengimplementasikan
@@ -711,7 +678,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
             <div className="relative pl-5">
               <span
                 aria-hidden="true"
-                className="absolute top-1.5 bottom-1.5 left-[7px] w-px bg-line"
+                className="absolute top-1.5 bottom-1.5 left-[7px] w-px bg-[#e5e5e5]"
               />
               <ul className="space-y-3">
                 {document.versions.map((version) => {
@@ -722,7 +689,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
                         aria-hidden="true"
                         className={cn(
                           "absolute top-1 -left-[18px] flex size-3.5 items-center justify-center rounded-full border-2 bg-white",
-                          isCurrent ? "border-forest" : "border-line"
+                          isCurrent ? "border-forest" : "border-[#e5e5e5]"
                         )}
                       >
                         {isCurrent ? <span className="size-1.5 rounded-full bg-forest" /> : null}
@@ -730,7 +697,7 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
                       <div
                         className={cn(
                           "flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5",
-                          isCurrent ? "border-forest/20 bg-teal-soft/40" : "border-line bg-white"
+                          isCurrent ? "border-forest/20 bg-teal-soft/40" : "border-[#e5e5e5] bg-white"
                         )}
                       >
                         <div className="min-w-0 flex-1">
@@ -773,37 +740,20 @@ export function DocumentInspector({ document, allDocuments, onChange, onClose }:
       </div>
 
       <SheetFooter className="border-t bg-white px-5 py-4">
-        <div className="grid w-full grid-cols-2 gap-2">
-          <Button
-            variant="outline"
-            disabled={reingesting || document.ingestion_status === "completed"}
-            title={
-              document.ingestion_status === "completed"
-                ? "Klik untuk memaksa ulang (force)"
-                : undefined
-            }
-            onClick={() => void reingest(document.ingestion_status === "completed")}
-          >
-            <RefreshCw className={cn(reingesting && "animate-spin")} />
-            {reingesting
-              ? "Memproses..."
-              : document.ingestion_status === "completed"
-                ? "Paksa ulang"
-                : "Re-ingest"}
-          </Button>
-          <Button
-            className="bg-javanese text-white hover:bg-forest"
-            disabled={!canPublish || republishing}
-            onClick={() => void changePublication()}
-          >
-            {republishing
-              ? "Memproses..."
-              : document.publication_status === "published"
-                ? "Batalkan terbit"
-                : "Terbitkan"}
-          </Button>
-        </div>
+        <Button
+          className="w-full bg-javanese text-white hover:bg-forest"
+          disabled={!canPublish || republishing}
+          onClick={() => void changePublication()}
+        >
+          <Upload aria-hidden="true" />
+          {republishing
+            ? "Memproses..."
+            : document.publication_status === "published"
+              ? "Batalkan terbit"
+              : "Terbitkan"}
+        </Button>
         <Button variant="ghost" className="w-full text-muted-text" onClick={onClose}>
+          <ArrowLeft aria-hidden="true" />
           Kembali ke daftar
         </Button>
       </SheetFooter>

@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
-import { RefreshCw } from "lucide-react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { Activity, ArrowDownLeft, ArrowUpRight, Coins, Gauge, RefreshCw, ShieldCheck, Sigma, Timer, Users } from "lucide-react";
 
-import { EmptyState, PageHeader } from "./primitives";
+import { EmptyState, PageHeader, StatusBadge } from "./primitives";
 import { AlertIcon } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { clearStoredSession, fetchAdminMetrics } from "@/features/admin/api";
@@ -59,7 +59,7 @@ function BarRow({
       <div
         role="img"
         aria-label={`${label}: ${display}`}
-        className="mt-1.5 h-2 overflow-hidden rounded-full bg-teal-soft/60"
+        className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#e9edea]"
       >
         <div
           className={cn("h-full rounded-full", fill)}
@@ -73,17 +73,26 @@ function BarRow({
 function SectionCard({
   title,
   hint,
+  icon: Icon,
   children,
 }: {
   title: string;
   hint: string;
+  icon: ComponentType<{ className?: string }>;
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-teal-soft bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
-      <header className="border-b border-teal-soft px-6 py-4">
-        <h2 className="text-sm font-semibold text-forest">{title}</h2>
-        <p className="mt-0.5 text-xs text-muted-text">{hint}</p>
+    <section className="overflow-hidden rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
+      <header className="border-b border-[#e5e5e5] px-6 py-4">
+        <div className="flex items-center gap-3">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+            <Icon className="size-4 text-forest" />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold text-forest">{title}</h2>
+            <p className="mt-0.5 text-xs text-muted-text">{hint}</p>
+          </div>
+        </div>
       </header>
       <div className="space-y-5 px-6 py-5">{children}</div>
     </section>
@@ -98,9 +107,9 @@ function ObservabilitySkeleton() {
         <Skeleton className="h-8 w-56" />
         <Skeleton className="h-4 w-72" />
       </div>
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Skeleton key={index} className="h-[128px] rounded-xl" />
+          <Skeleton key={index} className="h-[112px] rounded-xl" />
         ))}
       </div>
       <Skeleton className="h-64 rounded-xl" />
@@ -113,6 +122,11 @@ const outcomeStyle: Record<string, { label: string; fill: string; text: string }
   answered: { label: "Dijawab", fill: "bg-forest", text: "text-forest" },
   refused: { label: "Ditolak", fill: "bg-amber", text: "text-amber" },
   failed: { label: "Gagal", fill: "bg-red", text: "text-red" },
+  temporarily_unavailable: {
+    label: "Tak tersedia",
+    fill: "bg-muted-text",
+    text: "text-muted-text",
+  },
 };
 
 export function AdminObservability() {
@@ -158,7 +172,7 @@ export function AdminObservability() {
   if (error || !metrics) {
     return (
       <div className={`${styles.dashboard} flex min-h-64 items-center justify-center`} role="alert">
-        <div className="w-full max-w-sm rounded-xl border border-teal-soft bg-white p-2 shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
+        <div className="w-full max-w-sm rounded-xl border border-[#e5e5e5] bg-white p-2 shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
           <EmptyState
             icon={AlertIcon}
             title="Metrik tidak dapat dimuat"
@@ -166,7 +180,7 @@ export function AdminObservability() {
             action={
               <button
                 type="button"
-                className="h-10 rounded-xl border border-teal-soft bg-white px-5 text-sm font-semibold text-forest transition hover:border-forest hover:text-teal"
+                className="h-10 rounded-xl border border-[#e5e5e5] bg-white px-5 text-sm font-semibold text-forest transition hover:border-forest hover:text-teal"
                 onClick={() => {
                   setError(null);
                   setLoading(true);
@@ -215,15 +229,17 @@ export function AdminObservability() {
             return `${color} ${start}% ${end}%`;
           })
           .join(", ")
-      : "#dce7e0 0% 100%";
+      : "#e5e5e5 0% 100%";
   const topicEntries = topEntries(metrics.behavior.by_topic, 8);
   const maxTopic = Math.max(1, ...topicEntries.map(([, value]) => value));
+  const openaiUsage = Object.entries(metrics.tokens.by_model).filter(([model]) =>
+    model.startsWith("openai/")
+  );
+  const openaiPrompt = openaiUsage.reduce((sum, [, usage]) => sum + usage.prompt, 0);
+  const openaiCompletion = openaiUsage.reduce((sum, [, usage]) => sum + usage.completion, 0);
   const modelEntries = topEntries(
     Object.fromEntries(
-      Object.entries(metrics.tokens.by_model).map(([model, usage]) => [
-        model,
-        usage.prompt + usage.completion,
-      ])
+      openaiUsage.map(([model, usage]) => [model, usage.prompt + usage.completion])
     ),
     6
   );
@@ -236,24 +252,28 @@ export function AdminObservability() {
     {
       key: "requests",
       label: "Total permintaan RAG",
+      icon: Activity,
       value: formatInt(metrics.requests.total),
       footer: `${formatInt(metrics.behavior.total)} tercatat perilaku`,
     },
     {
       key: "latency",
-      label: "Latensi rata-rata (p95)",
+      label: "Latensi rata-rata",
+      icon: Timer,
       value: formatSeconds(requestLatency.avg),
       footer: `p95 ${formatSeconds(requestLatency.p95)} · n=${formatInt(requestLatency.count ?? 0)}`,
     },
     {
       key: "support",
       label: "Tingkat klaim didukung",
+      icon: ShieldCheck,
       value: formatPct(metrics.claims.support_rate),
       footer: `${formatInt(metrics.claims.supported)} didukung · ${formatInt(metrics.claims.unsupported)} tidak`,
     },
     {
       key: "ragas",
-      label: "RAGAS faithfulness (rerata)",
+      label: "RAGAS faithfulness",
+      icon: Gauge,
       value: formatScore(faithfulness.avg),
       footer:
         (faithfulness.count ?? 0) > 0
@@ -284,29 +304,39 @@ export function AdminObservability() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        {kpiCards.map((card) => (
-          <div key={card.key} className={styles.metric}>
-            <p className="text-[13px] font-medium text-muted-text">{card.label}</p>
-            <p className="mt-3 font-mono text-[30px] leading-none font-bold tracking-tight text-forest tabular-nums">
-              {card.value}
-            </p>
-            <p className="mt-4 border-t border-teal-soft pt-3 text-xs leading-relaxed text-muted-text">
-              {card.footer}
-            </p>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {kpiCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={card.key}
+              className="rounded-xl border border-[#e5e5e5] bg-white px-5 py-4 shadow-[0_1px_3px_rgba(27,67,50,0.06)]"
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                  <Icon strokeWidth={1.75} className="size-5 text-forest" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium text-muted-text">{card.label}</p>
+                  <p className="mt-0.5 font-mono text-xl leading-tight font-bold tracking-tight whitespace-nowrap text-tinta tabular-nums">
+                    {card.value}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-text">{card.footer}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <SectionCard
         title="Kesehatan pipeline RAG"
         hint="Distribusi hasil, latensi tiap tahap, dan verifikasi klaim dari Prometheus."
+        icon={Activity}
       >
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div>
-            <h3 className="text-xs font-semibold tracking-wide text-muted-text uppercase">
-              Distribusi hasil
-            </h3>
+            <h3 className="text-sm font-semibold text-tinta">Distribusi hasil</h3>
             {outcomeTotal > 0 ? (
               <div className="mt-3 flex items-center gap-4">
                 <div
@@ -315,7 +345,7 @@ export function AdminObservability() {
                   className="size-24 shrink-0 rounded-full"
                   style={{ background: `conic-gradient(${donutGradient})` }}
                 />
-                <dl className="min-w-0 flex-1 space-y-2">
+                <dl className="w-full max-w-56 min-w-0 flex-1 space-y-2">
                   {donutSegments.map((segment) => (
                     <div key={segment.key} className="flex items-center gap-2 text-sm">
                       <span
@@ -331,7 +361,7 @@ export function AdminObservability() {
                 </dl>
               </div>
             ) : (
-              <p className="mt-3 rounded-lg border border-dashed border-teal-soft bg-teal-soft/40 px-4 py-6 text-center text-sm text-muted-text">
+              <p className="mt-3 rounded-lg border border-dashed border-[#e5e5e5] bg-teal-soft/40 px-4 py-6 text-center text-sm text-muted-text">
                 Belum ada permintaan RAG yang tercatat.
               </p>
             )}
@@ -345,9 +375,7 @@ export function AdminObservability() {
             ) : null}
           </div>
           <div>
-            <h3 className="text-xs font-semibold tracking-wide text-muted-text uppercase">
-              Latensi per tahap
-            </h3>
+            <h3 className="text-sm font-semibold text-tinta">Latensi per tahap</h3>
             {stageEntries.length > 0 ? (
               <dl className="mt-3 space-y-3.5">
                 {stageEntries.map(([stage, stat]) => (
@@ -361,7 +389,7 @@ export function AdminObservability() {
                 ))}
               </dl>
             ) : (
-              <p className="mt-3 rounded-lg border border-dashed border-teal-soft bg-teal-soft/40 px-4 py-6 text-center text-sm text-muted-text">
+              <p className="mt-3 rounded-lg border border-dashed border-[#e5e5e5] bg-teal-soft/40 px-4 py-6 text-center text-sm text-muted-text">
                 Belum ada data latensi tahap.
               </p>
             )}
@@ -371,25 +399,35 @@ export function AdminObservability() {
 
       <SectionCard
         title="Pemakaian token"
-        hint="Akumulasi token prompt vs completion per model LLM."
+        hint="Akumulasi token prompt vs completion model OpenAI."
+        icon={Coins}
       >
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-teal-soft px-4 py-3">
-            <dt className="text-xs text-muted-text">Token prompt</dt>
+          <div className="rounded-lg border border-[#e5e5e5] px-4 py-3">
+            <dt className="flex items-center gap-1.5 text-xs text-muted-text">
+              <ArrowUpRight aria-hidden="true" className="size-3.5 text-forest" />
+              Token prompt
+            </dt>
             <dd className="mt-1 font-mono text-xl font-bold text-forest tabular-nums">
-              {formatInt(metrics.tokens.prompt)}
+              {formatInt(openaiPrompt)}
             </dd>
           </div>
-          <div className="rounded-lg border border-teal-soft px-4 py-3">
-            <dt className="text-xs text-muted-text">Token completion</dt>
-            <dd className="mt-1 font-mono text-xl font-bold text-forest tabular-nums">
-              {formatInt(metrics.tokens.completion)}
+          <div className="rounded-lg border border-[#e5e5e5] px-4 py-3">
+            <dt className="flex items-center gap-1.5 text-xs text-muted-text">
+              <ArrowDownLeft aria-hidden="true" className="size-3.5 text-amber" />
+              Token completion
+            </dt>
+            <dd className="mt-1 font-mono text-xl font-bold text-amber tabular-nums">
+              {formatInt(openaiCompletion)}
             </dd>
           </div>
-          <div className="rounded-lg border border-teal-soft px-4 py-3">
-            <dt className="text-xs text-muted-text">Total token</dt>
-            <dd className="mt-1 font-mono text-xl font-bold text-forest tabular-nums">
-              {formatInt(metrics.tokens.total)}
+          <div className="rounded-lg border border-[#e5e5e5] px-4 py-3">
+            <dt className="flex items-center gap-1.5 text-xs text-muted-text">
+              <Sigma aria-hidden="true" className="size-3.5 text-tinta" />
+              Total token
+            </dt>
+            <dd className="mt-1 font-mono text-xl font-bold text-tinta tabular-nums">
+              {formatInt(openaiPrompt + openaiCompletion)}
             </dd>
           </div>
         </dl>
@@ -401,29 +439,24 @@ export function AdminObservability() {
               const promptPct = total > 0 ? (usage.prompt / total) * 100 : 0;
               return (
                 <div key={model}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <dt className="min-w-0 truncate text-sm text-muted-text">{model}</dt>
-                    <dd className="shrink-0 font-mono text-sm font-semibold text-tinta tabular-nums">
-                      {formatInt(total)}
-                    </dd>
-                  </div>
+                  <p className="truncate text-sm text-muted-text">{model}</p>
                   <div
                     role="img"
                     aria-label={`${model}: ${formatInt(usage.prompt)} prompt, ${formatInt(usage.completion)} completion`}
-                    className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-teal-soft/60"
+                    className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-[#e9edea]"
                   >
                     <div className="h-full bg-forest" style={{ width: `${promptPct}%` }} />
-                    <div className="h-full bg-teal" style={{ width: `${100 - promptPct}%` }} />
+                    <div
+                      className="h-full bg-[#c9a227]"
+                      style={{ width: `${100 - promptPct}%` }}
+                    />
                   </div>
-                  <p className="mt-1 text-xs text-muted-text">
-                    prompt {formatInt(usage.prompt)} · completion {formatInt(usage.completion)}
-                  </p>
                 </div>
               );
             })}
           </dl>
         ) : (
-          <p className="rounded-lg border border-dashed border-teal-soft bg-teal-soft/40 px-4 py-6 text-center text-sm text-muted-text">
+          <p className="rounded-lg border border-dashed border-[#e5e5e5] bg-teal-soft/40 px-4 py-6 text-center text-sm text-muted-text">
             Belum ada pemakaian token yang tercatat.
           </p>
         )}
@@ -432,12 +465,11 @@ export function AdminObservability() {
       <SectionCard
         title="Perilaku pengguna & kualitas"
         hint="Rasio follow-up, distribusi topik, dan skor RAGAS faithfulness online (5% sampel)."
+        icon={Users}
       >
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div>
-            <h3 className="text-xs font-semibold tracking-wide text-muted-text uppercase">
-              Follow-up & topik
-            </h3>
+            <h3 className="text-sm font-semibold text-tinta">Follow-up & topik</h3>
             <p className="mt-3 font-mono text-3xl leading-none font-bold tracking-tight text-forest tabular-nums">
               {formatPct(metrics.behavior.followup_ratio)}
               <span className="ml-2 align-middle font-sans text-xs font-normal text-muted-text">
@@ -449,7 +481,7 @@ export function AdminObservability() {
                 {topicEntries.map(([topic, count]) => (
                   <BarRow
                     key={topic}
-                    label={topic}
+                    label={topic === "unknown" ? "Lainnya" : topic}
                     display={formatInt(count)}
                     pct={(count / maxTopic) * 100}
                     fill="bg-teal"
@@ -457,15 +489,13 @@ export function AdminObservability() {
                 ))}
               </dl>
             ) : (
-              <p className="mt-3 rounded-lg border border-dashed border-teal-soft bg-teal-soft/40 px-4 py-6 text-center text-sm text-muted-text">
+              <p className="mt-3 rounded-lg border border-dashed border-[#e5e5e5] bg-teal-soft/40 px-4 py-6 text-center text-sm text-muted-text">
                 Belum ada data topik.
               </p>
             )}
           </div>
           <div>
-            <h3 className="text-xs font-semibold tracking-wide text-muted-text uppercase">
-              RAGAS online
-            </h3>
+            <h3 className="text-sm font-semibold text-tinta">RAGAS online</h3>
             <p className="mt-3 flex items-center gap-2 text-sm">
               <span
                 className={cn(
@@ -494,16 +524,23 @@ export function AdminObservability() {
                 />
               </dl>
             ) : (
-              <p className="mt-3 rounded-lg border border-dashed border-teal-soft bg-teal-soft/40 px-4 py-6 text-center text-sm text-muted-text">
+              <p className="mt-3 rounded-lg border border-dashed border-[#e5e5e5] bg-teal-soft/40 px-4 py-6 text-center text-sm text-muted-text">
                 Belum ada sampel RAGAS. Aktifkan RAGAS dan tunggu permintaan masuk.
               </p>
             )}
             {evalTotal > 0 ? (
-              <p className="mt-3 text-xs text-muted-text">
-                {evalEntries
-                  .map(([statusName, count]) => `${statusName}: ${formatInt(count)}`)
-                  .join(" · ")}
-              </p>
+              <ul className="mt-3 space-y-2">
+                {evalEntries.map(([statusName, count]) => (
+                  <li key={statusName} className="flex items-center gap-2 text-xs">
+                    <StatusBadge tone={statusName === "success" ? "success" : "danger"}>
+                      {statusName === "success" ? "Berhasil" : "Gagal"}
+                    </StatusBadge>
+                    <span className="font-mono font-semibold text-tinta tabular-nums">
+                      {formatInt(count)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             ) : null}
           </div>
         </div>

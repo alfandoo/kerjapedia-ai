@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import modalStyles from "./evaluation-detail.module.css";
 import styles from "./admin-ingestion.module.css";
-import { AlertTriangle, CheckCircle2, Trophy } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Gauge, Loader2, Trophy } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -98,7 +98,7 @@ function MetricBar({ label, value }: { label: string; value: number }) {
 
 export function ModeMetricsCard({ mode, metrics }: { mode: string; metrics: EvaluationMetricSet }) {
   return (
-    <div className="rounded-xl border border-line bg-white p-4">
+    <div className="rounded-xl border border-[#e5e5e5] bg-white p-4 shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
       <div className="flex items-center justify-between">
         <StatusBadge tone="neutral">{modeLabel[mode] ?? mode}</StatusBadge>
         {metrics.recall_at_5 >= 0.8 && <Trophy className="size-4 text-emas" />}
@@ -148,20 +148,35 @@ export function RunDetailDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className={`admin-theme ${styles.ingestion} ${styles.detailModal}`}>
           <DialogHeader>
-            <DialogTitle>Detail evaluasi</DialogTitle>
-            <DialogDescription>
-              {error
-                ? "Detail belum dapat dimuat. Tutup modal dan pilih Detail untuk mencoba lagi."
-                : "Memuat hasil evaluasi…"}
-            </DialogDescription>
+            <div className="flex items-center gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                <Gauge aria-hidden="true" className="size-5 text-forest" />
+              </span>
+              <div className="min-w-0">
+                <DialogTitle>Detail evaluasi</DialogTitle>
+                <DialogDescription>
+                  {error ? "Laporan gagal dimuat." : "Memuat hasil evaluasi…"}
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-          <p role={error ? "alert" : "status"} className="text-sm text-muted-text">
-            {loading
-              ? "Mengambil laporan dari API…"
-              : error
-                ? "Gagal memuat laporan."
-                : "Laporan tidak tersedia."}
-          </p>
+          {loading ? (
+            <p
+              role="status"
+              aria-label="Memuat detail evaluasi"
+              className="flex items-center justify-center gap-2.5 py-10 text-center text-sm text-muted-text"
+            >
+              <Loader2
+                aria-hidden="true"
+                className="size-4 animate-spin text-forest motion-reduce:animate-none"
+              />
+              Memuat data…
+            </p>
+          ) : (
+            <Callout tone="danger" title="Gagal memuat laporan">
+              Tutup dialog ini lalu pilih Detail untuk mencoba lagi.
+            </Callout>
+          )}
         </DialogContent>
       </Dialog>
     );
@@ -201,13 +216,20 @@ export function RunDetailDialog({
         className={`admin-theme ${styles.ingestion} ${styles.detailModal} ${modalStyles.modal}`}
       >
         <DialogHeader className={modalStyles.header}>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-text">
-            Laporan pengujian
-          </p>
-          <DialogTitle className="text-xl">Detail evaluasi</DialogTitle>
-          <DialogDescription className="break-words">
-            {datasetName ?? detail.dataset_id}
-          </DialogDescription>
+          <div className="flex items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+              <Gauge aria-hidden="true" className="size-5 text-forest" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-text">
+                Laporan pengujian
+              </p>
+              <DialogTitle className="mt-0.5 text-xl">Detail evaluasi</DialogTitle>
+              <DialogDescription className="break-words">
+                {datasetName ?? detail.dataset_id}
+              </DialogDescription>
+            </div>
+          </div>
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-text">
             <span>{formatDateTime(detail.created_at)}</span>
             <span>{modes.length} mode</span>
