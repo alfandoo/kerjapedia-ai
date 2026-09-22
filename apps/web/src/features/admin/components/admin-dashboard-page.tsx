@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EmptyState, PageHeader, StatusBadge } from "./primitives";
-import { AlertIcon, DatabaseIcon, ThumbsUpIcon } from "@/components/icons";
-import { ArrowDown, ArrowRight, ArrowUp, BarChart3, ChevronRight, CircleCheck, Crosshair, Database, FileUp, ScrollText, MessagesSquare, Timer, Users } from "lucide-react";
+import { AlertIcon, DatabaseIcon, ThumbsDownIcon, ThumbsUpIcon } from "@/components/icons";
+import { ArrowDown, ArrowRight, ArrowUp, BarChart3, ChevronRight, CircleCheck, Crosshair, Database, FileUp, HeartPulse, Layers, Pencil, ScrollText, MessagesSquare, ShieldCheck, Timer, Trash2, TrendingUp, TriangleAlert, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   clearStoredSession,
@@ -21,6 +21,7 @@ import type {
   AdminStats,
   AuditLogEntry,
   DailyUsagePoint,
+  EvaluationMetricSet,
   EvaluationRunSummary,
 } from "@/features/admin/types";
 import { cn } from "@/lib/utils";
@@ -127,7 +128,7 @@ function shortDay(isoDate: string) {
 
 function UsageTrendChart({ points }: { points: DailyUsagePoint[] }) {
   const width = 640;
-  const height = 220;
+  const height = 280;
   const padLeft = 36;
   const padRight = 8;
   const padTop = 12;
@@ -145,6 +146,33 @@ function UsageTrendChart({ points }: { points: DailyUsagePoint[] }) {
   const line = (pick: (point: DailyUsagePoint) => number) =>
     points.map((point, index) => `${xAt(index).toFixed(1)},${yAt(pick(point)).toFixed(1)}`).join(" ");
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((fraction) => Math.round(fraction * maxValue));
+  const seriesOrder = (
+    [
+      {
+        key: "messages",
+        color: TREND_COLORS.messages,
+        dashed: false,
+        pick: (p: DailyUsagePoint) => p.messages,
+      },
+      {
+        key: "conversations",
+        color: TREND_COLORS.conversations,
+        dashed: true,
+        pick: (p: DailyUsagePoint) => p.conversations,
+      },
+      {
+        key: "active_users",
+        color: TREND_COLORS.active_users,
+        dashed: false,
+        pick: (p: DailyUsagePoint) => p.active_users,
+      },
+    ] as const
+  )
+    .map((series) => ({
+      ...series,
+      max: Math.max(0, ...points.map(series.pick)),
+    }))
+    .sort((a, b) => b.max - a.max);
   const labelIndexes =
     points.length <= 6
       ? points.map((_, index) => index)
@@ -162,7 +190,7 @@ function UsageTrendChart({ points }: { points: DailyUsagePoint[] }) {
       viewBox={`0 0 ${width} ${height}`}
       role="img"
       aria-label={`Tren 30 hari: ${totals.messages} pertanyaan, ${totals.conversations} percakapan, ${totals.activeUsers} pengguna aktif.`}
-      className="h-auto w-full"
+      className="block h-[300px] w-full"
     >
       {ticks.map((tick) => (
         <g key={tick}>
@@ -191,30 +219,18 @@ function UsageTrendChart({ points }: { points: DailyUsagePoint[] }) {
           {shortDay(points[index].date)}
         </text>
       ))}
-      <polyline
-        points={line((p) => p.active_users)}
-        fill="none"
-        stroke={TREND_COLORS.active_users}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <polyline
-        points={line((p) => p.conversations)}
-        fill="none"
-        stroke={TREND_COLORS.conversations}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <polyline
-        points={line((p) => p.messages)}
-        fill="none"
-        stroke={TREND_COLORS.messages}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {seriesOrder.map((series) => (
+        <polyline
+          key={series.key}
+          points={line(series.pick)}
+          fill="none"
+          stroke={series.color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray={series.dashed ? "6 4" : undefined}
+        />
+      ))}
     </svg>
   );
 }
@@ -276,6 +292,17 @@ function KnowledgeDonut({
       </div>
     </div>
   );
+}
+
+function auditIcon(action: string) {
+  if (action === "document.uploaded") return FileUp;
+  if (action === "document.published") return CircleCheck;
+  if (action === "document.metadata_updated" || action === "document.relationships_updated")
+    return Pencil;
+  if (action.endsWith("_verification")) return ShieldCheck;
+  if (action.startsWith("ingestion_build.")) return Layers;
+  if (action === "chat_purge") return Trash2;
+  return ScrollText;
 }
 
 function describeAudit(entry: AuditLogEntry) {
@@ -431,7 +458,7 @@ export function AdminDashboardPage() {
 
   const refreshIfStale = useCallback(() => {
     const last = lastUpdatedRef.current;
-    if (last !== null && Date.now() - last < 25000) return;
+    if (last !== null && Date.now() - last < 55000) return;
     void refreshSilent();
   }, [refreshSilent]);
 
@@ -448,7 +475,7 @@ export function AdminDashboardPage() {
     function handleVisibilityChange() {
       if (!document.hidden) refreshIfStale();
     }
-    const id = window.setInterval(refreshIfStale, 30000);
+    const id = window.setInterval(refreshIfStale, 60000);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       window.clearInterval(id);
@@ -518,7 +545,7 @@ export function AdminDashboardPage() {
     { key: "documents", label: "Total dokumen", icon: ScrollText },
     { key: "published", label: "Dokumen terbit", icon: Database },
     { key: "users", label: "Pengguna terdaftar", icon: Users },
-    { key: "messages", label: "Total pertanyaan", icon: MessagesSquare },
+    { key: "messages", label: "Total pesan", icon: MessagesSquare },
   ] as const;
 
   const hasTotal = stats.documents.total > 0;
@@ -549,22 +576,28 @@ export function AdminDashboardPage() {
     .filter((run) => run.status === "completed")
     .sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
   const latestCompletedRun = completedRuns[completedRuns.length - 1] ?? null;
-  const latestModeKey = latestCompletedRun
-    ? (Object.keys(latestCompletedRun.metrics)[0] ?? null)
-    : null;
-  function evalMetricsFor(run: EvaluationRunSummary) {
-    if (latestModeKey && run.metrics[latestModeKey]) return run.metrics[latestModeKey];
-    return Object.values(run.metrics)[0] ?? null;
+  function bestModeMetrics(run: EvaluationRunSummary) {
+    let best: { key: string; metrics: EvaluationMetricSet } | null = null;
+    for (const [key, metrics] of Object.entries(run.metrics)) {
+      if (!best || metrics.recall_at_5 > best.metrics.recall_at_5)
+        best = { key, metrics };
+    }
+    return best;
   }
-  const latestEvalMetrics = latestCompletedRun ? evalMetricsFor(latestCompletedRun) : null;
-  const recallAt5 = latestEvalMetrics?.recall_at_5 ?? null;
-  const mrr = latestEvalMetrics?.mean_reciprocal_rank ?? null;
-  const recallSeries = completedRuns
-    .map((run) => evalMetricsFor(run)?.recall_at_5 ?? null)
-    .filter((value): value is number => value !== null);
-  const mrrSeries = completedRuns
-    .map((run) => evalMetricsFor(run)?.mean_reciprocal_rank ?? null)
-    .filter((value): value is number => value !== null);
+  function prettyMode(key: string) {
+    return key.charAt(0).toUpperCase() + key.slice(1);
+  }
+  const latestBest = latestCompletedRun ? bestModeMetrics(latestCompletedRun) : null;
+  const latestBestLabel = latestBest
+    ? `${prettyMode(latestBest.key)} · ${shortDay(latestCompletedRun.created_at.slice(0, 10))}`
+    : "Belum ada evaluasi selesai";
+  const recallAt5 = latestBest?.metrics.recall_at_5 ?? null;
+  const mrr = latestBest?.metrics.mean_reciprocal_rank ?? null;
+  const bestSeries = completedRuns
+    .map((run) => bestModeMetrics(run)?.metrics ?? null)
+    .filter((metrics): metrics is EvaluationMetricSet => metrics !== null);
+  const recallSeries = bestSeries.map((metrics) => metrics.recall_at_5);
+  const mrrSeries = bestSeries.map((metrics) => metrics.mean_reciprocal_rank);
   const recallDelta =
     recallSeries.length >= 2
       ? recallSeries[recallSeries.length - 1] - recallSeries[recallSeries.length - 2]
@@ -576,7 +609,7 @@ export function AdminDashboardPage() {
   const avgLatency =
     metrics?.request_latency?.avg ?? metrics?.request_latency?.p50 ?? null;
   const requestTotal = metrics?.requests.total ?? 0;
-  const providerErrorTotal = metrics?.provider_errors.total ?? 0;
+  const providerErrorTotal = metrics?.provider_errors.last_7_days ?? 0;
   const hasHealthSignal =
     stats.messages > 0 || requestTotal > 0 || latestCompletedRun !== null;
   const health: "healthy" | "attention" | "nodata" = !hasHealthSignal
@@ -601,10 +634,7 @@ export function AdminDashboardPage() {
       label: "Recall@5",
       icon: Crosshair,
       display: recallAt5 === null ? "N/A" : `${(recallAt5 * 100).toFixed(1)}%`,
-      hint:
-        latestCompletedRun === null
-          ? "Belum ada evaluasi selesai"
-          : `Run ${formatDate(latestCompletedRun.created_at)}`,
+      hint: latestBestLabel,
       delta: recallDelta === null ? null : recallDelta * 100,
       deltaSuffix: "%",
       series: recallSeries,
@@ -613,13 +643,10 @@ export function AdminDashboardPage() {
       key: "mrr",
       label: "MRR",
       icon: BarChart3,
-      display: mrr === null ? "N/A" : mrr.toFixed(3),
-      hint:
-        latestCompletedRun === null
-          ? "Belum ada evaluasi selesai"
-          : `Run ${formatDate(latestCompletedRun.created_at)}`,
-      delta: mrrDelta,
-      deltaSuffix: "",
+      display: mrr === null ? "N/A" : `${(mrr * 100).toFixed(1)}%`,
+      hint: latestBestLabel,
+      delta: mrrDelta === null ? null : mrrDelta * 100,
+      deltaSuffix: "%",
       series: mrrSeries,
     },
     {
@@ -648,8 +675,8 @@ export function AdminDashboardPage() {
   ] as const;
 
   const belowTargetEvals = completedRuns.filter((run) => {
-    const metricsForRun = evalMetricsFor(run);
-    return metricsForRun !== null && metricsForRun.recall_at_5 < 0.8;
+    const best = bestModeMetrics(run);
+    return best !== null && best.metrics.recall_at_5 < 0.8;
   }).length;
   const alerts: { key: string; count: number; text: string; tone: string; href: string }[] = [];
   if (failedDocs > 0)
@@ -726,7 +753,10 @@ export function AdminDashboardPage() {
           const Icon = card.icon;
           const foot = kpiFooters[index];
           return (
-            <div key={card.key} className="rounded-xl border border-[#e5e5e5] bg-white px-5 py-4">
+            <div
+              key={card.key}
+              className="rounded-xl border border-[#e5e5e5] bg-white px-5 py-4 shadow-[0_1px_3px_rgba(27,67,50,0.06)]"
+            >
               <div className="flex items-start gap-3">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
                   <Icon strokeWidth={1.75} className="size-5 text-forest" />
@@ -746,11 +776,16 @@ export function AdminDashboardPage() {
 
       <section aria-label="Kesehatan RAG">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-forest">RAG Health</h2>
-            <p className="mt-1 text-xs text-muted-text">
-              Metrik utama sistem RAG untuk memantau kualitas dan performa.
-            </p>
+          <div className="flex items-center gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+              <HeartPulse aria-hidden="true" className="size-4 text-forest" />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-forest">RAG Health</h2>
+              <p className="mt-1 text-xs text-muted-text">
+                Metrik utama sistem RAG untuk memantau kualitas dan performa.
+              </p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {health === "healthy" ? (
@@ -779,7 +814,7 @@ export function AdminDashboardPage() {
             return (
               <div
                 key={card.key}
-                className="rounded-xl border border-[#e5e5e5] bg-white px-5 py-4"
+                className="rounded-xl border border-[#e5e5e5] bg-white px-5 py-4 shadow-[0_1px_3px_rgba(27,67,50,0.06)]"
               >
                 <div className="flex items-center gap-3">
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
@@ -805,7 +840,7 @@ export function AdminDashboardPage() {
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-1 truncate text-[11px] text-muted-text">{card.hint}</p>
+                    <p className="mt-1 text-[11px] text-muted-text">{card.hint}</p>
                   </div>
                   <Sparkline points={[...card.series]} />
                 </div>
@@ -816,13 +851,18 @@ export function AdminDashboardPage() {
       </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <section className="rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)] lg:col-span-3">
+        <section className="flex flex-col overflow-hidden rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)] lg:col-span-3">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5e5e5] px-6 py-4">
-            <div>
-              <h2 className="text-sm font-semibold text-forest">Tren Penggunaan (30 Hari)</h2>
-              <p className="mt-0.5 text-xs text-muted-text">
-                Aktivitas pertanyaan, percakapan, dan pengguna dalam 30 hari terakhir.
-              </p>
+            <div className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                <TrendingUp aria-hidden="true" className="size-4 text-forest" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-forest">Tren Penggunaan (30 Hari)</h2>
+                <p className="mt-0.5 text-xs text-muted-text">
+                  Aktivitas pertanyaan, percakapan, dan pengguna dalam 30 hari terakhir.
+                </p>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-text">
               <span className="inline-flex items-center gap-1.5">
@@ -851,7 +891,7 @@ export function AdminDashboardPage() {
               </span>
             </div>
           </header>
-          <div className="px-6 py-5">
+          <div className="flex flex-1 flex-col justify-center px-6 py-5">
             {dailyUsage === null ? (
               <p className="rounded-lg border border-dashed border-[#e5e5e5] px-4 py-10 text-center text-sm text-muted-text">
                 Data tren belum dapat dimuat. Coba muat ulang halaman.
@@ -866,22 +906,28 @@ export function AdminDashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)] lg:col-span-2">
+        <section className="flex flex-col overflow-hidden rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)] lg:col-span-2">
           <header className="flex items-center justify-between border-b border-[#e5e5e5] px-6 py-4">
-            <div>
-              <h2 className="text-sm font-semibold text-forest">Kondisi Knowledge Base</h2>
-              <p className="mt-0.5 text-xs text-muted-text">
-                Status pemrosesan seluruh dokumen dalam sistem.
-              </p>
+            <div className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                <Database aria-hidden="true" className="size-4 text-forest" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-forest">Kondisi Knowledge Base</h2>
+                <p className="mt-0.5 text-xs text-muted-text">
+                  Status pemrosesan seluruh dokumen dalam sistem.
+                </p>
+              </div>
             </div>
             <Link
               href="/documents"
-              className="rounded-md px-2 py-3.5 -my-3 -mr-2 shrink-0 text-xs font-semibold text-forest transition hover:text-teal"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-3.5 -my-3 -mr-2 text-xs font-semibold text-forest transition hover:text-teal"
             >
               Kelola dokumen
+              <ArrowRight aria-hidden="true" className="size-3.5" />
             </Link>
           </header>
-          <div className="px-6 py-5">
+          <div className="flex flex-1 flex-col justify-center px-6 py-5">
             {hasTotal ? (
               <>
                 <KnowledgeDonut segments={kbSegments} total={stats.documents.total} />
@@ -925,19 +971,29 @@ export function AdminDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
+        <section className="overflow-hidden rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
           <header className="border-b border-[#e5e5e5] px-6 py-4">
-            <h2 className="text-sm font-semibold text-forest">Feedback Pengguna</h2>
-            <p className="mt-0.5 text-xs text-muted-text">
-              Penilaian pengguna terhadap jawaban AI.
-            </p>
+            <div className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                <MessagesSquare aria-hidden="true" className="size-4 text-forest" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-forest">Feedback Pengguna</h2>
+                <p className="mt-0.5 text-xs text-muted-text">
+                  Penilaian pengguna terhadap jawaban AI.
+                </p>
+              </div>
+            </div>
           </header>
           <div className="px-6 py-5">
             {stats.feedback.total > 0 ? (
               <div className="space-y-4">
                 <div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-sm text-muted-text">Helpful</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="inline-flex items-center gap-2 text-sm text-muted-text">
+                      <ThumbsUpIcon aria-hidden="true" className="size-4 text-forest" />
+                      Helpful
+                    </p>
                     <p className="font-mono text-sm font-semibold text-tinta tabular-nums">
                       {stats.feedback.helpful}
                       <span className="ml-2 text-xs font-normal text-muted-text">
@@ -948,14 +1004,17 @@ export function AdminDashboardPage() {
                   <div
                     role="img"
                     aria-label={`${satisfaction}% feedback menilai membantu`}
-                    className="mt-2 h-2 overflow-hidden rounded-full bg-surface-soft"
+                    className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#e9edea]"
                   >
                     <div className="h-full rounded-full bg-forest" style={{ width: `${satisfaction}%` }} />
                   </div>
                 </div>
                 <div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-sm text-muted-text">Tidak membantu</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="inline-flex items-center gap-2 text-sm text-muted-text">
+                      <ThumbsDownIcon aria-hidden="true" className="size-4 text-red" />
+                      Tidak membantu
+                    </p>
                     <p className="font-mono text-sm font-semibold text-tinta tabular-nums">
                       {stats.feedback.not_helpful}
                       <span className="ml-2 text-xs font-normal text-muted-text">
@@ -966,7 +1025,7 @@ export function AdminDashboardPage() {
                   <div
                     role="img"
                     aria-label={`${100 - satisfaction}% feedback menilai tidak membantu`}
-                    className="mt-2 h-2 overflow-hidden rounded-full bg-surface-soft"
+                    className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#e9edea]"
                   >
                     <div
                       className="h-full rounded-full bg-red"
@@ -988,10 +1047,17 @@ export function AdminDashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
+        <section className="overflow-hidden rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
           <header className="border-b border-[#e5e5e5] px-6 py-4">
-            <h2 className="text-sm font-semibold text-forest">Ingestion Terbaru</h2>
-            <p className="mt-0.5 text-xs text-muted-text">Proses ingestion terakhir.</p>
+            <div className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                <Layers aria-hidden="true" className="size-4 text-forest" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-forest">Ingestion Terbaru</h2>
+                <p className="mt-0.5 text-xs text-muted-text">Proses ingestion terakhir.</p>
+              </div>
+            </div>
           </header>
           {stats.ingestion_jobs.recent.length === 0 ? (
             <div className="px-6 py-5">
@@ -1043,12 +1109,19 @@ export function AdminDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
+        <section className="overflow-hidden rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
           <header className="border-b border-[#e5e5e5] px-6 py-4">
-            <h2 className="text-sm font-semibold text-forest">Alert & Tindakan</h2>
-            <p className="mt-0.5 text-xs text-muted-text">
-              Isu penting yang memerlukan perhatian.
-            </p>
+            <div className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-soft">
+                <TriangleAlert aria-hidden="true" className="size-4 text-amber" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-forest">Alert & Tindakan</h2>
+                <p className="mt-0.5 text-xs text-muted-text">
+                  Isu penting yang memerlukan perhatian.
+                </p>
+              </div>
+            </div>
           </header>
           <div className="px-6 py-5">
             {alerts.length > 0 ? (
@@ -1073,29 +1146,31 @@ export function AdminDashboardPage() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-text">
-                Tidak ada isu yang perlu perhatian saat ini.
-              </p>
+              <div className="flex flex-col items-center gap-2 rounded-lg bg-white px-4 py-6 text-center">
+                <span className="flex size-10 items-center justify-center rounded-full bg-teal-soft">
+                  <CircleCheck aria-hidden="true" className="size-5 text-forest" />
+                </span>
+                <p className="text-sm font-medium text-tinta">Semua aman</p>
+                <p className="text-xs text-muted-text">
+                  Tidak ada isu yang perlu perhatian saat ini.
+                </p>
+              </div>
             )}
-            <div className="mt-4 flex flex-wrap gap-2.5">
-              <Link href="/admin/ingestion" className={styles.upload}>
-                Buka Ingestion
-              </Link>
-              <Link
-                href="/admin/evaluation"
-                className="inline-flex min-h-11 items-center justify-center rounded-[10px] border border-[#e5e5e5] bg-white px-4 text-sm font-semibold text-forest transition hover:border-forest"
-              >
-                Lihat Evaluasi
-              </Link>
-            </div>
           </div>
         </section>
       </div>
 
-      <section className="rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
+      <section className="overflow-hidden rounded-xl border border-[#e5e5e5] bg-white shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
         <header className="border-b border-[#e5e5e5] px-6 py-4">
-          <h2 className="text-sm font-semibold text-forest">Aktivitas Sistem Terbaru</h2>
-          <p className="mt-0.5 text-xs text-muted-text">Log aktivitas penting dalam sistem.</p>
+          <div className="flex items-center gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+              <ScrollText aria-hidden="true" className="size-4 text-forest" />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-forest">Aktivitas Sistem Terbaru</h2>
+              <p className="mt-0.5 text-xs text-muted-text">Log aktivitas penting dalam sistem.</p>
+            </div>
+          </div>
         </header>
         {auditLogs === null ? (
           <p className="px-6 py-8 text-center text-sm text-muted-text">
@@ -1122,19 +1197,29 @@ export function AdminDashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-dashed divide-[#e5e5e5]">
-                {auditLogs.map((entry) => (
-                  <tr key={entry.audit_id}>
-                    <td className="px-6 py-3 whitespace-nowrap text-xs text-muted-text tabular-nums">
-                      <time dateTime={entry.created_at}>{formatDate(entry.created_at)}</time>
-                    </td>
-                    <td className="max-w-0 truncate px-3 py-3 font-medium text-tinta">
-                      {describeAudit(entry)}
-                    </td>
-                    <td className="px-6 py-3 text-right">
-                      <StatusBadge tone="success">Sukses</StatusBadge>
-                    </td>
-                  </tr>
-                ))}
+                {auditLogs.map((entry) => {
+                  const ActivityIcon = auditIcon(entry.action);
+                  return (
+                    <tr key={entry.audit_id}>
+                      <td className="px-6 py-3 whitespace-nowrap text-xs text-muted-text tabular-nums">
+                        <time dateTime={entry.created_at}>{formatDate(entry.created_at)}</time>
+                      </td>
+                      <td className="max-w-0 px-3 py-3">
+                        <span className="flex items-center gap-2.5">
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
+                            <ActivityIcon aria-hidden="true" className="size-4 text-forest" />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-medium text-tinta">
+                            {describeAudit(entry)}
+                          </span>
+                        </span>
+                      </td>
+                      <td className="px-6 py-3 text-right">
+                        <StatusBadge tone="success">Sukses</StatusBadge>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

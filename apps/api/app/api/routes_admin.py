@@ -419,6 +419,13 @@ def admin_metrics(session: DbSession, _: AdminUser) -> dict:
         .all()
     )
     provider_errors = {str(stage): int(count) for stage, count in provider_rows}
+    week_ago = now_utc() - timedelta(days=7)
+    recent_provider_errors = int(
+        session.query(sa_func.count(RagProviderError.id))
+        .filter(RagProviderError.created_at >= week_ago)
+        .scalar()
+        or 0
+    )
     ragas_rows = (
         session.query(RagRagasEval.status, sa_func.count(RagRagasEval.id))
         .group_by(RagRagasEval.status)
@@ -486,6 +493,7 @@ def admin_metrics(session: DbSession, _: AdminUser) -> dict:
         "provider_errors": {
             "total": sum(provider_errors.values()),
             "by_stage": provider_errors,
+            "last_7_days": recent_provider_errors,
         },
         "ragas": {
             "eval_total": ragas_eval,

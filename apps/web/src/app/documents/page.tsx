@@ -11,7 +11,7 @@ export default async function DocumentsPage({
 
   return (
     <AdminShell>
-      <AdminDashboard initialQuery={initialQuery} />
+      <AdminDashboard key={initialQuery} initialQuery={initialQuery} />
     </AdminShell>
   );
 }

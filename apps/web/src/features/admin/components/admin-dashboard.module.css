@@ -42,15 +42,3 @@
 .dashboard .upload:hover {
   background: #1b4932;
 }
-.metric {
-  min-width: 0;
-  padding: 20px;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
-  background: #ffffff;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.metric:hover {
-  border-color: #d4d4d4;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}

@@ -222,6 +222,7 @@ export type AdminMetrics = {
   provider_errors: {
     total: number;
     by_stage: Record<string, number>;
+    last_7_days: number;
   };
   ragas: {
     eval_total: Record<string, number>;

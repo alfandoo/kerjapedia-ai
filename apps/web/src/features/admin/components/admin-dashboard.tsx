@@ -78,11 +78,11 @@ function DocumentsSkeleton() {
   );
 }
 
-export function AdminDashboard() {
+export function AdminDashboard({ initialQuery = "" }: { initialQuery?: string }) {
   const router = useRouter();
   const [documents, setDocuments] = useState<AdminDocument[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialQuery);
   const [statusFilter, setStatusFilter] = useState("all");
   const [publicationFilter, setPublicationFilter] = useState("all");
   const [page, setPage] = useState(1);

@@ -57,7 +57,7 @@ export function FileIcon({ className }: IconProps) {
 
 export function ThumbsUpIcon({ className }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M7 11v9H4v-9h3Zm0 0 5-8 1 1v5h5.2a2 2 0 0 1 2 2.3l-1 6A2 2 0 0 1 17.2 19H7" />
     </svg>
   );
@@ -65,7 +65,7 @@ export function ThumbsUpIcon({ className }: IconProps) {
 
 export function ThumbsDownIcon({ className }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M7 13V4H4v9h3Zm0 0 5 8 1-1v-5h5.2a2 2 0 0 0 2-2.3l-1-6A2 2 0 0 0 17.2 5H7" />
     </svg>
   );
