@@ -21,14 +21,14 @@ RUN groupadd --system kerjapedia \
     && mkdir -p /workspace/storage /workspace/model-cache \
     && chown -R kerjapedia:kerjapedia /workspace
 
-COPY requirements-prod.txt requirements.txt .
+COPY apps/api/requirements-prod.txt apps/api/requirements.txt ./
 RUN python -m pip install --upgrade pip && python -m pip install -r requirements.txt
 
-COPY alembic.ini .
-COPY alembic ./alembic
-COPY app ./app
+COPY apps/api/alembic.ini ./
+COPY apps/api/alembic ./alembic
+COPY apps/api/app ./app
 COPY dataset ./dataset
-COPY start.sh .
+COPY apps/api/start.sh ./
 RUN chmod +x start.sh
 
 USER kerjapedia

@@ -1,0 +1,8 @@
+# Keep the Render Docker build context small: only apps/api and dataset
+# are copied into the image. Everything else is excluded.
+apps/web
+docs
+scripts
+render.yaml
+README.md
+AGENTS.md

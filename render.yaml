@@ -3,7 +3,7 @@ services:
     name: kerjapedia-api
     runtime: docker
     dockerfilePath: ./apps/api/Dockerfile
-    dockerContext: ./apps/api
+    dockerContext: .
     plan: free
     healthCheckPath: /ready
     envVars:
@@ -127,7 +127,7 @@ services:
     name: kerjapedia-worker
     runtime: docker
     dockerfilePath: ./apps/api/Dockerfile
-    dockerContext: ./apps/api
+    dockerContext: .
     plan: free
     dockerCommand: python -m celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=1
     envVars:
@@ -166,7 +166,7 @@ services:
     name: kerjapedia-scheduler
     runtime: docker
     dockerfilePath: ./apps/api/Dockerfile
-    dockerContext: ./apps/api
+    dockerContext: .
     plan: free
     schedule: "0 2 * * *"
     dockerCommand: python -m celery -A app.workers.celery_app beat --loglevel=INFO
