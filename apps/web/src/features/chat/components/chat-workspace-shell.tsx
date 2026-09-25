@@ -14,8 +14,7 @@ import {
 } from "react";
 
 import { ProfileModal } from "@/features/auth/components/profile-modal";
-import { AuthModal, signOut } from "@/features/auth";
-import { toast } from "sonner";
+import { AuthModal, LogoutConfirmDialog, signOut } from "@/features/auth";
 import {
   Calculator,
   ChevronRight,
@@ -237,15 +236,25 @@ export function ChatWorkspaceShell({
     window.setTimeout(() => authTriggerRef.current?.focus(), 0);
   }
 
-  async function handleLogout() {
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+
+  async function confirmLogout() {
+    if (logoutBusy) return;
+    setLogoutBusy(true);
+    setLogoutError(null);
     try {
       await signOut();
       setProfileMenuOpen(false);
+      setLogoutOpen(false);
       onNewConversation();
       onSourceDrawerClose();
       onMobileSidebarOpenChange(false);
     } catch (error) {
-      toast.error((error as Error).message);
+      setLogoutError((error as Error).message);
+    } finally {
+      setLogoutBusy(false);
     }
   }
 
@@ -772,12 +781,24 @@ export function ChatWorkspaceShell({
           type="button"
           role="menuitem"
           className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
-          onClick={handleLogout}
+          onClick={() => {
+            setLogoutError(null);
+            setLogoutOpen(true);
+          }}
         >
           <LogOut className="size-[18px]" />
           <span>{translate("sidebar.logout")}</span>
         </button>
       </div>
+      <LogoutConfirmDialog
+        open={logoutOpen}
+        confirming={logoutBusy}
+        error={logoutError}
+        onCancel={() => {
+          if (!logoutBusy) setLogoutOpen(false);
+        }}
+        onConfirm={() => void confirmLogout()}
+      />
     </div>
   ) : null;
 

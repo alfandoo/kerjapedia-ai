@@ -12,7 +12,7 @@ menampilkan exception/provider detail ke pengguna.
 Trace server hanya menyimpan hash retrieval query, model/prompt/answer version,
 chunk/document version, score, verification result, jumlah redaksi PII, dan token usage.
 Email, nomor telepon, NIK, serta token eksplisit disamarkan sebelum query memory dikirim
-ke embedding/Pinecone. System prompt,
+ke embedding/Upstash Vector. System prompt,
 rendered prompt, serta query kontekstual mentah tidak masuk response publik. Celery Beat
 menghapus `rag_trace` setelah `RAG_TRACE_RETENTION_DAYS` (default 30).
 
@@ -20,7 +20,7 @@ Chat guest wajib memakai UUID per browser dan conversation tidak pernah dibuat t
 owner. Urutan message dialokasikan per conversation di bawah row lock singkat; pending
 turn mencegah request bersamaan mencampur konteks dan dapat dipulihkan setelah timeout.
 
-`/health` digunakan sebagai liveness. `/ready` gagal ketika database/Pinecone tidak siap,
+`/health` digunakan sebagai liveness. `/ready` gagal ketika Neon PostgreSQL/Upstash Vector tidak siap,
 tidak ada active release, atau registry membuat snapshot release stale. Prometheus
 tersedia di `/metrics`; OpenTelemetry OTLP bersifat opsional melalui environment.
 

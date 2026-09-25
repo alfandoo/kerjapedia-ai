@@ -3,6 +3,8 @@ import { fetchWithAuthRetry } from "@/features/auth";
 import type {
   AdminMetrics,
   AdminOverview,
+  AlertEvent,
+  AlertRule,
   DailyUsagePoint,
   AdminRelationship,
   AdminStats,
@@ -15,6 +17,11 @@ import type {
   FeedbackItem,
   IngestionJob,
   RetrievalPlaygroundResponse,
+  SystemLogEntry,
+  SystemOverview,
+  SystemServiceStatus,
+  SystemTraceDetail,
+  SystemTraceSummary,
 } from "../types";
 function adminHeaders(contentType = true): HeadersInit {
   return {
@@ -279,6 +286,131 @@ export async function fetchEvaluationRun(
     signal
   );
   return parseJsonResponse<EvaluationRunDetail>(response);
+}
+
+export async function fetchSystemOverview(
+  sinceHours = 24,
+  signal?: AbortSignal
+): Promise<SystemOverview> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/system/overview?since_hours=${sinceHours}`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
+  return parseJsonResponse<SystemOverview>(response);
+}
+
+export async function fetchSystemServices(
+  signal?: AbortSignal
+): Promise<{ services: SystemServiceStatus[] }> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/system/services`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
+  return parseJsonResponse<{ services: SystemServiceStatus[] }>(response);
+}
+
+export async function fetchSystemLogs(
+  params: {
+    search?: string;
+    level?: string;
+    service?: string;
+    status?: string;
+    sinceHours?: number;
+    limit?: number;
+    offset?: number;
+  } = {},
+  signal?: AbortSignal
+): Promise<{ entries: SystemLogEntry[]; total: number; response: Response }> {
+  const query = new URLSearchParams();
+  if (params.search) query.set("search", params.search);
+  if (params.level) query.set("level", params.level);
+  if (params.service) query.set("service", params.service);
+  if (params.status) query.set("status", params.status);
+  query.set("since_hours", String(params.sinceHours ?? 24));
+  query.set("limit", String(params.limit ?? 50));
+  query.set("offset", String(params.offset ?? 0));
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/system/logs?${query}`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
+  const entries = await parseJsonResponse<SystemLogEntry[]>(response);
+  return {
+    entries,
+    total: Number(response.headers.get("X-Total-Count") ?? entries.length),
+    response,
+  };
+}
+
+export async function fetchSystemLog(
+  logId: string,
+  signal?: AbortSignal
+): Promise<SystemLogEntry> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/system/logs/${encodeURIComponent(logId)}`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
+  return parseJsonResponse<SystemLogEntry>(response);
+}
+
+export async function fetchSystemTraces(
+  params: {
+    route?: string;
+    status?: string;
+    sinceHours?: number;
+    limit?: number;
+    offset?: number;
+  } = {},
+  signal?: AbortSignal
+): Promise<{ entries: SystemTraceSummary[]; total: number }> {
+  const query = new URLSearchParams();
+  if (params.route) query.set("route", params.route);
+  if (params.status) query.set("status", params.status);
+  query.set("since_hours", String(params.sinceHours ?? 24));
+  query.set("limit", String(params.limit ?? 50));
+  query.set("offset", String(params.offset ?? 0));
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/system/traces?${query}`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
+  const entries = await parseJsonResponse<SystemTraceSummary[]>(response);
+  return {
+    entries,
+    total: Number(response.headers.get("X-Total-Count") ?? entries.length),
+  };
+}
+
+export async function fetchSystemTrace(
+  traceId: string,
+  signal?: AbortSignal
+): Promise<SystemTraceDetail> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/system/traces/${encodeURIComponent(traceId)}`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
+  return parseJsonResponse<SystemTraceDetail>(response);
+}
+
+export async function fetchSystemAlerts(signal?: AbortSignal): Promise<{
+  rules: AlertRule[];
+  active: { rule: string; severity: string; message: string }[];
+  recent: AlertEvent[];
+}> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/admin/system/alerts`,
+    { headers: adminHeaders(), signal },
+    signal
+  );
+  return parseJsonResponse<{
+    rules: AlertRule[];
+    active: { rule: string; severity: string; message: string }[];
+    recent: AlertEvent[];
+  }>(response);
 }
 
 export { clearStoredSession } from "@/features/auth";

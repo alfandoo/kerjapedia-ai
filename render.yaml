@@ -7,7 +7,7 @@ services:
     plan: free
     healthCheckPath: /ready
     envVars:
-      # Supabase
+      # Supabase Storage only (object/file storage, NOT a relational database)
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY
@@ -17,11 +17,11 @@ services:
       - key: SUPABASE_STORAGE_BUCKET
         value: regulations
 
-      # Database
+      # Database — Neon PostgreSQL (relational system of record)
       - key: DATABASE_URL
         sync: false
 
-      # LLM
+      # LLM — Groq (production)
       - key: LLM_PROVIDER
         value: groq
       - key: OPENROUTER_API_KEY
@@ -47,32 +47,41 @@ services:
       - key: GROQ_MAX_TOKENS
         value: "6000"
 
-      # Redis
+      # Redis — Upstash Redis (queue/cache/rate-limit)
       - key: REDIS_URL
         sync: false
+      - key: CELERY_ENABLED
+        value: "true"
 
-      # Vector Store
+      # Vector Store — Upstash Vector HYBRID
       - key: VECTOR_STORE
         value: upstash_vector
 
       # Upstash Vector (hosted hybrid: text-embedding-3-small + BM25).
+      # REST_* is canonical; URL/TOKEN remain accepted as legacy aliases.
       # URL/token are dashboard-managed secrets; never hardcode values here.
-      - key: UPSTASH_VECTOR_URL
+      - key: UPSTASH_VECTOR_REST_URL
         sync: false
-      - key: UPSTASH_VECTOR_TOKEN
+      - key: UPSTASH_VECTOR_REST_TOKEN
         sync: false
       - key: UPSTASH_VECTOR_DIMENSION
         value: "1536"
       - key: UPSTASH_VECTOR_NAMESPACE
         value: production
 
-      # Embedding (local artifact pipeline only)
+      # Embedding (local artifact pipeline only, never production vectors)
       - key: EMBEDDING_PROVIDER
         value: hash
       - key: INGESTION_EMBEDDING_TIMEOUT_SECONDS
-        value: "300"
+        value: "120"
       - key: INGESTION_EMBEDDING_BATCH_SIZE
-        value: "8"
+        value: "16"
+
+      # RAG governance (fail-closed in production)
+      - key: RAG_FAIL_CLOSED
+        value: "true"
+      - key: RAG_ALLOW_UNPUBLISHED
+        value: "false"
 
       # App
       - key: APP_ENV
@@ -104,8 +113,69 @@ services:
       - key: CLAIM_VERIFIER_MODEL
         value: openai/gpt-oss-120b
 
-      # Evaluation
+      # Observability
+      - key: TELEMETRY_ENABLED
+        value: "true"
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
       - key: RAGAS_ENABLED
         value: "true"
       - key: RAGAS_SAMPLE_RATE
         value: "0.05"
+
+  - type: worker
+    name: kerjapedia-worker
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
+    plan: free
+    dockerCommand: python -m celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=1
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_ENABLED
+        value: "true"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: regulations
+      - key: VECTOR_STORE
+        value: upstash_vector
+      - key: UPSTASH_VECTOR_REST_URL
+        sync: false
+      - key: UPSTASH_VECTOR_REST_TOKEN
+        sync: false
+      - key: UPSTASH_VECTOR_NAMESPACE
+        value: production
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TELEMETRY_ENABLED
+        value: "true"
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+
+  - type: cron
+    name: kerjapedia-scheduler
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
+    plan: free
+    schedule: "0 2 * * *"
+    dockerCommand: python -m celery -A app.workers.celery_app beat --loglevel=INFO
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_ENABLED
+        value: "true"

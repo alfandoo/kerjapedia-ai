@@ -1221,6 +1221,12 @@ GET  /api/v1/evaluations/runs/{id}/results
 - S3-compatible storage untuk production.
 - Redis untuk queue dan cache.
 
+> Production decision 2026-09 (lihat `docs/system-design/`): Neon PostgreSQL
+> sebagai relational system of record; Supabase Storage only untuk object
+> storage; Upstash Vector HYBRID (text-embedding-3-small + BM25) sebagai
+> production index. Qdrant/MinIO/Supabase-Postgres di atas adalah opsi awal
+> yang sudah digantikan.
+
 ## RAG dan AI
 
 - PyMuPDF.

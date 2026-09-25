@@ -5,8 +5,8 @@ OpenAPI tersedia di `/docs` dan `/openapi.json` ketika API dijalankan.
 ## System dan chat
 
 - `GET /health`: liveness dan konfigurasi provider nonsecret.
-- `GET /ready`: readiness database, Pinecone, Supabase, Redis, dan active immutable
-  release.
+- `GET /ready`: readiness Neon PostgreSQL, Upstash Vector, Supabase Storage
+  (production), Redis (bila Celery aktif), dan active release.
 - `GET /metrics`: Prometheus exporter (tidak masuk OpenAPI).
 - `POST /chat/ask`: jawaban terverifikasi nonstreaming.
 - `POST /chat/ask/stream`: status proses, lalu answer delta hanya setelah verification.

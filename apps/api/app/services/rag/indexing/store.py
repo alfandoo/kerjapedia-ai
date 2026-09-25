@@ -1,8 +1,10 @@
 """Vector store interface plus an in-memory backend.
 
-Production Pinecone access implements the same protocol in
-:mod:`pinecone_backend`; every guard below runs against the interface,
-so rules are backend-independent and fully testable.
+Production access is Upstash Vector HYBRID (dense text-embedding-3-small +
+BM25); every guard below runs against the interface, so rules are
+backend-independent and fully testable. The ``pinecone_*`` parameter names
+below are historic aliases kept for backward compatibility — they refer to
+the generic ``vector_filter``.
 """
 
 from __future__ import annotations
@@ -20,7 +22,9 @@ class VectorStore(Protocol):
 
     def delete_ids(self, ids: list[str], namespace: str) -> int: ...
 
-    def delete_by_filter(self, pinecone_filter: dict | None, namespace: str) -> int: ...
+    def delete_by_filter(
+        self, vector_filter: dict | None = None, namespace: str = "", **kwargs
+    ) -> int: ...
 
     def count(self, namespace: str) -> int: ...
 
@@ -31,7 +35,8 @@ class VectorStore(Protocol):
         vector: list[float],
         top_k: int,
         namespace: str,
-        pinecone_filter: dict | None = None,
+        vector_filter: dict | None = None,
+        **kwargs,
     ) -> list[tuple[str, float]]: ...
 
 
@@ -67,10 +72,17 @@ class InMemoryVectorStore:
                 removed += 1
         return removed
 
-    def delete_by_filter(self, pinecone_filter: dict | None, namespace: str) -> int:
+    def delete_by_filter(
+        self,
+        vector_filter: dict | None = None,
+        namespace: str = "",
+        pinecone_filter: dict | None = None,
+        **_kwargs,
+    ) -> int:
+        active_filter = vector_filter if vector_filter is not None else pinecone_filter
         matched = [
             key for key, vector in self._vectors.items()
-            if key[0] == namespace and _matches(vector.metadata, pinecone_filter)
+            if key[0] == namespace and _matches(vector.metadata, active_filter)
         ]
         for key in matched:
             del self._vectors[key]
@@ -87,21 +99,27 @@ class InMemoryVectorStore:
         vector: list[float],
         top_k: int,
         namespace: str,
+        vector_filter: dict | None = None,
         pinecone_filter: dict | None = None,
+        **_kwargs,
     ) -> list[tuple[str, float]]:
+        active_filter = vector_filter if vector_filter is not None else pinecone_filter
         scored = [
             (chunk_id, _cosine(vector, item.values))
             for (space, chunk_id), item in self._vectors.items()
-            if space == namespace and _matches(item.metadata, pinecone_filter)
+            if space == namespace and _matches(item.metadata, active_filter)
         ]
         scored.sort(key=lambda item: item[1], reverse=True)
         return scored[:top_k]
 
 
-def _matches(metadata: dict, pinecone_filter: dict | None) -> bool:
-    if not pinecone_filter:
+def _matches(metadata: dict, vector_filter: dict | None = None, **kwargs) -> bool:
+    # Backward-compatible alias: ``pinecone_filter=`` still accepted.
+    if vector_filter is None and "pinecone_filter" in kwargs:
+        vector_filter = kwargs["pinecone_filter"]
+    if not vector_filter:
         return True
-    for key, condition in pinecone_filter.items():
+    for key, condition in vector_filter.items():
         value = metadata.get(key)
         if isinstance(condition, dict):
             if "$eq" in condition and value != condition["$eq"]:

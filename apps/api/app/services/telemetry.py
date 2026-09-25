@@ -156,6 +156,20 @@ def record_provider_error(stage: str, provider: str) -> None:
             session.commit()
     except Exception:
         logger.debug("provider error observation not persisted", exc_info=True)
+    # Mirror into System Monitoring logs (same trace when in-request context).
+    try:
+        from app.services.monitoring.collector import write_system_log
+        from app.services.monitoring.tracing import get_trace_id
+
+        write_system_log(
+            level="error",
+            service=f"provider:{provider[:60]}",
+            message=f"{stage} provider error",
+            trace_id=get_trace_id(),
+            error_type="provider",
+        )
+    except Exception:
+        logger.debug("provider error log mirror skipped", exc_info=True)
 
 
 def observe_rag_completion(answer, retrieval) -> None:
@@ -187,7 +201,9 @@ def observe_rag_completion(answer, retrieval) -> None:
             ).inc()
 
 
-def configure_telemetry(service_name: str, endpoint: str = "") -> None:
+def configure_telemetry(
+    service_name: str, endpoint: str = "", insecure: bool = True
+) -> None:
     if not endpoint:
         return
     try:
@@ -202,7 +218,7 @@ def configure_telemetry(service_name: str, endpoint: str = "") -> None:
         return
     provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
     provider.add_span_processor(
-        BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint, insecure=True))
+        BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint, insecure=insecure))
     )
     trace.set_tracer_provider(provider)
 

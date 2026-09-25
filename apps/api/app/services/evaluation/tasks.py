@@ -1,8 +1,9 @@
 """Background execution for evaluation runs.
 
-Runs are admin-triggered and sequential, so FastAPI BackgroundTasks keep the
-HTTP request short while the frontend polls progress. This mirrors the
-ingestion non-celery fallback instead of adding a queue dependency.
+Production path is Celery (`kerjapedia.evaluation.run`) via Upstash Redis so
+heavy `run_experiments` never occupies a FastAPI worker. Development fallback
+is FastAPI BackgroundTasks. Frontend polls `GET /evaluation/runs/{id}` either
+way; job state lives in Neon (`evaluation_runs`).
 """
 
 from __future__ import annotations
@@ -112,6 +113,46 @@ def _run_upstash(run_id: str, dataset_id: str, modes: list[str], top_k: int) -> 
             raise RuntimeError("Evaluation dataset was not found.")
         questions = [EvaluationQuestion.from_dict(item) for item in dataset.questions]
     return run_experiments(questions, [], modes, top_k, _progress_reporter(run_id))
+
+
+def enqueue_evaluation_run(run_id: str, modes: list[str], top_k: int) -> str:
+    """Enqueue via Celery in production, else return background fallback mode."""
+    from app.core.config import settings
+
+    if settings.celery_enabled:
+        try:
+            from app.services.ingestion.tasks import celery_app
+
+            celery_app.send_task(
+                "kerjapedia.evaluation.run",
+                args=[run_id, modes, top_k],
+            )
+            return "celery"
+        except Exception as exc:
+            logger.warning("evaluation celery enqueue failed, using background: %s", exc)
+    return "background"
+
+
+try:
+    from app.services.ingestion.tasks import celery_app as _celery_app
+
+    @_celery_app.task(
+        bind=True,
+        name="kerjapedia.evaluation.run",
+        autoretry_for=(Exception,),
+        retry_backoff=True,
+        retry_jitter=True,
+        max_retries=2,
+    )
+    def run_evaluation_task(_task, run_id: str, modes: list[str], top_k: int) -> None:
+        execute_evaluation_run(run_id, modes, top_k)
+
+    @_celery_app.task(name="kerjapedia.evaluation.fail_stuck")
+    def fail_stuck_evaluations() -> int:
+        return fail_stuck_runs()
+except Exception:  # pragma: no cover - celery optional in minimal installs
+    run_evaluation_task = None  # type: ignore[assignment]
+    fail_stuck_evaluations = None  # type: ignore[assignment]
 
 
 def fail_stuck_runs() -> int:

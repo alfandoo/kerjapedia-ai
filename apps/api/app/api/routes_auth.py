@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 import jwt as pyjwt
 from cryptography.fernet import Fernet, InvalidToken
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from supabase_auth.errors import AuthApiError
 
 from app.api.dependencies import CurrentUser, DbSession, _extract_bearer_token
@@ -37,6 +37,17 @@ from app.services import supabase as supabase_service
 from app.services.mailer import send_verification_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Endpoint-specific budget for the user-enumeration-sensitive lookup below.
+# The global middleware already applies 60/min identity + 600/min IP; this
+# tighter per-process budget further slows address harvesting. Redis-backed
+# when available, memory fallback otherwise (same semantics as global).
+try:
+    from app.services.rate_limit import RateLimiter as _RateLimiter
+
+    _login_methods_limiter = _RateLimiter(10, redis_url=settings.redis_url)
+except Exception:  # pragma: no cover - limiter optional in minimal installs
+    _login_methods_limiter = None  # type: ignore[assignment]
 
 
 def to_user_response(user: UserRecord) -> UserResponse:
@@ -172,6 +183,24 @@ def _sync_user_profile(
             profile.email = email
             profile.name = name
             profile.roles = resolved_roles
+        # Write-through to normalized `user_roles` (authoritative since 0016).
+        # Best-effort in a savepoint: the JSONB cache above already carries
+        # the roles, so a row-sync failure must never block login nor discard
+        # the profile write.
+        try:
+            from app.services.access import set_user_roles
+
+            with session.begin_nested():
+                session.flush()
+                resolved_roles = set_user_roles(
+                    session, profile.user_id, resolved_roles, assigned_by="auth-sync"
+                )
+        except Exception:
+            import logging as _logging
+
+            _logging.getLogger("kerjapedia.auth").debug(
+                "user_roles sync skipped", exc_info=True
+            )
         session.commit()
     return UserRecord(user_id=uid, email=email, name=name, roles=resolved_roles)
 
@@ -307,10 +336,40 @@ def register(payload: RegisterRequest) -> LoginResponse:
 
 
 @router.get("/login-methods", response_model=LoginMethodsResponse)
-def login_methods(email: str = Query(min_length=3, max_length=160)) -> LoginMethodsResponse:
+def login_methods(
+    request: Request,
+    email: str = Query(min_length=3, max_length=160),
+) -> LoginMethodsResponse:
     """Report which sign-in methods exist for an email, so the UI can either
-    offer Google or keep the password form instead of a confusing error."""
-    exists, has_password, providers = _lookup_login_methods(email.lower())
+    offer Google or keep the password form instead of a confusing error.
+
+    User-enumeration hardening: strict per-endpoint budget (10/min), email
+    shape validation, and a uniform response shape on every path (including
+    lookup failures) so timing/appearance differences stay minimal.
+    """
+    candidate = (email or "").strip().lower()
+    if "@" not in candidate or "." not in candidate.rsplit("@", 1)[-1]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email format.",
+        )
+    if _login_methods_limiter is not None:
+        headers = {k.lower(): v for k, v in request.headers.items()}
+        peer = request.client.host if request.client else "unknown"
+        from app.services.rate_limit import client_identity as _identity
+        from app.services.rate_limit import client_ip as _ip
+
+        identity = _identity(headers, peer, settings.trust_proxy_headers)
+        decision = _login_methods_limiter.check(
+            f"login-methods:{identity}",
+            _ip(headers, peer, settings.trust_proxy_headers),
+        )
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded.",
+            )
+    exists, has_password, providers = _lookup_login_methods(candidate)
     return LoginMethodsResponse(
         email_exists=exists,
         has_password=has_password,

@@ -22,6 +22,21 @@ export function proxy(request: NextRequest) {
   // Replace client-supplied values before Next renders its own script tags.
   headers.set("x-nonce", nonce);
   headers.set("Content-Security-Policy", policy);
+  // Edge presence guard for admin HTML: unauthenticated browsers never get
+  // admin SSR. Role authority stays in the backend (`require_admin` → 403);
+  // this only avoids the blank-render + client-redirect flash.
+  const accessName = development ? "kp-access" : "__Host-kp-access";
+  const pathname = request.nextUrl.pathname;
+  if (
+    (pathname === "/admin" || pathname.startsWith("/admin/")) &&
+    !request.cookies.get(accessName)?.value
+  ) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login-admin";
+    loginUrl.search = "";
+    return NextResponse.redirect(loginUrl);
+  }
+
   const response = NextResponse.next({ request: { headers } });
   const guestName = development ? "kp-guest" : "__Host-kp-guest";
   const guest = request.cookies.get(guestName)?.value;

@@ -1,5 +1,9 @@
 # BGE-M3 di Google Colab
 
+> ARCHIVED 2026-09: BGE-M3/Pinecone dipensiunkan. Produksi memakai Upstash
+> Vector HYBRID (dense text-embedding-3-small + BM25, server-side). Dokumen ini
+> dipertahankan sebagai arsip historis, bukan panduan produksi.
+
 Dokumen ini menghasilkan embedding dari artifact ingestion yang telah lulus
 validasi. Proses ini tidak mengubah database, Pinecone, retrieval, atau file
 `chunks.jsonl` sumber.

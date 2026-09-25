@@ -14,10 +14,16 @@
                                  │
                     ┌────────────┼────────────┐
                     │            │            │
-              ┌─────▼─────┐ ┌───▼───┐ ┌─────▼─────┐
-              │ Supabase  │ │ Redis │ │ Upstash │
-              │ (Postgres)│ │(Upstash)│ │(Vectors)│
-              └───────────┘ └───────┘ └───────────┘
+              ┌─────▼─────┐ ┌───▼───┐ ┌─────▼─────┐ ┌──────────┐
+               │   Neon    │ │ Redis │ │ Upstash │ │ Supabase │
+               │(Postgres) │ │(Upstash)│ │(Vectors)│ │(Storage) │
+               └───────────┘ └───────┘ └───────────┘ └──────────┘
+                        ▲         │
+                        │         ▼
+                        │  ┌─────────────┐
+                        │  │Celery Worker│
+                        │  │  (Render)   │
+                        │  └─────────────┘
 ```
 
 ## Prerequisites
@@ -57,8 +63,8 @@ Click "Add Environment Variable" for each:
 | `REDIS_URL` | (copy from .env, Upstash) | .env |
 | `OPENROUTER_API_KEY` | (copy from .env, fallback only) | .env |
 | `GROQ_API_KEY` | (copy from .env) | .env |
-| `UPSTASH_VECTOR_URL` | (copy from .env) | .env |
-| `UPSTASH_VECTOR_TOKEN` | (copy from .env) | .env |
+| `UPSTASH_VECTOR_REST_URL` | (copy from .env) | .env |
+| `UPSTASH_VECTOR_REST_TOKEN` | (copy from .env) | .env |
 | `SMTP_USERNAME` | `kerjapedia@zohomail.com` | .env |
 | `SMTP_PASSWORD` | (copy from .env) | .env |
 | `SMTP_SENDER_EMAIL` | `kerjapedia@zohomail.com` | .env |

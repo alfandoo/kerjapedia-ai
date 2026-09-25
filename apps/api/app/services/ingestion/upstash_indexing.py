@@ -98,9 +98,12 @@ def transform_chunk(record: dict[str, Any]) -> dict[str, Any]:
 
     Existing ``chunk_id`` values are already unique and deterministic
     (``{DOCUMENT}-{content-hash-prefix}``), so they are preserved as-is
-    to keep indexing idempotent. No metadata is fabricated: fields absent
-    from the source are omitted, never defaulted to plausible values,
-    except pipeline bookkeeping (``embedding_model`` marker).
+    to keep indexing idempotent. No governance metadata is fabricated here:
+    publication/verification/current flags are authoritative in Neon
+    (``DocumentVersion``) and enforced by the Neon-backed governance filter
+    at retrieval time. Fields absent from the source are omitted, never
+    defaulted to plausible values, except pipeline bookkeeping
+    (``embedding_model`` marker).
     """
     chunk_id = str(record["chunk_id"])
     text = str(record["content"])
@@ -134,12 +137,6 @@ def transform_chunk(record: dict[str, Any]) -> dict[str, Any]:
         "token_count": record.get("token_count", 0),
         "content_hash": str(record.get("content_hash") or ""),
         "legal_status": str(document.get("regulation_status") or "active"),
-        "publication_status": "published",
-        "verification_status": "verified",
-        "source_verification_status": "verified",
-        "legal_review_status": "verified",
-        "is_current": True,
-        "topics": [],
         "text": text[:12_000],
         "retrieval_text": text[:12_000],
         "embedding_model": "upstash-hosted:text-embedding-3-small",

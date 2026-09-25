@@ -106,7 +106,8 @@ class UpstashVectorStore:
             ) from exc
         if not config.url or not config.token:
             raise RuntimeError(
-                "UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN are required."
+                "UPSTASH_VECTOR_REST_URL and UPSTASH_VECTOR_REST_TOKEN are required "
+                "(legacy UPSTASH_VECTOR_URL/TOKEN accepted)."
             )
         self.config = config
         self.fail_closed = fail_closed
@@ -138,7 +139,7 @@ class UpstashVectorStore:
         except Exception as exc:
             raise RuntimeError(
                 "Unable to reach the Upstash Vector index. Verify "
-                "UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN."
+                "UPSTASH_VECTOR_REST_URL and UPSTASH_VECTOR_REST_TOKEN."
             ) from exc
         dense_model = ""
         if getattr(info, "dense_index", None) is not None:

@@ -33,12 +33,19 @@ def log_audit(
         pass
 
 
-def list_audit_logs(session, limit: int = 100) -> list[dict]:
+def count_audit_logs(session) -> int:
+    return int(session.query(AuditLog).count() or 0)
+
+
+def list_audit_logs(session, limit: int | None = 100, offset: int = 0) -> list[dict]:
+    from app.api.pagination import apply_db_pagination
+
     rows = (
-        session.query(AuditLog)
-        .order_by(AuditLog.created_at.desc())
-        .limit(max(1, min(limit, 500)))
-        .all()
+        apply_db_pagination(
+            session.query(AuditLog).order_by(AuditLog.created_at.desc()),
+            limit,
+            offset,
+        ).all()
     )
     return [
         {

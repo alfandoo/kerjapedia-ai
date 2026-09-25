@@ -18,6 +18,7 @@ from app.api.routes_evaluation import router as evaluation_router
 from app.api.routes_feedback import router as feedback_router
 from app.api.routes_ingestion import router as ingestion_router
 from app.api.routes_system import router as system_router
+from app.api.routes_system_monitoring import router as system_monitoring_router
 from app.core.config import settings
 from app.services.rate_limit import RateLimiter, client_identity, client_ip
 from app.services.storage import ensure_bucket
@@ -41,12 +42,15 @@ rate_limiter = RateLimiter(
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    from app.core.logging import configure_structured_logging
     from app.services.telemetry import configure_telemetry
 
+    configure_structured_logging(settings.app_name, settings.app_env)
     if settings.telemetry_enabled:
         configure_telemetry(
             settings.app_name,
             settings.otel_exporter_otlp_endpoint,
+            insecure=settings.otel_exporter_otlp_insecure,
         )
     if settings.app_env.lower() != "test":
         from app.db.session import assert_schema_current
@@ -60,6 +64,29 @@ async def lifespan(_app: FastAPI):
                 logger.info("marked %s stuck evaluation runs as failed", reset)
         except Exception as exc:
             logger.warning("stuck evaluation run reset failed: %s", exc)
+        try:
+            from app.services.ingestion.recovery import recover_stuck_ingestion_jobs
+
+            recovered = recover_stuck_ingestion_jobs()
+            if sum(recovered.values()):
+                logger.info("recovered stuck ingestion jobs: %s", recovered)
+        except Exception as exc:
+            logger.warning("stuck ingestion recovery failed: %s", exc)
+        try:
+            from app.db.session import create_session
+            from app.services.access import ensure_governance_seeds
+            from app.services.answering.prompts import refresh_active_prompt_cache
+
+            with create_session() as seed_session:
+                seeded = ensure_governance_seeds(seed_session)
+                seed_session.commit()
+                active_prompt = refresh_active_prompt_cache(seed_session)
+            if any(seeded.values()):
+                logger.info("governance seeds ensured: %s", seeded)
+            if active_prompt:
+                logger.info("active prompt version: %s", active_prompt)
+        except Exception as exc:
+            logger.warning("governance seeding failed: %s", exc)
     if settings.app_env.lower() != "test":
         logger.info(
             "Local artifact embeddings use the deterministic hash provider; "
@@ -128,6 +155,7 @@ async def request_timeout(request: Request, call_next):
     try:
         return await asyncio.wait_for(call_next(request), timeout=150)
     except TimeoutError:
+        incoming_id = request.headers.get("X-Request-ID") or uuid4().hex
         return JSONResponse(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             content={
@@ -136,58 +164,133 @@ async def request_timeout(request: Request, call_next):
                     "message": "The request took too long to complete.",
                 }
             },
-            headers={"X-Error-Code": "request_timeout"},
+            headers={
+                "X-Error-Code": "request_timeout",
+                "X-Request-ID": incoming_id,
+                "X-Trace-ID": incoming_id,
+            },
         )
 
 
 @app.middleware("http")
 async def rate_limit_and_log(request: Request, call_next):
+    from app.services import monitoring as sysmon
+
     started_at = time.perf_counter()
+    # request_id and trace_id share one value so logs, traces, and errors for
+    # the same request correlate with a single header round-trip.
     request_id = request.headers.get("X-Request-ID") or uuid4().hex
+    trace_id = request.headers.get("X-Trace-ID") or request_id
     path = request.url.path
     if path in ("/health", "/ready", "/docs", "/openapi.json"):
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
+        response.headers["X-Trace-ID"] = trace_id
         return response
     headers = {key.lower(): value for key, value in request.headers.items()}
     peer_ip = request.client.host if request.client else "unknown"
     ip = client_ip(headers, peer_ip, settings.trust_proxy_headers)
     identity = client_identity(headers, peer_ip, settings.trust_proxy_headers)
     decision = rate_limiter.check(identity, ip)
+    route_label = sysmon.route_template(request)
 
     if not decision.allowed:
+        latency_ms = int((time.perf_counter() - started_at) * 1000)
+        try:
+            await asyncio.to_thread(
+                sysmon.record_rate_limited, route=route_label
+            )
+            await asyncio.to_thread(
+                sysmon.persist_request_observation,
+                route=route_label,
+                method=request.method,
+                status_code=429,
+                latency_ms=latency_ms,
+                error_type="rate_limited",
+                request_id=request_id,
+                trace_id=trace_id,
+                finished_trace=None,
+            )
+        except Exception:
+            logger.debug("rate-limit observation skipped", exc_info=True)
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={"detail": "Rate limit exceeded."},
             headers={
                 "X-Request-ID": request_id,
+                "X-Trace-ID": trace_id,
                 "Retry-After": str(decision.retry_after_seconds),
                 "X-Error-Code": "rate_limited",
             },
         )
 
+    sysmon.start_trace(trace_id, route_label)
     try:
         response = await call_next(request)
     except Exception:
+        latency_ms = int((time.perf_counter() - started_at) * 1000)
+        finished = sysmon.finish_trace("error")
         logger.exception(
-            "request_failed request_id=%s path=%s method=%s client=%s",
+            "request_failed request_id=%s trace_id=%s path=%s method=%s client=%s",
             request_id,
+            trace_id,
             request.url.path,
             request.method,
             identity,
         )
+        try:
+            await asyncio.to_thread(
+                sysmon.persist_request_observation,
+                route=route_label,
+                method=request.method,
+                status_code=500,
+                latency_ms=latency_ms,
+                error_type="server",
+                request_id=request_id,
+                trace_id=trace_id,
+                finished_trace=finished,
+            )
+        except Exception:
+            logger.debug("error observation skipped", exc_info=True)
         raise
 
     latency_ms = int((time.perf_counter() - started_at) * 1000)
+    error_code = response.headers.get("X-Error-Code")
+    trace_status = (
+        "timeout"
+        if response.status_code == 504
+        else ("error" if response.status_code >= 500 else "ok")
+    )
+    finished = sysmon.finish_trace(trace_status)
+    try:
+        await asyncio.to_thread(
+            sysmon.persist_request_observation,
+            route=route_label,
+            method=request.method,
+            status_code=response.status_code,
+            latency_ms=latency_ms,
+            error_type=error_code,
+            request_id=request_id,
+            trace_id=trace_id,
+            finished_trace=finished,
+        )
+    except Exception:
+        logger.debug("request observation skipped", exc_info=True)
     response.headers["X-Request-Latency-Ms"] = str(latency_ms)
     response.headers["X-Request-ID"] = request_id
+    response.headers["X-Trace-ID"] = trace_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if settings.app_env.lower() == "production":
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=63072000; includeSubDomains; preload"
+        )
     logger.info(
-        "request request_id=%s path=%s method=%s status=%s latency_ms=%s client=%s",
+        "request request_id=%s trace_id=%s path=%s method=%s status=%s latency_ms=%s client=%s",
         request_id,
+        trace_id,
         request.url.path,
         request.method,
         response.status_code,
@@ -198,6 +301,7 @@ async def rate_limit_and_log(request: Request, call_next):
 
 
 app.include_router(system_router)
+app.include_router(system_monitoring_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(chat_router)

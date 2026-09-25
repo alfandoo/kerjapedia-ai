@@ -14,9 +14,9 @@ flowchart TD
     api --> eval["Evaluation Service"]
     docs --> queue["Redis Queue"]
     queue --> worker["Ingestion Worker"]
-    worker --> object["Supabase Storage"]
-    worker --> postgres["PostgreSQL via Supabase (metadata only)"]
-    worker --> upstash["Upstash Vector (production hybrid index)"]
+    worker --> object["Supabase Storage only (private bucket)"]
+    worker --> postgres["Neon PostgreSQL (system of record)"]
+    worker --> upstash["Upstash Vector HYBRID (production index)"]
     chat --> retriever["Hybrid Retriever"]
     retriever --> upstash
     retriever --> reranker["Heuristic Reranker"]
@@ -31,7 +31,7 @@ Primary apps:
 - `apps/web`: Next.js frontend for chat, source viewer, search, and admin UI.
 - `apps/api`: FastAPI backend for auth, chat, documents, ingestion jobs, evaluation, and feedback.
 - `dataset`: source PDFs and `metadata.json`.
-- `compose.yaml`: local Redis (PostgreSQL/object storage via Supabase).
+- `compose.yaml`: local Redis (PostgreSQL via local/Neon-compatible Postgres; object storage via Supabase Storage only).
 
 ### Vector Store Architecture
 
@@ -118,7 +118,7 @@ Initial relational tables:
 - `document_topics`: normalized topics per document.
 - `document_relationships`: amendment, revocation, implementation, and related links.
 - `chunks`: parsed legal chunks with article, paragraph, page, text, token count.
-- `chunk_embeddings`: pgvector embeddings and retrieval payload fields.
+- `chunk_embeddings`: embedding provenance only (vectors live in Upstash, not Postgres).
 - `ingestion_jobs`: async job status, retries, error messages, timing.
 - `conversations`, `messages`: chat history.
 - `message_citations`: citations attached to generated answers.
@@ -128,11 +128,15 @@ Initial relational tables:
 - `evaluation_datasets`, `evaluation_questions`, `evaluation_runs`, `evaluation_results`.
 - `audit_logs`: admin and system changes.
 
-Vector fields live in PostgreSQL with pgvector for MVP. If retrieval scale outgrows PostgreSQL, `chunk_embeddings` can be moved to Qdrant without changing document/chunk IDs.
+> Production relational database is Neon PostgreSQL (system of record).
+> Supabase is storage-only. Production vectors live in Upstash Vector HYBRID
+> (dense text-embedding-3-small + BM25); pgvector is enabled but NOT used for
+> search, and Pinecone/BGE-M3/Qdrant proposals were retired 2026-09.
 
 ## Object Storage Layout
 
-Use MinIO locally and S3-compatible storage in production.
+Use Supabase Storage (private `regulations` bucket) in all environments; local
+filesystem under `storage/` mirrors the same prefixes for development.
 
 ```text
 kerjapedia/

@@ -131,6 +131,15 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
       return json({ detail: "Cross-site request rejected." }, 403);
   }
   if (request.method === "OPTIONS") return json({ detail: "Method not allowed." }, 405);
+  if (auth && action === "login-methods") {
+    const candidate = request.nextUrl.searchParams.get("email")?.trim() ?? "";
+    if (
+      candidate.length < 3 ||
+      candidate.length > 160 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)
+    )
+      return json({ detail: "Invalid email format." }, 400);
+  }
 
   const access = request.cookies.get(ACCESS)?.value;
   const refresh = request.cookies.get(REFRESH)?.value;

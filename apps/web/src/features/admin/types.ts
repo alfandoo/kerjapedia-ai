@@ -240,6 +240,106 @@ export type AdminMetrics = {
   };
 };
 
+export type SystemOverview = {
+  status: "healthy" | "degraded" | "critical" | string;
+  uptime_seconds: number;
+  window_hours: number;
+  requests: {
+    total: number;
+    rate_per_minute: number;
+    successful: number;
+    failed_5xx: number;
+    count_4xx: number;
+    error_rate: number | null;
+  };
+  latency_ms: {
+    avg_ms: number | null;
+    p50_ms: number | null;
+    p95_ms: number | null;
+    p99_ms: number | null;
+  };
+  dependencies: Record<
+    string,
+    { status: string; latency_ms: number | null; error: string | null }
+  >;
+  dependency_latency_ms: Record<
+    string,
+    { avg_24h_ms: number | null; last_ms: number | null }
+  >;
+  recent_errors: SystemLogEntry[];
+  active_alerts: { rule: string; severity: string; message: string }[];
+};
+
+export type SystemServiceStatus = {
+  service: string;
+  status: "healthy" | "degraded" | "down" | "unknown" | string;
+  latency_ms: number | null;
+  error: string | null;
+  last_checked: string;
+  avg_24h_ms: number | null;
+  error_rate_24h: number | null;
+  recent_incidents: {
+    status: string;
+    latency_ms: number | null;
+    error: string | null;
+    checked_at: string;
+  }[];
+};
+
+export type SystemLogEntry = {
+  log_id: string;
+  timestamp: string;
+  level: "debug" | "info" | "warn" | "error" | string;
+  service: string;
+  message: string;
+  request_id: string | null;
+  trace_id: string | null;
+  route: string | null;
+  status_code: number | null;
+  duration_ms: number | null;
+  error_type: string | null;
+};
+
+export type TraceSpan = {
+  span_id: string;
+  parent_span_id: string | null;
+  name: string;
+  service: string;
+  started_offset_ms: number;
+  duration_ms: number | null;
+  status: string;
+  error?: string | null;
+};
+
+export type SystemTraceSummary = {
+  trace_id: string;
+  timestamp: string;
+  route: string;
+  duration_ms: number;
+  status: string;
+  span_count: number;
+};
+
+export type SystemTraceDetail = SystemTraceSummary & {
+  spans: TraceSpan[];
+};
+
+export type AlertRule = {
+  rule: string;
+  severity: "warning" | "critical" | string;
+  description: string;
+};
+
+export type AlertEvent = {
+  alert_id: string;
+  rule: string;
+  severity: string;
+  status: "firing" | "resolved" | string;
+  message: string;
+  created_at: string;
+  resolved_at: string | null;
+};
+
 export type DailyUsagePoint = {
   date: string;
   messages: number;

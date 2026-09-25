@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { login } from "@/features/auth/api";
+import { login, signOut } from "@/features/auth/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,6 +26,13 @@ export default function LoginPage() {
     try {
       const session = await login(email.trim(), password);
       if (!session.user.roles.includes("admin")) {
+        // Revoke the just-issued HttpOnly session so a non-admin credential
+        // never leaves an authenticated cookie behind.
+        try {
+          await signOut();
+        } catch {
+          /* BFF already cleared cookies on failure; keep the denial message. */
+        }
         setStatus("Akses ditolak. Hanya admin yang dapat masuk.");
         setLoading(false);
         return;
@@ -135,7 +142,18 @@ export default function LoginPage() {
                 </p>
               ) : null}
               <button className={styles.primary} type="submit" disabled={loading}>
-                <span role="status">{loading ? "Memeriksa akun..." : "Masuk"}</span>
+                <span role="status" className="inline-flex items-center gap-2">
+                  {loading ? (
+                    <svg
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      className="size-4 animate-spin fill-none stroke-current [stroke-width:2.5]"
+                    >
+                      <path d="M12 2a10 10 0 1 0 10 10" strokeLinecap="round" />
+                    </svg>
+                  ) : null}
+                  {loading ? "Memeriksa akun..." : "Masuk"}
+                </span>
               </button>
             </form>
           </div>

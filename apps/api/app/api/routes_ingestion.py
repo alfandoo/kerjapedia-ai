@@ -4,7 +4,7 @@ import hashlib
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Response, status
 from sqlalchemy import text
 
 from app.api.dependencies import AdminUser, DbSession
@@ -420,8 +420,24 @@ def _advance_version_ingestion_status(
 
 
 @router.get("")
-def list_ingestion_jobs(_: AdminUser, session: DbSession) -> list[dict]:
-    rows = session.query(IngestionJob).order_by(IngestionJob.created_at.desc()).all()
+def list_ingestion_jobs(
+    _: AdminUser,
+    session: DbSession,
+    response: Response,
+    limit: int | None = Query(default=None, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict]:
+    from app.api.pagination import apply_db_pagination
+
+    total = int(session.query(IngestionJob).count() or 0)
+    response.headers["X-Total-Count"] = str(total)
+    rows = (
+        apply_db_pagination(
+            session.query(IngestionJob).order_by(IngestionJob.created_at.desc()),
+            limit,
+            offset,
+        ).all()
+    )
     avg_duration = _average_build_duration(session)
     return [
         _job_payload(
@@ -437,85 +453,143 @@ def list_ingestion_jobs(_: AdminUser, session: DbSession) -> list[dict]:
 # Re-embed endpoint: migrate chunks to Upstash Vector
 # ---------------------------------------------------------------------------
 
-@router.post("/reembed")
-def reembed_to_upstash(
-    _: AdminUser,
-    session: DbSession,
-) -> dict:
-    """Read all chunks from PostgreSQL and upsert to Upstash Vector.
+def _collect_governed_chunks(session) -> tuple[list[dict], int, int]:
+    """Collect chunks eligible for production indexing.
 
-    Raw chunk text is sent to Upstash, which produces dense vectors with its
-    hosted ``open-ai/text-embedding-3-small`` model and sparse vectors with
-    hosted BM25. The application performs no local embedding on this path
-    (no ``model.encode()``, no direct OpenAI embedding calls).
+    Governance is authoritative in Neon: only versions with
+    publication=published, ingestion=completed, source/legal verified, and
+    legal_status active/amended are indexed when fail-closed. Returns
+    (upsert_payload, total_scanned, skipped_governance).
     """
-    if not settings.upstash_vector_url or not settings.upstash_vector_token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN must be set.",
-        )
+    from app.models.ingestion import DocumentChunk, DocumentVersion
+    from app.services.ingestion.governance import is_canonical_official_source_url
 
-    from app.models.ingestion import DocumentChunk
-    from app.services.retrieval.upstash_vector_store import UpstashVectorConfig, UpstashVectorStore
-
-    chunks = session.query(DocumentChunk).all()
-    if not chunks:
-        return {"status": "no_chunks", "upserted": 0}
-
-    upsert_chunks = []
-    for chunk in chunks:
-        doc = session.query(Document).filter_by(document_id=chunk.document_id).first()
-        topics = []
-        legal_status = "active"
-        source_url = ""
-        if doc:
-            doc_meta = doc.payload or {}
-            topics = doc_meta.get("topics", [])
-            legal_status = doc_meta.get("legal_status", "active")
-            source_url = doc_meta.get("source_url", "")
-
-        upsert_chunks.append({
-            "chunk_id": chunk.chunk_id,
-            "text": chunk.retrieval_text or chunk.text,
-            "metadata": {
+    fail_closed = settings.rag_fail_closed and not settings.rag_allow_unpublished
+    total = 0
+    skipped = 0
+    payload: list[dict] = []
+    query = session.query(DocumentChunk).yield_per(500)
+    version_cache: dict[str, DocumentVersion | None] = {}
+    for chunk in query:
+        total += 1
+        version = version_cache.get(chunk.version_id)
+        if chunk.version_id not in version_cache:
+            version = (
+                session.query(DocumentVersion)
+                .filter(DocumentVersion.version_id == chunk.version_id)
+                .one_or_none()
+            )
+            version_cache[chunk.version_id] = version
+        if fail_closed and version is not None:
+            eligible = (
+                version.publication_status == "published"
+                and version.ingestion_status == "completed"
+                and version.source_verification_status == "verified"
+                and version.legal_review_status == "verified"
+                and version.legal_status in ("active", "amended")
+                and is_canonical_official_source_url(version.source_url)
+            )
+            if not eligible:
+                skipped += 1
+                continue
+        payload.append(
+            {
                 "chunk_id": chunk.chunk_id,
-                "document_id": chunk.document_id,
-                "version_id": chunk.version_id,
-                "chapter": chunk.chapter or "",
-                "section": chunk.section or "",
-                "article": chunk.article or "",
-                "paragraph": chunk.paragraph or "",
-                "page_start": chunk.page_start or 0,
-                "page_end": chunk.page_end or 0,
-                "token_count": chunk.token_count or 0,
-                "text": (chunk.text or "")[:10000],
-                "retrieval_text": (chunk.retrieval_text or chunk.text or "")[:10000],
-                "topics": topics,
-                "legal_status": legal_status,
-                "source_url": source_url,
-                "embedding_model": "text-embedding-3-small",
-            },
-        })
+                "text": chunk.retrieval_text or chunk.text,
+                "metadata": {
+                    "chunk_id": chunk.chunk_id,
+                    "document_id": chunk.document_id,
+                    "version_id": chunk.version_id,
+                    "chapter": chunk.chapter or "",
+                    "section": chunk.section or "",
+                    "article": chunk.article or "",
+                    "paragraph": chunk.paragraph or "",
+                    "page_start": chunk.page_start or 0,
+                    "page_end": chunk.page_end or 0,
+                    "token_count": chunk.token_count or 0,
+                    "text": (chunk.text or "")[:10000],
+                    "retrieval_text": (
+                        chunk.retrieval_text or chunk.text or ""
+                    )[:10000],
+                    "embedding_model": "text-embedding-3-small",
+                },
+            }
+        )
+    return payload, total, skipped
 
+
+def _run_reembed_sync() -> dict:
+    from app.db.session import create_session
+    from app.services.retrieval.upstash_vector_store import (
+        UpstashVectorConfig,
+        UpstashVectorStore,
+    )
+
+    with create_session() as session:
+        upsert_chunks, total, skipped = _collect_governed_chunks(session)
+    if not upsert_chunks:
+        return {"status": "no_chunks", "upserted": 0, "skipped": skipped}
     config = UpstashVectorConfig(
         url=settings.upstash_vector_url,
         token=settings.upstash_vector_token,
         dimension=settings.upstash_vector_dimension,
         namespace=settings.upstash_vector_namespace,
     )
-    store = UpstashVectorStore(
-        config=config,
-    )
-
+    store = UpstashVectorStore(config=config)
     upserted = store.upsert_chunks(upsert_chunks, batch_size=100)
-
+    logger.info(
+        "reembed completed total=%s upserted=%s skipped_governance=%s",
+        total,
+        upserted,
+        skipped,
+    )
     return {
         "status": "completed",
-        "total_chunks": len(chunks),
+        "total_chunks": total,
         "upserted": upserted,
+        "skipped_governance": skipped,
         "embedding_model": "text-embedding-3-small",
         "dimension": settings.upstash_vector_dimension,
     }
+
+
+@router.post("/reembed")
+def reembed_to_upstash(
+    _: AdminUser,
+    background_tasks: BackgroundTasks,
+    sync: bool = False,
+) -> dict:
+    """Upsert governed chunks to Upstash Vector (HYBRID, hosted embeddings).
+
+    Raw chunk text is sent to Upstash, which produces dense vectors with its
+    hosted ``open-ai/text-embedding-3-small`` model and sparse vectors with
+    hosted BM25. The application performs no local embedding on this path.
+    Heavy indexing never blocks the request by default: it runs in
+    BackgroundTasks (dev) or Celery (production). Pass ``?sync=true`` only
+    for small administrative runs.
+    """
+    if not settings.upstash_vector_url or not settings.upstash_vector_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "UPSTASH_VECTOR_REST_URL and UPSTASH_VECTOR_REST_TOKEN must be set."
+            ),
+        )
+    if sync:
+        return _run_reembed_sync()
+    if settings.celery_enabled:
+        try:
+            from app.services.ingestion.tasks import enqueue_reembed
+
+            enqueue_reembed()
+            return {"status": "queued", "mode": "celery"}
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="The ingestion queue is temporarily unavailable.",
+            ) from exc
+    background_tasks.add_task(_run_reembed_sync)
+    return {"status": "queued", "mode": "background"}
 
 
 @router.get("/{job_id}")

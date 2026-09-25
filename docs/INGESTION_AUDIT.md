@@ -1,5 +1,10 @@
 # KerjaPedia AI Ingestion Engineering Audit
 
+> ARCHIVED 2026-09: audit pra-Upstash; referensi Pinecone/BGE-M3 di bawah
+> adalah historis. Produksi saat ini: Neon PostgreSQL + Supabase Storage +
+> Upstash Vector HYBRID (text-embedding-3-small + BM25). Lihat
+> `docs/system-design/` sebagai sumber utama.
+
 **Audit date:** 2026-09-13
 **Scope:** Current repository working tree, ingestion-related tests, migrations, configuration, and stored local ingestion artifacts
 **Change policy:** Analysis only. This audit does not change the ingestion implementation.

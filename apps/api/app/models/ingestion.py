@@ -246,8 +246,9 @@ class ChunkEmbedding(Base):
     )
     embedding_model: Mapped[str] = mapped_column(String(120), nullable=False)
     # External embedding imports keep the immutable vector payload in its
-    # accepted artifact and Pinecone.  The relational row records provenance
-    # without duplicating 1,024 floats per chunk.
+    # accepted artifact and Upstash Vector (HYBRID). The relational row records
+    # provenance without duplicating dense floats per chunk. Neon is the
+    # source of truth for metadata; Upstash is the retrieval index only.
     embedding: Mapped[list[float] | None] = mapped_column(JSONB)
     build_id: Mapped[str | None] = mapped_column(
         ForeignKey("ingestion_builds.build_id")

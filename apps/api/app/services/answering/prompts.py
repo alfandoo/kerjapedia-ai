@@ -88,12 +88,62 @@ kalimat klaim hukum dalam answer, seluruh klaim hukum harus tercakup, dan citati
 claim hanya boleh menunjuk chunk yang mendukung seluruh kalimat tersebut."""
 
 
+_ACTIVE_TEMPLATE: PromptTemplate | None = None
+
+
 def default_prompt_template() -> PromptTemplate:
+    """Code default, overridden by the cached DB active version when loaded.
+
+    The DB (`prompt_versions`, single active row) is the auditable source of
+    truth; processes load it into memory via :func:`refresh_active_prompt_cache`
+    at startup and after admin publish. Cached generators keep working because
+    no per-request session is required.
+    """
+    if _ACTIVE_TEMPLATE is not None:
+        return _ACTIVE_TEMPLATE
     return PromptTemplate(
         prompt_version_id=PROMPT_VERSION_ID,
         system_prompt=SYSTEM_PROMPT,
         user_template=USER_TEMPLATE,
     )
+
+
+def load_active_prompt_template(session) -> PromptTemplate | None:
+    """Read the active `prompt_versions` row; None when bare/missing."""
+    from app.models.business import PromptVersion
+
+    row = (
+        session.query(PromptVersion)
+        .filter(PromptVersion.status == "active")
+        .first()
+    )
+    if row is None:
+        return None
+    return PromptTemplate(
+        prompt_version_id=row.version_id,
+        system_prompt=row.system_prompt,
+        user_template=row.user_template,
+    )
+
+
+def refresh_active_prompt_cache(session) -> str | None:
+    """Load the DB active version into memory; None keeps the code default."""
+    global _ACTIVE_TEMPLATE
+    try:
+        template = load_active_prompt_template(session)
+    except Exception:
+        logger.debug("active prompt load failed; keeping code default", exc_info=True)
+        return None
+    if template is None:
+        return None
+    _ACTIVE_TEMPLATE = template
+    return template.prompt_version_id
+
+
+def reset_active_prompt_cache() -> None:
+    """Drop the cached override (tests and publish rollback paths)."""
+    global _ACTIVE_TEMPLATE
+    _ACTIVE_TEMPLATE = None
 
 
 def render_history_block(history: tuple[HistoryTurn, ...] | list[HistoryTurn] | None) -> str:

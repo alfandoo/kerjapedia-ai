@@ -9,12 +9,14 @@ An AI-powered assistant for Indonesian employment regulations, built with Retrie
 | Layer | Tech |
 |-------|------|
 | Frontend | Next.js (Vercel) |
-| Backend | Python FastAPI (Render) |
-| Database | PostgreSQL via Supabase |
-| Vector Store | Upstash Vector (hybrid: text-embedding-3-small + BM25) |
-| Cache/Queue | Redis via Upstash |
+| Backend | Python FastAPI modular monolith (Render) |
+| Database | Neon PostgreSQL (relational system of record) |
+| Object Storage | Supabase Storage only (PDF/artifacts, private bucket) |
+| Vector Store | Upstash Vector HYBRID (dense text-embedding-3-small + BM25) |
+| Cache/Queue | Upstash Redis (Celery queue/cache/rate-limit) |
+| Async Worker | Celery Worker (Render `kerjapedia-worker`) |
 | LLM | Groq (openai/gpt-oss-120b) |
-| Auth | Google OAuth + HttpOnly cookies |
+| Auth | Google OAuth (via Supabase Auth) + Bearer + RBAC (backend authority) |
 
 ## Features
 

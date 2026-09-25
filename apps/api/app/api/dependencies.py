@@ -52,8 +52,22 @@ def _get_user_from_supabase(token: str) -> UserRecord | None:
         return None
     else:
         profile = _get_profile_with_retry(uid)
-        roles = profile.roles if profile else ["user"]
+        roles = _resolve_roles(uid, profile)
         return UserRecord(user_id=uid, email=email, name=name, roles=roles)
+
+
+def _resolve_roles(uid: str, profile) -> list[str]:
+    """Authoritative role read via `user_roles`, JSONB cache as fallback."""
+    if profile is None:
+        return ["user"]
+    try:
+        with create_session() as session:
+            from app.services.access import resolve_user_roles
+
+            fresh = session.get(UserProfile, uid)
+            return resolve_user_roles(session, fresh if fresh is not None else profile)
+    except Exception:
+        return list(profile.roles or ["user"])
 
 
 def _get_profile_with_retry(uid: str):

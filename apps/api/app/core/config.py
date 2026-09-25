@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     app_env: str = "development"
     project_root: Path | None = None
+    # Production relational database = Neon PostgreSQL (system of record).
+    # Supabase is storage-only; never use Supabase PostgreSQL as a second DB.
     database_url: str = (
         "postgresql+psycopg://postgres:postgres@localhost:5432/kerjapedia"
     )
@@ -64,6 +66,7 @@ class Settings(BaseSettings):
     celery_enabled: bool = False
     telemetry_enabled: bool = True
     otel_exporter_otlp_endpoint: str = ""
+    otel_exporter_otlp_insecure: bool = True
     rag_trace_retention_days: int = 30
     ragas_enabled: bool = False
     ragas_sample_rate: float = 0.05
@@ -145,7 +148,10 @@ class Settings(BaseSettings):
         if self.vector_store != "upstash_vector":
             raise ValueError("VECTOR_STORE must be upstash_vector in production.")
         if not self.upstash_vector_url or not self.upstash_vector_token:
-            raise ValueError("UPSTASH_VECTOR_URL and UPSTASH_VECTOR_TOKEN are required.")
+            raise ValueError(
+                "UPSTASH_VECTOR_REST_URL and UPSTASH_VECTOR_REST_TOKEN are required "
+                "(legacy UPSTASH_VECTOR_URL/TOKEN still accepted via alias)."
+            )
         if self.llm_provider == "openrouter" and not self.openrouter_api_key:
             raise ValueError("OPENROUTER_API_KEY is required for the OpenRouter LLM provider.")
         if self.llm_provider == "groq" and not self.groq_api_key:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Response, status
 
 from app.api.dependencies import AdminUser, DbSession, LegalReviewerUser
 from app.api.schemas import (
@@ -17,7 +17,7 @@ from app.models.business import EvaluationDataset, EvaluationQuestionReview, Eva
 from app.services.evaluation.dataset import load_evaluation_dataset
 from app.services.evaluation.runner import UPSTASH_RANKING_MODES
 from app.services.evaluation.schemas import EvaluationQuestion
-from app.services.evaluation.tasks import execute_evaluation_run
+from app.services.evaluation.tasks import enqueue_evaluation_run, execute_evaluation_run
 
 router = APIRouter(prefix="/evaluation", tags=["evaluation"])
 
@@ -170,9 +170,13 @@ def create_evaluation_run(
     )
     session.add(run)
     session.commit()
-    background_tasks.add_task(
-        execute_evaluation_run, run_id, list(payload.experiment_modes), payload.top_k
-    )
+    # Heavy `run_experiments` must never block a FastAPI worker: Celery in
+    # production, BackgroundTasks only as the development fallback.
+    mode = enqueue_evaluation_run(run_id, list(payload.experiment_modes), payload.top_k)
+    if mode == "background":
+        background_tasks.add_task(
+            execute_evaluation_run, run_id, list(payload.experiment_modes), payload.top_k
+        )
     return {
         "run_id": run_id,
         "dataset_id": payload.dataset_id,
@@ -188,8 +192,24 @@ def create_evaluation_run(
 
 
 @router.get("/runs")
-def list_evaluation_runs(_: AdminUser, session: DbSession) -> list[dict]:
-    rows = session.query(EvaluationRun).order_by(EvaluationRun.created_at.desc()).all()
+def list_evaluation_runs(
+    _: AdminUser,
+    session: DbSession,
+    response: Response,
+    limit: int | None = Query(default=None, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict]:
+    from app.api.pagination import apply_db_pagination
+
+    total = int(session.query(EvaluationRun).count() or 0)
+    response.headers["X-Total-Count"] = str(total)
+    rows = (
+        apply_db_pagination(
+            session.query(EvaluationRun).order_by(EvaluationRun.created_at.desc()),
+            limit,
+            offset,
+        ).all()
+    )
     return [
         {
             "run_id": r.run_id,

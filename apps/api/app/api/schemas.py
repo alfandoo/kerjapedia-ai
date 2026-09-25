@@ -289,6 +289,12 @@ class DocumentVerificationRequest(ApiModel):
     notes: str = Field(default="", max_length=2000)
 
 
+class PromptVersionCreateRequest(ApiModel):
+    version_id: str = Field(min_length=3, max_length=160)
+    system_prompt: str = Field(min_length=10, max_length=20000)
+    user_template: str = Field(min_length=10, max_length=20000)
+
+
 class IngestionBuildReviewRequest(ApiModel):
     status: Literal["approved", "rejected"]
     page_dispositions: dict[

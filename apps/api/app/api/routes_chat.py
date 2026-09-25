@@ -318,6 +318,21 @@ def _retrieve_with_isolated_session(memory: MemoryContext, top_k: int):
         return _retrieve(memory, top_k, isolated_session)
 
 
+def _generate_with_fresh_generator(question: str, retrieval, history):
+    """Run blocking LLM generation in a worker thread (fresh instance)."""
+    generator = answer_generator_from_settings(settings)
+    return generator.generate(question, retrieval, history=history)
+
+
+# Per-stage budgets keep the non-streaming answer path under the 150s
+# request-timeout middleware with headroom for turn bookkeeping and
+# observability writes (60 + 80 = 140). Separate budgets let latency
+# histograms and provider-error counters tell Upstash slowness apart from
+# Groq slowness instead of one opaque "request too long".
+_RETRIEVAL_TIMEOUT_SECONDS = 60.0
+_GENERATION_TIMEOUT_SECONDS = 80.0
+
+
 def _next_message_sequence(conversation_id: str, session: Session) -> int:
     current = session.execute(
         select(func.coalesce(func.max(Message.sequence_no), 0)).where(
@@ -563,18 +578,28 @@ def _stream_event(event: str, **payload) -> bytes:
     return f"{serialized}\n".encode()
 
 
-async def _pings_while(task: asyncio.Task):
+async def _pings_while(task: asyncio.Task, timeout_seconds: float | None = None):
     """Yield keepalive pings until the awaited stage finishes.
 
     Proxies and load balancers drop idle SSE streams; a ping every
     heartbeat interval keeps the connection (and the UI spinner) alive.
-    Unknown events are ignored by the web client.
+    Unknown events are ignored by the web client. When `timeout_seconds`
+    is set, a hung stage raises TimeoutError instead of pinging forever
+    (the stream path is exempt from the 150s request-timeout middleware).
     """
+    started_at = time.perf_counter()
     try:
         while not task.done():
             done, _ = await asyncio.wait({task}, timeout=_HEARTBEAT_SECONDS)
             if task in done:
                 break
+            if (
+                timeout_seconds is not None
+                and time.perf_counter() - started_at > timeout_seconds
+            ):
+                raise TimeoutError(
+                    f"Stage exceeded {timeout_seconds:.0f}s budget."
+                )
             yield _stream_event("ping")
     finally:
         if not task.done():
@@ -790,7 +815,7 @@ def _log_rag_completion(answer, latency_ms: int) -> None:
 
 
 @router.post("/ask", response_model=AskResponse)
-def ask_question(
+async def ask_question(
     payload: AskRequest,
     response: Response,
     session: DbSession,
@@ -840,21 +865,82 @@ def ask_question(
             )
             retrieval = None
         else:
+            history = build_history_turns(pending_turn.previous_messages)
             retrieval_started = time.perf_counter()
-            with trace_stage("retrieval", settings.vector_store):
-                retrieval = _retrieve(memory, payload.top_k, session)
+            try:
+                from app.services.monitoring.tracing import end_span as _end_span
+                from app.services.monitoring.tracing import start_span as _start_span
+
+                with trace_stage("retrieval", settings.vector_store):
+                    _start_span("retrieval", settings.vector_store)
+                    try:
+                        retrieval = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                _retrieve_with_isolated_session,
+                                memory,
+                                payload.top_k,
+                            ),
+                            timeout=_RETRIEVAL_TIMEOUT_SECONDS,
+                        )
+                    except Exception as exc:
+                        _end_span("error", f"{type(exc).__name__}")
+                        raise
+                    _end_span("ok")
+            except TimeoutError as exc:
+                elapsed = time.perf_counter() - retrieval_started
+                observe_stage("retrieval", settings.vector_store, elapsed)
+                record_outcome("timeout_retrieval")
+                record_provider_error("retrieval", settings.vector_store)
+                raise HTTPException(
+                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                    detail={
+                        "code": "request_timeout",
+                        "message": "The request took too long to complete.",
+                        "stage": "retrieval",
+                        "trace_id": trace_id,
+                    },
+                ) from exc
             observe_stage(
                 "retrieval",
                 settings.vector_store,
                 time.perf_counter() - retrieval_started,
             )
             generation_started = time.perf_counter()
-            with trace_stage("generation_and_verification", settings.llm_provider):
-                answer = answer_generator_from_settings(settings).generate(
-                    payload.question,
-                    retrieval,
-                    history=build_history_turns(pending_turn.previous_messages),
+            try:
+                with trace_stage("generation_and_verification", settings.llm_provider):
+                    _start_span("generation", settings.llm_provider)
+                    try:
+                        answer = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                _generate_with_fresh_generator,
+                                payload.question,
+                                retrieval,
+                                history,
+                            ),
+                            timeout=_GENERATION_TIMEOUT_SECONDS,
+                        )
+                    except Exception as exc:
+                        _end_span("error", f"{type(exc).__name__}")
+                        raise
+                    _end_span("ok")
+            except TimeoutError as exc:
+                elapsed = time.perf_counter() - generation_started
+                observe_stage(
+                    "generation_and_verification", settings.llm_provider, elapsed
                 )
+                record_outcome("timeout_generation")
+                record_provider_error(
+                    "generation_and_verification", settings.llm_provider
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                    detail={
+                        "code": "request_timeout",
+                        "message": "The request took too long to complete.",
+                        "stage": "generation_and_verification",
+                        "trace_id": trace_id,
+                    },
+                ) from exc
             observe_stage(
                 "generation_and_verification",
                 settings.llm_provider,
@@ -875,6 +961,14 @@ def ask_question(
             rag_trace,
             session,
         )
+    except HTTPException:
+        _mark_turn_failed(
+            pending_turn.user_message_id,
+            session,
+            "rag_pipeline_failed",
+        )
+        record_outcome("failed")
+        raise
     except Exception as exc:
         _mark_turn_failed(
             pending_turn.user_message_id,
@@ -1003,17 +1097,41 @@ def ask_question_stream(
             else:
                 yield _stream_event("thinking", status="Menelusuri regulasi resmi")
                 retrieval_started = time.perf_counter()
-                with trace_stage("retrieval", settings.vector_store):
-                    retrieval_task = asyncio.ensure_future(
-                        asyncio.to_thread(
-                            _retrieve_with_isolated_session,
-                            memory,
-                            payload.top_k,
-                        )
+                try:
+                    from app.services.monitoring.tracing import end_span as _end_span
+                    from app.services.monitoring.tracing import (
+                        start_span as _start_span,
                     )
-                    async for ping in _pings_while(retrieval_task):
-                        yield ping
-                    retrieval = retrieval_task.result()
+
+                    with trace_stage("retrieval", settings.vector_store):
+                        _start_span("retrieval", settings.vector_store)
+                        retrieval_task = asyncio.ensure_future(
+                            asyncio.to_thread(
+                                _retrieve_with_isolated_session,
+                                memory,
+                                payload.top_k,
+                            )
+                        )
+                        try:
+                            async for ping in _pings_while(
+                                retrieval_task,
+                                timeout_seconds=_RETRIEVAL_TIMEOUT_SECONDS,
+                            ):
+                                yield ping
+                            retrieval = retrieval_task.result()
+                        except Exception as exc:
+                            _end_span("error", f"{type(exc).__name__}")
+                            raise
+                        _end_span("ok")
+                except TimeoutError:
+                    observe_stage(
+                        "retrieval",
+                        settings.vector_store,
+                        time.perf_counter() - retrieval_started,
+                    )
+                    record_outcome("timeout_retrieval")
+                    record_provider_error("retrieval", settings.vector_store)
+                    raise
                 observe_stage(
                     "retrieval",
                     settings.vector_store,
@@ -1023,18 +1141,39 @@ def ask_question_stream(
                 generator = answer_generator_from_settings(settings)
                 history = build_history_turns(pending_turn.previous_messages)
                 generation_started = time.perf_counter()
-                with trace_stage("generation_and_verification", settings.llm_provider):
-                    generation_task = asyncio.ensure_future(
-                        asyncio.to_thread(
-                            generator.generate,
-                            payload.question,
-                            retrieval,
-                            history=history,
+                try:
+                    with trace_stage("generation_and_verification", settings.llm_provider):
+                        _start_span("generation", settings.llm_provider)
+                        generation_task = asyncio.ensure_future(
+                            asyncio.to_thread(
+                                generator.generate,
+                                payload.question,
+                                retrieval,
+                                history=history,
+                            )
                         )
+                        try:
+                            async for ping in _pings_while(
+                                generation_task,
+                                timeout_seconds=_GENERATION_TIMEOUT_SECONDS,
+                            ):
+                                yield ping
+                            answer = generation_task.result()
+                        except Exception as exc:
+                            _end_span("error", f"{type(exc).__name__}")
+                            raise
+                        _end_span("ok")
+                except TimeoutError:
+                    observe_stage(
+                        "generation_and_verification",
+                        settings.llm_provider,
+                        time.perf_counter() - generation_started,
                     )
-                    async for ping in _pings_while(generation_task):
-                        yield ping
-                    answer = generation_task.result()
+                    record_outcome("timeout_generation")
+                    record_provider_error(
+                        "generation_and_verification", settings.llm_provider
+                    )
+                    raise
                 observe_stage(
                     "generation_and_verification",
                     settings.llm_provider,
@@ -1058,6 +1197,19 @@ def ask_question_stream(
                 session,
             )
             stored = True
+        except TimeoutError:
+            failure_code = "request_timeout"
+            logger.exception("rag_stage_timeout trace_id=%s", trace_id)
+            _record_request_observation(
+                "failed", latency_ms=int((time.perf_counter() - started_at) * 1000)
+            )
+            yield _stream_event(
+                "error",
+                code="request_timeout",
+                detail="The request took too long to complete.",
+                trace_id=trace_id,
+            )
+            return
         except Exception:
             failure_code = "rag_pipeline_failed"
             record_outcome("failed")

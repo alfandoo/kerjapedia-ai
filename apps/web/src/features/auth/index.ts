@@ -1,4 +1,5 @@
 export { AuthModal } from "./components/auth-modal";
+export { LogoutConfirmDialog } from "./components/logout-confirm";
 export {
   fetchWithAuthRetry,
   googleLogin,

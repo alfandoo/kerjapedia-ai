@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 from celery import Celery
@@ -7,6 +8,12 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.db.session import create_session
+from app.services.ingestion.recovery import (
+    STUCK_INGESTION_MAX_AGE,  # noqa: F401  (re-exported for beat/tests)
+    recover_stuck_ingestion_jobs,
+)
+
+logger = logging.getLogger(__name__)
 
 celery_app = Celery(
     "kerjapedia_ingestion",
@@ -23,7 +30,19 @@ celery_app.conf.update(
         "purge-expired-rag-traces-daily": {
             "task": "kerjapedia.rag.purge_expired_traces",
             "schedule": 86_400.0,
-        }
+        },
+        "monitoring-cleanup-daily": {
+            "task": "kerjapedia.system.cleanup",
+            "schedule": 86_400.0,
+        },
+        "recover-stuck-ingestion-hourly": {
+            "task": "kerjapedia.ingestion.recover_stuck",
+            "schedule": 3_600.0,
+        },
+        "fail-stuck-evaluations-hourly": {
+            "task": "kerjapedia.evaluation.fail_stuck",
+            "schedule": 3_600.0,
+        },
     },
 )
 
@@ -57,6 +76,36 @@ def enqueue_ingestion(
     persist_db: bool,
 ) -> None:
     run_ingestion_task.delay(job_id, document_id, version_id, build_id, persist_db)
+
+
+@celery_app.task(
+    bind=True,
+    name="kerjapedia.ingestion.reembed",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    max_retries=3,
+)
+def run_reembed_task(_task) -> dict:
+    from app.api.routes_ingestion import _run_reembed_sync
+
+    return _run_reembed_sync()
+
+
+def enqueue_reembed() -> None:
+    run_reembed_task.delay()
+
+
+@celery_app.task(name="kerjapedia.ingestion.recover_stuck")
+def recover_stuck_ingestion() -> dict[str, int]:
+    return recover_stuck_ingestion_jobs()
+
+
+@celery_app.task(name="kerjapedia.system.cleanup")
+def monitoring_cleanup() -> dict[str, int]:
+    from app.services.monitoring.collector import cleanup_monitoring
+
+    return cleanup_monitoring()
 
 
 @celery_app.task(name="kerjapedia.rag.purge_expired_traces")

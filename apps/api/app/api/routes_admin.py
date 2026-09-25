@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy import Float as sa_Float
 from sqlalchemy import cast as sa_cast
 from sqlalchemy import func as sa_func
@@ -20,6 +20,7 @@ from app.api.schemas import (
     DocumentUpdateRequest,
     DocumentVerificationRequest,
     IngestionBuildReviewRequest,
+    PromptVersionCreateRequest,
     PublicationRequest,
     RetrievalPlaygroundRequest,
 )
@@ -33,11 +34,13 @@ from app.api.utils import (
 from app.api.utils import project_root as get_project_root
 from app.core.config import settings
 from app.models.business import (
+    CalculationRule,
     Conversation,
     DailyUsage,
     DocumentAdmin,
     Feedback,
     Message,
+    PromptVersion,
     RagProviderError,
     RagRagasEval,
     RagRequestObservation,
@@ -1081,6 +1084,148 @@ def admin_settings(_: AdminUser) -> dict:
 def audit_logs(
     session: DbSession,
     _: AdminUser,
-    limit: int = Query(default=100, ge=1, le=500),
-) -> list[dict]:
-    return list_audit_logs(session, limit=limit)
+    response: Response,
+    limit: int | None = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    page: int | None = Query(default=None, ge=1),
+) -> dict | list[dict]:
+    """Paginated audit trail. `page` returns the `{entries, total}` envelope
+    the admin settings UI expects; otherwise a legacy plain list (plus
+    `X-Total-Count`) so existing callers keep working."""
+    from app.services.audit import count_audit_logs
+
+    total = count_audit_logs(session)
+    response.headers["X-Total-Count"] = str(total)
+    if page is not None:
+        per_page = max(1, min(limit or 100, 500))
+        entries = list_audit_logs(
+            session, limit=per_page, offset=(page - 1) * per_page
+        )
+        return {"entries": entries, "total": total}
+    return list_audit_logs(session, limit=limit, offset=offset)
+
+
+def _prompt_payload(row: PromptVersion) -> dict:
+    return {
+        "version_id": row.version_id,
+        "status": row.status,
+        "created_by": row.created_by,
+        "created_at": row.created_at,
+        "activated_at": row.activated_at,
+    }
+
+
+@router.get("/prompt-versions")
+def list_prompt_versions(session: DbSession, _: AdminUser) -> list[dict]:
+    rows = (
+        session.query(PromptVersion)
+        .order_by(PromptVersion.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    return [_prompt_payload(row) for row in rows]
+
+
+@router.post("/prompt-versions", status_code=status.HTTP_201_CREATED)
+def create_prompt_version(
+    payload: PromptVersionCreateRequest,
+    session: DbSession,
+    user: AdminUser,
+) -> dict:
+    if session.get(PromptVersion, payload.version_id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Prompt version already exists.",
+        )
+    row = PromptVersion(
+        version_id=payload.version_id,
+        system_prompt=payload.system_prompt,
+        user_template=payload.user_template,
+        status="draft",
+        created_by=user.user_id,
+    )
+    session.add(row)
+    session.commit()
+    log_audit(
+        actor=user.user_id,
+        action="prompt_create",
+        target_type="prompt_versions",
+        target_id=row.version_id,
+        details={"status": "draft"},
+    )
+    return _prompt_payload(row)
+
+
+@router.post("/prompt-versions/{version_id}/publish")
+def publish_prompt_version(
+    version_id: str,
+    session: DbSession,
+    user: AdminUser,
+) -> dict:
+    """Atomically switch the active prompt; running processes pick it up.
+
+    The single-active partial unique index guarantees at most one active row.
+    Cached generators are reset so the next request constructs with the new
+    template; in-flight turns finish on the previous template.
+    """
+    row = session.get(PromptVersion, version_id)
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Prompt version was not found.",
+        )
+    previous = (
+        session.query(PromptVersion)
+        .filter(PromptVersion.status == "active")
+        .with_for_update()
+        .all()
+    )
+    for active_row in previous:
+        if active_row.version_id != version_id:
+            active_row.status = "retired"
+    row.status = "active"
+    row.activated_at = now_utc()
+    session.commit()
+    log_audit(
+        actor=user.user_id,
+        action="prompt_publish",
+        target_type="prompt_versions",
+        target_id=version_id,
+        details={"previous": [r.version_id for r in previous]},
+    )
+    # Best-effort process refresh; the DB row is authoritative even if the
+    # local caches lag until the next deploy or publish.
+    try:
+        from app.db.session import create_session
+        from app.services.answering.prompts import refresh_active_prompt_cache
+        from app.services.providers import reset_provider_caches
+
+        with create_session() as fresh:
+            refresh_active_prompt_cache(fresh)
+        reset_provider_caches()
+    except Exception:
+        pass
+    return _prompt_payload(row)
+
+
+@router.get("/calculation-rules")
+def list_calculation_rules(session: DbSession, _: AdminUser) -> list[dict]:
+    rows = (
+        session.query(CalculationRule)
+        .order_by(CalculationRule.rule_type, CalculationRule.effective_from.desc())
+        .limit(200)
+        .all()
+    )
+    return [
+        {
+            "rule_id": row.rule_id,
+            "rule_type": row.rule_type,
+            "version": row.version,
+            "legal_source": row.legal_source,
+            "effective_from": row.effective_from,
+            "effective_until": row.effective_until,
+            "formula_identifier": row.formula_identifier,
+            "status": row.status,
+        }
+        for row in rows
+    ]

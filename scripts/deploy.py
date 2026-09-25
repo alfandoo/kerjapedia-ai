@@ -60,16 +60,18 @@ def setup_render():
    • SUPABASE_SERVICE_KEY = (your supabase service key from .env)
    • SUPABASE_ANON_KEY = (your supabase anon key from .env)
    • DATABASE_URL = (your database URL from .env)
-   • REDIS_URL = (your Upstash Redis URL from .env)
-   • OPENROUTER_API_KEY = (your OpenRouter API key from .env)
-   • PINECONE_API_KEY = (your Pinecone API key from .env)
+    • REDIS_URL = (your Upstash Redis URL from .env)
+    • OPENROUTER_API_KEY = (your OpenRouter API key from .env, fallback only)
+    • GROQ_API_KEY = (your Groq API key from .env)
+    • UPSTASH_VECTOR_REST_URL = (your Upstash Vector URL from .env)
+    • UPSTASH_VECTOR_REST_TOKEN = (your Upstash Vector token from .env)
    • SMTP_USERNAME = kerjapedia@zohomail.com
    • SMTP_PASSWORD = (your SMTP password from .env)
    • SMTP_SENDER_EMAIL = kerjapedia@zohomail.com
 
 4. DEPLOY
    → Render will auto-deploy from the Blueprint
-   → First deploy takes ~5-10 min (downloading BGE-M3 model)
+    → First deploy takes ~5-10 min (system deps + OCR toolchain; no local embedding model — vectors are hosted by Upstash)
    → Your API URL will be: https://kerjapedia-api.onrender.com
 
 5. RUN DATABASE MIGRATION
