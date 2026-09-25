@@ -360,6 +360,7 @@ export type AdminSettings = {
 export type AuditLogEntry = {
   audit_id: string;
   actor: string;
+  actor_name: string | null;
   action: string;
   target_type: string;
   target_id: string | null;

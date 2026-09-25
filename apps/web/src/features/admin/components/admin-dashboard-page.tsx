@@ -151,19 +151,16 @@ function UsageTrendChart({ points }: { points: DailyUsagePoint[] }) {
       {
         key: "messages",
         color: TREND_COLORS.messages,
-        dashed: false,
         pick: (p: DailyUsagePoint) => p.messages,
       },
       {
         key: "conversations",
         color: TREND_COLORS.conversations,
-        dashed: true,
         pick: (p: DailyUsagePoint) => p.conversations,
       },
       {
         key: "active_users",
         color: TREND_COLORS.active_users,
-        dashed: false,
         pick: (p: DailyUsagePoint) => p.active_users,
       },
     ] as const
@@ -228,7 +225,6 @@ function UsageTrendChart({ points }: { points: DailyUsagePoint[] }) {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeDasharray={series.dashed ? "6 4" : undefined}
         />
       ))}
     </svg>
@@ -305,6 +301,14 @@ function auditIcon(action: string) {
   return ScrollText;
 }
 
+function verificationResult(details: Record<string, unknown>) {
+  const status = details.status;
+  if (status === "verified") return "terverifikasi";
+  if (status === "rejected") return "ditolak";
+  if (status === "pending") return "menunggu keputusan";
+  return typeof status === "string" && status ? status : "diperbarui";
+}
+
 function describeAudit(entry: AuditLogEntry) {
   const target = entry.target_id ?? "";
   const details = entry.details ?? {};
@@ -314,10 +318,24 @@ function describeAudit(entry: AuditLogEntry) {
       return `Upload dokumen "${fileName}"`;
     case "document.published":
       return `Publish dokumen ${target}`;
+    case "document.draft":
+      return `Batal terbit dokumen ${target} (kembali ke draft)`;
     case "document.metadata_updated":
       return `Metadata dokumen ${target} diperbarui`;
     case "document.relationships_updated":
       return `Relasi dokumen ${target} diperbarui`;
+    case "document.source_verification":
+      return `Verifikasi sumber dokumen ${target} ${verificationResult(details)}`;
+    case "document.legal_verification":
+      return `Review hukum dokumen ${target} ${verificationResult(details)}`;
+    case "ingestion_build.approved":
+      return `Setujui hasil ingestion ${target}`;
+    case "ingestion_build.rejected":
+      return `Tolak hasil ingestion ${target}`;
+    case "prompt_create":
+      return `Buat versi prompt ${target}`;
+    case "prompt_publish":
+      return `Publish versi prompt ${target}`;
     case "chat_purge":
       return "Bersihkan percakapan lama";
     default:
@@ -1182,7 +1200,7 @@ export function AdminDashboardPage() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-left text-sm">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[#e5e5e5] text-xs text-muted-text">
                   <th scope="col" className="px-6 py-3 font-medium">
@@ -1190,6 +1208,9 @@ export function AdminDashboardPage() {
                   </th>
                   <th scope="col" className="px-3 py-3 font-medium">
                     Aktivitas
+                  </th>
+                  <th scope="col" className="px-3 py-3 font-medium">
+                    User
                   </th>
                   <th scope="col" className="px-6 py-3 text-right font-medium">
                     Status
@@ -1204,15 +1225,18 @@ export function AdminDashboardPage() {
                       <td className="px-6 py-3 whitespace-nowrap text-xs text-muted-text tabular-nums">
                         <time dateTime={entry.created_at}>{formatDate(entry.created_at)}</time>
                       </td>
-                      <td className="max-w-0 px-3 py-3">
-                        <span className="flex items-center gap-2.5">
+                      <td className="px-3 py-3">
+                        <span className="flex items-start gap-2.5">
                           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-soft/70">
                             <ActivityIcon aria-hidden="true" className="size-4 text-forest" />
                           </span>
-                          <span className="min-w-0 flex-1 truncate font-medium text-tinta">
+                          <span className="min-w-0 flex-1 font-medium break-words text-tinta">
                             {describeAudit(entry)}
                           </span>
                         </span>
+                      </td>
+                      <td className="px-3 py-3 text-xs whitespace-nowrap text-muted-text">
+                        {entry.actor_name || entry.actor}
                       </td>
                       <td className="px-6 py-3 text-right">
                         <StatusBadge tone="success">Sukses</StatusBadge>

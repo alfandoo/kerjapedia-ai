@@ -39,6 +39,7 @@ def count_audit_logs(session) -> int:
 
 def list_audit_logs(session, limit: int | None = 100, offset: int = 0) -> list[dict]:
     from app.api.pagination import apply_db_pagination
+    from app.models.business import UserProfile
 
     rows = (
         apply_db_pagination(
@@ -47,10 +48,20 @@ def list_audit_logs(session, limit: int | None = 100, offset: int = 0) -> list[d
             offset,
         ).all()
     )
+    actor_ids = {row.actor for row in rows if row.actor}
+    actor_names: dict[str, str] = {}
+    if actor_ids:
+        profiles = (
+            session.query(UserProfile)
+            .filter(UserProfile.user_id.in_(actor_ids))
+            .all()
+        )
+        actor_names = {profile.user_id: profile.name for profile in profiles}
     return [
         {
             "audit_id": row.audit_id,
             "actor": row.actor,
+            "actor_name": actor_names.get(row.actor),
             "action": row.action,
             "target_type": row.target_type,
             "target_id": row.target_id,
