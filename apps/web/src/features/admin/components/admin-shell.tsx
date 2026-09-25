@@ -3,7 +3,6 @@
 import { readPreference, writePreference } from "@/lib/preference-cookie";
 
 import Link from "next/link";
-import { toast } from "sonner";
 import { usePathname, useRouter } from "next/navigation";
 import {
   useEffect,
@@ -18,6 +17,10 @@ import {
   Activity,
   Bell,
   ChevronDown,
+  FileText,
+  Monitor,
+  Server,
+  Workflow,
   ChevronLeft,
   Database,
   FileUp,
@@ -36,7 +39,7 @@ import {
 } from "lucide-react";
 
 import { ScaleIcon } from "@/components/icons";
-import { useStoredSession, useSessionReady } from "@/features/auth";
+import { LogoutConfirmDialog, useStoredSession, useSessionReady } from "@/features/auth";
 import { fetchAdminStats, signOut } from "@/features/admin/api";
 import { cn } from "@/lib/utils";
 import sidebarStyles from "./admin-sidebar.module.css";
@@ -68,6 +71,16 @@ const adminNavGroups: {
       { href: "/admin/observability", label: "Observability", icon: Activity },
     ],
   },
+  {
+    label: "System",
+    items: [
+      { href: "/admin/system", label: "System Overview", icon: Monitor },
+      { href: "/admin/system/services", label: "Services", icon: Server },
+      { href: "/admin/system/logs", label: "Logs", icon: FileText },
+      { href: "/admin/system/traces", label: "Traces", icon: Workflow },
+      { href: "/admin/system/alerts", label: "Alerts", icon: Bell },
+    ],
+  },
 ];
 
 const allNavItems = adminNavGroups.flatMap((group) => group.items);
@@ -87,13 +100,18 @@ export function AdminShell({ children }: AdminShellProps) {
   const session = useStoredSession();
   const sessionReady = useSessionReady();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   const [headerQuery, setHeaderQuery] = useState("");
   const [attentionCount, setAttentionCount] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => typeof window !== "undefined" && readPreference("kp-admin-sidebar") === "collapsed"
   );
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const asideRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
@@ -167,9 +185,13 @@ export function AdminShell({ children }: AdminShellProps) {
     function handleKeydown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       setDropdownOpen(false);
+      setNotificationOpen(false);
       setMobileOpen(false);
     }
     function handleClickOutside(event: MouseEvent) {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setNotificationOpen(false);
+      }
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setDropdownOpen(false);
       }
@@ -187,21 +209,25 @@ export function AdminShell({ children }: AdminShellProps) {
   }
 
   const isActive = (href: string) =>
-    href === "/documents"
-      ? pathname === "/documents"
+    href === "/documents" || href === "/admin/system"
+      ? pathname === href
       : pathname === href || pathname.startsWith(`${href}/`);
   const currentItem = [...allNavItems].reverse().find((item) => isActive(item.href));
   const currentSection = currentItem?.label ?? "Admin";
   const SectionIcon =
     currentItem?.icon ?? (pathname.startsWith("/admin/settings") ? Settings : LayoutDashboard);
 
-  async function handleLogout() {
+  async function confirmLogout() {
+    if (logoutBusy) return;
+    setLogoutBusy(true);
+    setLogoutError(null);
     try {
       await signOut();
       // Full page redirect after logout clears all client state intentionally.
       window.location.assign("/login-admin"); // eslint-disable-line @next/next/no-location-assign-relative-destination
     } catch (error) {
-      toast.error((error as Error).message);
+      setLogoutError((error as Error).message);
+      setLogoutBusy(false);
     }
   }
 
@@ -370,81 +396,116 @@ export function AdminShell({ children }: AdminShellProps) {
             </div>
           </form>
           <div className="flex shrink-0 items-center gap-1.5">
-            <Link
-              href="/documents"
-              aria-label={
-                attentionCount > 0
-                  ? `${attentionCount} dokumen perlu perhatian`
-                  : "Notifikasi dokumen"
-              }
-              className="relative flex size-11 items-center justify-center rounded-full text-tinta transition hover:bg-surface-soft"
-            >
-              <Bell aria-hidden="true" className="size-5" />
-              {attentionCount > 0 ? (
+            <div className="relative shrink-0" ref={notificationRef}>
+              <button
+                type="button"
+                aria-label={
+                  attentionCount > 0 ? `${attentionCount} dokumen perlu perhatian` : "Notifikasi"
+                }
+                aria-controls="admin-notification-placeholder"
+                aria-expanded={notificationOpen}
+                aria-haspopup="dialog"
+                onClick={() => setNotificationOpen((open) => !open)}
+                className="relative flex size-11 items-center justify-center rounded-full text-tinta transition hover:bg-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
+              >
+                <Bell aria-hidden="true" className="size-5" />
+                {attentionCount > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-1 right-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 font-mono text-[10px] font-bold text-white"
+                  >
+                    {attentionCount > 99 ? "99+" : attentionCount}
+                  </span>
+                ) : null}
+              </button>
+              {notificationOpen && (
+                <div
+                  id="admin-notification-placeholder"
+                  role="dialog"
+                  aria-labelledby="admin-notification-placeholder-title"
+                  className="absolute right-0 top-12 z-40 w-72 overflow-hidden rounded-xl border border-[#e5e5e5] bg-white shadow-[0_12px_32px_rgba(27,67,50,0.12)]"
+                >
+                  <div className="px-4 py-3">
+                    <p
+                      id="admin-notification-placeholder-title"
+                      className="text-sm font-semibold text-tinta"
+                    >
+                      Notifikasi
+                    </p>
+                    <p className="mt-1 text-xs text-muted-text">Fitur notifikasi belum tersedia.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="relative shrink-0" ref={dropdownRef}>
+              <button
+                type="button"
+                className="flex h-11 items-center gap-2.5 rounded-full pr-2 pl-1.5 transition hover:bg-surface-soft"
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                aria-expanded={dropdownOpen}
+                aria-haspopup="menu"
+              >
                 <span
                   aria-hidden="true"
-                  className="absolute top-1 right-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 font-mono text-[10px] font-bold text-white"
+                  className="flex size-8 items-center justify-center rounded-full bg-javanese text-[11px] font-bold text-white"
                 >
-                  {attentionCount > 99 ? "99+" : attentionCount}
+                  {session.user.name
+                    .trim()
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((word) => word[0]?.toUpperCase() ?? "")
+                    .join("") || "?"}
                 </span>
-              ) : null}
-            </Link>
-          <div className="relative shrink-0" ref={dropdownRef}>
-            <button
-              type="button"
-              className="flex h-11 items-center gap-2.5 rounded-full pr-2 pl-1.5 transition hover:bg-surface-soft"
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              aria-expanded={dropdownOpen}
-              aria-haspopup="menu"
-            >
-              <span
-                aria-hidden="true"
-                className="flex size-8 items-center justify-center rounded-full bg-javanese text-[11px] font-bold text-white"
-              >
-                {session.user.name
-                  .trim()
-                  .split(/\s+/)
-                  .slice(0, 2)
-                  .map((word) => word[0]?.toUpperCase() ?? "")
-                  .join("") || "?"}
-              </span>
-              <span className="max-w-40 truncate text-sm font-medium text-tinta">
-                {session.user.name}
-              </span>
-              <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted-text" />
-            </button>
-            {dropdownOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 top-12 w-52 overflow-hidden rounded-xl border border-line bg-white shadow-[0_12px_32px_rgba(27,67,50,0.12)]"
-              >
-                <Link
-                  href="/admin/settings"
-                  role="menuitem"
-                  className="flex h-11 items-center gap-2.5 px-4 text-sm text-tinta transition hover:bg-surface-soft"
-                  onClick={() => setDropdownOpen(false)}
+                <span className="max-w-40 truncate text-sm font-medium text-tinta">
+                  {session.user.name}
+                </span>
+                <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted-text" />
+              </button>
+              {dropdownOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-12 w-52 overflow-hidden rounded-xl border border-line bg-white shadow-[0_12px_32px_rgba(27,67,50,0.12)]"
                 >
-                  <Settings className="size-4 text-muted-text" />
-                  <span>Pengaturan</span>
-                </Link>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex h-11 w-full items-center gap-2.5 px-4 text-sm text-tinta transition hover:bg-surface-soft"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="size-4 text-muted-text" />
-                  <span>Logout</span>
-                </button>
-              </div>
-            )}
-          </div>
+                  <Link
+                    href="/admin/settings"
+                    role="menuitem"
+                    className="flex h-11 items-center gap-2.5 px-4 text-sm text-tinta transition hover:bg-surface-soft"
+                    onClick={() => setDropdownOpen(false)}
+                  >
+                    <Settings className="size-4 text-muted-text" />
+                    <span>Pengaturan</span>
+                  </Link>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex h-11 w-full items-center gap-2.5 px-4 text-sm text-tinta transition hover:bg-surface-soft"
+                    onClick={() => {
+                      setLogoutError(null);
+                      setLogoutOpen(true);
+                      setDropdownOpen(false);
+                    }}
+                  >
+                    <LogOut className="size-4 text-muted-text" />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           {children}
         </main>
       </div>
+      <LogoutConfirmDialog
+        open={logoutOpen}
+        confirming={logoutBusy}
+        error={logoutError}
+        onCancel={() => {
+          if (!logoutBusy) setLogoutOpen(false);
+        }}
+        onConfirm={() => void confirmLogout()}
+      />
     </div>
   );
 }
