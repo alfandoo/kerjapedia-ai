@@ -25,6 +25,7 @@ from app.services.retrieval.postprocessing import (
     apply_query_focus_adjustments,
     apply_relationship_adjustments,
     build_warnings,
+    demote_definitional_chunks,
     drop_heading_only_chunks,
     expand_context,
     mmr_select,
@@ -465,6 +466,10 @@ class UpstashVectorStore:
         ranked.sort(key=lambda item: item.final_score, reverse=True)
         ranked = apply_relationship_adjustments(ranked, self.relationship_index)
         ranked = apply_query_focus_adjustments(
+            ranked,
+            understanding.normalized_retrieval_query,
+        )
+        ranked = demote_definitional_chunks(
             ranked,
             understanding.normalized_retrieval_query,
         )

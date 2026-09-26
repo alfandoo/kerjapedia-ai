@@ -72,6 +72,32 @@ def build_citations(ranked: list[RankedChunk]) -> list[Citation]:
     return citations
 
 
+def select_citation_chunks(
+    ranked: list[RankedChunk],
+    max_documents: int = 2,
+    max_citations: int = 4,
+) -> list[RankedChunk]:
+    """Pick citation chunks from the top-ranked documents only.
+
+    Ranked chunks usually span several documents (diversity/MMR spreads
+    them), but citing every one of them tanks citation precision: each
+    citation outside the answer's key documents counts as wrong. Group
+    chunks by document in rank order, keep the top documents, and return
+    up to ``max_citations`` of their chunks, rank order preserved.
+    """
+    if max_documents < 1 or max_citations < 1:
+        return []
+    ordered_documents: list[str] = []
+    for item in ranked:
+        document_id = item.document.document_id
+        if document_id not in ordered_documents:
+            ordered_documents.append(document_id)
+    top_documents = set(ordered_documents[:max_documents])
+    return [item for item in ranked if item.document.document_id in top_documents][
+        :max_citations
+    ]
+
+
 def build_related_documents(ranked: list[RankedChunk]) -> list[RelatedDocument]:
     related: list[RelatedDocument] = []
     seen_documents: set[str] = set()

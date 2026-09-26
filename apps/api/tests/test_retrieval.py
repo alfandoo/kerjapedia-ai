@@ -8,12 +8,14 @@ from app.services.ingestion.embeddings import HashEmbeddingProvider
 from app.services.retrieval.engine import RetrievalEngine
 from app.services.retrieval.postprocessing import (
     apply_query_focus_adjustments,
+    demote_definitional_chunks,
     drop_heading_only_chunks,
     expand_context,
+    is_definitional_chunk,
     is_heading_only,
     mmr_select,
 )
-from app.services.retrieval.query import is_employment_query, understand_query
+from app.services.retrieval.query import is_employment_query, rewrite_query, understand_query
 from app.services.retrieval.relationships import (
     RegulationRelationship,
     build_relationship_index,
@@ -55,6 +57,30 @@ def make_document(
         embedding_model=provider.model_name,
         embedding=provider.embed([text])[0],
         metadata={"year": 2021, "regulation_type": "PP", "number": 35},
+    )
+
+
+def test_comparison_query_probes_both_entities() -> None:
+    rewritten = rewrite_query("apa perbedaan pkwt dan pkwtt?")
+
+    assert rewritten[0] == "apa perbedaan pkwt dan pkwtt?"
+    assert "perbedaan pkwt perjanjian kerja waktu tertentu" in rewritten
+    assert "perbedaan pkwtt perjanjian kerja waktu tidak tertentu" in rewritten
+
+
+def test_comparison_probes_require_two_entities() -> None:
+    assert rewrite_query("apa perbedaan pkwt?") == [
+        "apa perbedaan pkwt?",
+        "apa perbedaan perjanjian kerja waktu tertentu?",
+    ]
+    assert rewrite_query("berapa pesangon phk?")[0] == "berapa pesangon phk?"
+
+
+def test_pkwtt_expands_without_corrupting_pkwt() -> None:
+    understanding = understand_query("apa perbedaan PKWT dan PKWTT?")
+    assert "comparison" in understanding.detected_intents
+    assert any(
+        "tidak tertentu" in item for item in understanding.rewritten_queries
     )
 
 
@@ -806,3 +832,61 @@ def test_expand_context_respects_max_expansions() -> None:
 
     assert len(expand_context(ranked, candidates, max_expansions=1)) == 2
     assert len(expand_context(ranked, candidates)) == 3
+
+
+def _definition_ranked(chunk_id: str, chapter: str, article: str, score: float) -> RankedChunk:
+    document = RetrievalDocument(
+        chunk_id=chunk_id,
+        document_id="UU-2-2004",
+        text="teks ketentuan",
+        chapter=chapter,
+        section="",
+        article=article,
+        paragraph="",
+        page_start=1,
+        page_end=1,
+        token_count=3,
+        topics=[],
+        legal_status="active",
+        source_url="https://peraturan.bpk.go.id/",
+        metadata={},
+    )
+    return RankedChunk(
+        document=document,
+        lexical_score=score,
+        semantic_score=score,
+        fusion_score=score,
+        rerank_score=score,
+        final_score=score,
+        match_reasons=[],
+    )
+
+
+def test_definitional_chunks_demoted_for_distinguishing_questions() -> None:
+    definition = _definition_ranked("def-1", "BAB I", "Pasal 1", 0.9)
+    operative = _definition_ranked("ops-1", "BAB III", "Pasal 5", 0.85)
+
+    ranked = demote_definitional_chunks(
+        [definition, operative], "Apa perbedaan mediasi dan konsiliasi?"
+    )
+
+    assert [item.document.chunk_id for item in ranked] == ["ops-1", "def-1"]
+    assert ranked[1].final_score == round(0.9 - 0.12, 6)
+    assert "definitional_chunk_demoted" in ranked[1].match_reasons
+
+
+def test_definitional_chunks_kept_for_definition_questions() -> None:
+    definition = _definition_ranked("def-1", "BAB I", "Pasal 1", 0.9)
+    operative = _definition_ranked("ops-1", "BAB III", "Pasal 5", 0.85)
+
+    ranked = demote_definitional_chunks(
+        [definition, operative], "Apa definisi pengusaha menurut regulasi?"
+    )
+
+    assert [item.document.chunk_id for item in ranked] == ["def-1", "ops-1"]
+
+
+def test_non_pasal_satu_articles_are_not_definitional() -> None:
+    operative = _definition_ranked("ops-1", "BAB III", "Pasal 15", 0.9)
+
+    assert is_definitional_chunk(operative.document) is False

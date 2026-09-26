@@ -783,6 +783,7 @@ export function ChatWorkspaceShell({
           className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
           onClick={() => {
             setLogoutError(null);
+            setProfileMenuOpen(false);
             setLogoutOpen(true);
           }}
         >
@@ -790,15 +791,6 @@ export function ChatWorkspaceShell({
           <span>{translate("sidebar.logout")}</span>
         </button>
       </div>
-      <LogoutConfirmDialog
-        open={logoutOpen}
-        confirming={logoutBusy}
-        error={logoutError}
-        onCancel={() => {
-          if (!logoutBusy) setLogoutOpen(false);
-        }}
-        onConfirm={() => void confirmLogout()}
-      />
     </div>
   ) : null;
 
@@ -1072,6 +1064,15 @@ export function ChatWorkspaceShell({
           onReturnFocus={() => profileTriggerRef.current?.focus()}
         />
       ) : null}
+      <LogoutConfirmDialog
+        open={logoutOpen}
+        confirming={logoutBusy}
+        error={logoutError}
+        onCancel={() => {
+          if (!logoutBusy) setLogoutOpen(false);
+        }}
+        onConfirm={() => void confirmLogout()}
+      />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );

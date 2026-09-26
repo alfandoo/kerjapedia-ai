@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import asdict, replace
 
 from app.services.answering.generator import AnswerGenerator, _detect_language
 from app.services.evaluation.metrics import (
     answer_correctness,
+    answer_similarity,
     citation_correctness,
     faithfulness,
     ndcg_at_k,
@@ -24,6 +26,8 @@ from app.services.evaluation.schemas import (
 from app.services.retrieval.engine import RetrievalEngine
 from app.services.retrieval.reranker import DEFAULT_RERANK_WEIGHTS, RerankWeights
 from app.services.retrieval.schemas import RankedChunk, RetrievalDocument, RetrievalResponse
+
+logger = logging.getLogger(__name__)
 
 EXPERIMENT_MODES: tuple[ExperimentMode, ...] = ("baseline", "dense", "hybrid", "rerank", "upstash")
 UPSTASH_RANKING_MODES: tuple[ExperimentMode, ...] = (
@@ -172,6 +176,29 @@ def _evaluate_searches(
         answer = generator.generate(question.question, mode_retrieval)
         retrieved_document_ids = _unique_document_ids(selected)
         answerable = not question.should_refuse
+        similarity_score: float | None = None
+        if (
+            answerable
+            and not actual_refuse
+            and answer.answer.strip()
+            and question.expected_answer.strip()
+        ):
+            try:
+                from app.core.config import settings as _settings
+                from app.services.evaluation.semantic import embed_texts
+
+                vectors = (
+                    embed_texts(
+                        [answer.answer, question.expected_answer],
+                        api_key=_settings.openrouter_api_key or "",
+                    )
+                    if _settings.openrouter_api_key
+                    else None
+                )
+                if vectors and len(vectors) == 2:
+                    similarity_score = answer_similarity(vectors[0], vectors[1])
+            except Exception:
+                logger.warning("semantic similarity scoring failed", exc_info=True)
         results.append(
             QuestionEvaluation(
                 question_id=question.question_id,
@@ -202,6 +229,7 @@ def _evaluate_searches(
                     if answerable
                     else None
                 ),
+                answer_similarity=similarity_score,
                 ragas_faithfulness=None,
                 recall_at_10=(
                     recall_at_k(
@@ -506,6 +534,7 @@ def _aggregate(
         citation_correctness=_average(item.citation_correctness for item in answerable),
         faithfulness=_average(item.faithfulness for item in answerable),
         answer_correctness=_average(item.answer_correctness for item in answerable),
+        answer_similarity=_average(item.answer_similarity for item in answerable),
         ragas_faithfulness=_average(item.ragas_faithfulness for item in answerable),
         refusal_accuracy=_average(1.0 if item.refusal_correct else 0.0 for item in results),
         hard_negative_recall_at_5=_average(item.recall_at_5 for item in hard_negatives),
@@ -711,6 +740,7 @@ def _evaluate_provider_questions(
                     if answerable
                     else None
                 ),
+                answer_similarity=None,
                 ragas_faithfulness=(
                     score_ragas_faithfulness(
                         ragas_scorer,

@@ -256,24 +256,13 @@ export function AdminEvaluation() {
         title="Evaluasi RAG"
         description="Bandingkan kualitas pencarian, ketepatan kutipan, dan jawaban pada dataset evaluasi."
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              className="min-h-11"
-              disabled={loading || loadError || seeding || submitting}
-              onClick={() => void seed()}
-            >
-              <RefreshCw className={seeding ? "animate-spin motion-reduce:animate-none" : ""} />{" "}
-              Muat dataset
-            </Button>
-            <Button
-              className="min-h-11 bg-javanese text-white hover:bg-forest"
-              disabled={loading || loadError || submitting || seeding || !datasets.length}
-              onClick={() => setRunDialogOpen(true)}
-            >
-              <Play /> Jalankan evaluasi
-            </Button>
-          </div>
+          <Button
+            className="min-h-11 bg-javanese text-white hover:bg-forest"
+            disabled={loading || loadError || submitting}
+            onClick={() => setRunDialogOpen(true)}
+          >
+            <Play /> Jalankan evaluasi
+          </Button>
         }
       />
 
@@ -304,7 +293,7 @@ export function AdminEvaluation() {
         <>
           {!datasets.length && (
             <p className="rounded-lg bg-surface-soft p-4 text-sm text-muted-text">
-              Belum ada dataset. Pilih Muat dataset untuk menyiapkan pertanyaan evaluasi.
+              Belum ada dataset. Buka Jalankan evaluasi untuk memuat golden questions.
             </p>
           )}
 
@@ -508,8 +497,8 @@ export function AdminEvaluation() {
               <div className="min-w-0">
                 <DialogTitle>Jalankan evaluasi</DialogTitle>
                 <DialogDescription>
-                  Pilih dataset dan jumlah hasil. Empat strategi ranking dibandingkan dari
-                  candidate pool Upstash yang sama.
+                  Pilih dataset, lalu bandingkan empat strategi ranking dari candidate pool
+                  Upstash yang sama.
                 </DialogDescription>
               </div>
             </div>
@@ -523,42 +512,44 @@ export function AdminEvaluation() {
                 {runError}
               </p>
             )}
-            <div className="space-y-1.5">
-              <Label htmlFor="eval-dataset">Dataset</Label>
-              <Select disabled={submitting} value={runDatasetId} onValueChange={setRunDatasetId}>
-                <SelectTrigger id="eval-dataset" className="min-h-11 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className={`admin-theme ${styles.ingestion}`}>
-                  {datasets.map((dataset) => (
-                    <SelectItem key={dataset.dataset_id} value={dataset.dataset_id}>
-                      {dataset.name} ({dataset.questions.length} pertanyaan)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-tinta">Sumber retrieval</p>
-              <div className="rounded-lg border border-[#e5e5e5] bg-surface-soft px-4 py-3">
-                <p className="text-sm font-semibold text-forest">Upstash live</p>
-                <p className="mt-1 text-xs leading-relaxed text-muted-text">
-                  Hosted dense embedding dan BM25 dari index produksi aktif.
+            {datasets.length === 0 ? (
+              <div className="space-y-3 rounded-lg border border-amber/25 bg-amber-soft px-4 py-3">
+                <p className="text-sm text-amber">
+                  Belum ada dataset. Muat golden questions terlebih dahulu.
                 </p>
+                <Button
+                  variant="outline"
+                  className="min-h-11 bg-white"
+                  disabled={seeding || submitting}
+                  onClick={() => void seed()}
+                >
+                  <RefreshCw
+                    className={seeding ? "animate-spin motion-reduce:animate-none" : ""}
+                  />
+                  {seeding ? "Memuat..." : "Muat golden questions"}
+                </Button>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-tinta">Strategi yang dibandingkan</p>
-              <ul className="divide-y divide-dashed divide-[#e5e5e5] rounded-lg border border-[#e5e5e5] bg-white px-4">
-                {["Baseline", "Dense", "Hybrid", "Re-ranker"].map((mode) => (
-                  <li key={mode} className="py-2.5 text-sm text-tinta">
-                    {mode}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="eval-dataset">Dataset</Label>
+                <Select
+                  disabled={submitting}
+                  value={runDatasetId}
+                  onValueChange={setRunDatasetId}
+                >
+                  <SelectTrigger id="eval-dataset" className="min-h-11 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className={`admin-theme ${styles.ingestion}`}>
+                    {datasets.map((dataset) => (
+                      <SelectItem key={dataset.dataset_id} value={dataset.dataset_id}>
+                        {dataset.name} ({dataset.questions.length} pertanyaan)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="eval-top-k">Jumlah hasil (Top K)</Label>
@@ -574,11 +565,14 @@ export function AdminEvaluation() {
               </Select>
             </div>
 
-            {datasets.length === 0 && (
-              <div className="rounded-lg border border-amber/25 bg-amber-soft px-3 py-2.5 text-sm text-amber">
-                Belum ada dataset. Muat golden questions terlebih dahulu.
-              </div>
-            )}
+            <div className="rounded-lg border border-[#e5e5e5] bg-surface-soft px-4 py-3">
+              <p className="text-sm font-semibold text-forest">
+                Upstash live · Baseline, Dense, Hybrid, Re-ranker
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-text">
+                Hosted dense embedding dan BM25 dari index produksi aktif.
+              </p>
+            </div>
           </div>
           <DialogFooter className="mx-0 mb-0 mt-2 rounded-none border-[#e5e5e5] bg-transparent px-0 pb-0 pt-4">
             <Button variant="outline" className="min-h-11" onClick={() => setRunDialogOpen(false)}>

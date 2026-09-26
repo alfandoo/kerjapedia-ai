@@ -2,7 +2,11 @@ import json
 
 import pytest
 
-from app.services.answering.citations import build_citations, compact_text
+from app.services.answering.citations import (
+    build_citations,
+    compact_text,
+    select_citation_chunks,
+)
 from app.services.ingestion.metadata import (
     duplicate_ids_by_checksum,
     find_document,
@@ -88,3 +92,55 @@ def test_citation_formatter_compacts_text_and_deduplicates_chunks() -> None:
     assert citations[0].article == "Pasal 15"
     assert citations[0].quote == "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi."
     assert compact_text("kata " * 20, limit=20).endswith("...")
+
+def _ranked_chunk(document_id: str, chunk_id: str) -> RankedChunk:
+    document = RetrievalDocument(
+        chunk_id=chunk_id,
+        document_id=document_id,
+        text="teks pasal",
+        chapter="BAB II",
+        section="PKWT",
+        article="Pasal 15",
+        paragraph="Ayat (1)",
+        page_start=12,
+        page_end=12,
+        token_count=9,
+        topics=[],
+        legal_status="active",
+        source_url="https://peraturan.bpk.go.id/",
+        metadata={},
+    )
+    return RankedChunk(
+        document=document,
+        lexical_score=1.0,
+        semantic_score=0.9,
+        fusion_score=0.8,
+        rerank_score=0.7,
+        final_score=0.75,
+        match_reasons=[],
+    )
+
+
+def test_select_citation_chunks_keeps_top_documents_only() -> None:
+    ranked = [
+        _ranked_chunk("PP-35-2021", "chunk-1"),
+        _ranked_chunk("UU-13-2003", "chunk-2"),
+        _ranked_chunk("PP-35-2021", "chunk-3"),
+        _ranked_chunk("UU-21-2000", "chunk-4"),
+    ]
+
+    selected = select_citation_chunks(ranked, max_documents=2, max_citations=4)
+
+    assert [item.document.chunk_id for item in selected] == [
+        "chunk-1",
+        "chunk-2",
+        "chunk-3",
+    ]
+    top_doc_chunks = select_citation_chunks(ranked, max_documents=1, max_citations=4)
+    assert [item.document.chunk_id for item in top_doc_chunks] == [
+        "chunk-1",
+        "chunk-3",
+    ]
+    single = select_citation_chunks(ranked, max_documents=1, max_citations=1)
+    assert [item.document.chunk_id for item in single] == ["chunk-1"]
+    assert select_citation_chunks([], max_documents=2, max_citations=4) == []

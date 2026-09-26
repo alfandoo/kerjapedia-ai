@@ -119,7 +119,7 @@ services:
       - key: OTEL_EXPORTER_OTLP_ENDPOINT
         sync: false
       - key: RAGAS_ENABLED
-        value: "true"
+        value: "false"
       - key: RAGAS_SAMPLE_RATE
         value: "0.05"
 

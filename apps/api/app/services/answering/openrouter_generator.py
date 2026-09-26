@@ -7,7 +7,11 @@ import time
 from dataclasses import dataclass, replace
 from typing import Any
 
-from app.services.answering.citations import build_citations, build_related_documents
+from app.services.answering.citations import (
+    build_citations,
+    build_related_documents,
+    select_citation_chunks,
+)
 from app.services.answering.claim_verifier import (
     claim_coverage_score,
     verify_claims_deterministically,
@@ -44,6 +48,14 @@ RATE_LIMITED_ID = (
 )
 RATE_LIMITED_EN = (
     "The AI model is currently rate-limited. Please wait a moment and try again. "
+    "The official sources found are still shown below."
+)
+QUOTA_EXHAUSTED_ID = (
+    "Kuota harian AI sudah habis. Silakan coba lagi nanti. "
+    "Sumber resmi yang ditemukan tetap ditampilkan di bawah."
+)
+QUOTA_EXHAUSTED_EN = (
+    "The AI daily quota is exhausted. Please try again later. "
     "The official sources found are still shown below."
 )
 EXTRACTIVE_FALLBACK_WARNING = "answer_degraded_extractive"
@@ -128,6 +140,30 @@ def _is_transient_provider_error(exc: Exception) -> bool:
     )
 
 
+def _rate_limit_scope(exc: Exception) -> str | None:
+    """Classify rate limiting as "daily" (quota exhausted) or "transient".
+
+    Providers often wrap 429s (e.g. instructor retries after validation
+    failures), so detect by status code first, then by message. Returns
+    None when the error is not a rate limit.
+    """
+    message = str(exc).lower()
+    if "tokens per day" in message or "tpd" in message:
+        return "daily"
+    if _provider_status_code(exc) == 429:
+        return "transient"
+    try:
+        from openai import RateLimitError
+
+        if isinstance(exc, RateLimitError):
+            return "transient"
+    except ImportError:
+        pass
+    if "rate limit" in message or "rate_limit" in message or "rate-limit" in message:
+        return "transient"
+    return None
+
+
 class OpenRouterAnswerGenerator(AnswerGenerator):
     provider_label = "openrouter"
 
@@ -190,7 +226,13 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             )
 
         selected = retrieval.results[: self.max_citations]
-        retrieved_citations = build_citations(selected)
+        retrieved_citations = build_citations(
+            select_citation_chunks(
+                retrieval.results[: self.max_citations * 2],
+                max_documents=2,
+                max_citations=self.max_citations,
+            )
+        )
         if not retrieved_citations:
             return self._refusal_response(
                 query=query,
@@ -203,6 +245,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         validation_issues: list[str] | None = None
         failure_category = "provider_failure"
         provider_failure_type: str | None = None
+        rate_limit_scope: str | None = None
         generation_attempts = 0
         verified_subset: _VerifiedSubset | None = None
         salvage_candidates: list[str] = []
@@ -279,6 +322,10 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             except Exception as exc:
                 failure_category = "provider_failure"
                 provider_failure_type = type(exc).__name__
+                scope = _rate_limit_scope(exc)
+                if scope is not None:
+                    provider_failure_type = "RateLimitError"
+                    rate_limit_scope = scope
                 logger.warning(
                     f"{self.provider_label}_generation_provider_failure "
                     "type=%s attempt=%s status=%s detail=%.300s",
@@ -418,6 +465,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             provider_failure_type=provider_failure_type,
             generation_attempts=generation_attempts,
             transient_retries=transient_retries,
+            rate_limit_scope=rate_limit_scope,
         )
 
     def _validate_payload(
@@ -534,7 +582,9 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         ][:_SALVAGE_MAX_SENTENCES]
         if not sentences or _detect_language(" ".join(sentences)) != _detect_language(query):
             return None
-        citations = build_citations(selected)
+        citations = build_citations(
+            select_citation_chunks(selected, max_documents=2, max_citations=len(selected))
+        )
         if not citations:
             return None
         all_ids = [citation.chunk_id for citation in citations]
@@ -662,6 +712,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         provider_failure_type: str | None,
         generation_attempts: int,
         transient_retries: int = 0,
+        rate_limit_scope: str | None = None,
     ) -> AnswerResponse:
         lang = _detect_language(query)
         rate_limited = (provider_failure_type or "") == "RateLimitError"
@@ -675,7 +726,9 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             "; ".join(validation_issues or [])[:500],
             query,
         )
-        if rate_limited:
+        if rate_limited and rate_limit_scope == "daily":
+            answer_text = QUOTA_EXHAUSTED_ID if lang == "id" else QUOTA_EXHAUSTED_EN
+        elif rate_limited:
             answer_text = RATE_LIMITED_ID if lang == "id" else RATE_LIMITED_EN
         else:
             answer_text = TEMPORARILY_UNAVAILABLE_ID if lang == "id" else TEMPORARILY_UNAVAILABLE_EN

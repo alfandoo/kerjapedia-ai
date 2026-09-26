@@ -7,6 +7,7 @@ from app.api.schemas import EvaluationDatasetRequest, EvaluationRunRequest
 from app.services.answering.schemas import AnswerResponse, Citation
 from app.services.evaluation.dataset import load_evaluation_dataset
 from app.services.evaluation.metrics import (
+    answer_similarity,
     citation_correctness,
     faithfulness,
     ndcg_at_k,
@@ -623,3 +624,73 @@ def test_run_experiment_upstash_mode_requires_credentials(
 
     with pytest.raises(RuntimeError, match="UPSTASH_VECTOR_URL"):
         run_experiment([_upstash_question()], [], "upstash", top_k=5)
+
+
+def test_answer_similarity_scores_meaning_not_tokens() -> None:
+    assert answer_similarity([1.0, 0.0], [1.0, 0.0]) == 1.0
+    assert answer_similarity([1.0, 0.0], [0.0, 1.0]) == 0.0
+    assert answer_similarity([1.0, 0.0], [-1.0, 0.0]) == 0.0
+    assert answer_similarity(None, [1.0, 0.0]) is None
+    assert answer_similarity([1.0, 0.0], None) is None
+    assert answer_similarity([], []) is None
+
+
+def test_embed_texts_returns_vectors_in_index_order(monkeypatch) -> None:
+    import app.services.evaluation.semantic as semantic
+
+    calls = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "data": [
+                    {"index": 1, "embedding": [0.0, 1.0]},
+                    {"index": 0, "embedding": [1.0, 0.0]},
+                ]
+            }
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            calls["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr("httpx.Client", FakeClient)
+    vectors = semantic.embed_texts(["satu", "dua"], api_key="key")
+    assert vectors == [[1.0, 0.0], [0.0, 1.0]]
+    assert calls["json"]["input"] == ["satu", "dua"]
+
+
+def test_embed_texts_returns_none_on_failure(monkeypatch) -> None:
+    import app.services.evaluation.semantic as semantic
+
+    assert semantic.embed_texts(["", "  "], api_key="key") is None
+
+    class FailingResponse:
+        status_code = 429
+
+    class FailingClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            return FailingResponse()
+
+    monkeypatch.setattr("httpx.Client", FailingClient)
+    assert semantic.embed_texts(["satu", "dua"], api_key="key") is None

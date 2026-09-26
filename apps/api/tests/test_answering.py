@@ -656,3 +656,16 @@ def test_build_history_turns_skips_turns_containing_sensitive_data() -> None:
     ]
 
     assert build_history_turns(messages) == ()
+
+
+def test_rate_limit_scope_detects_daily_quota_and_transient() -> None:
+    from app.services.answering.openrouter_generator import _rate_limit_scope
+
+    daily = Exception("Rate limit reached on tokens per day (TPD): Limit 200000")
+    assert _rate_limit_scope(daily) == "daily"
+
+    transient = Exception("Rate limit reached on tokens per minute (TPM)")
+    assert _rate_limit_scope(transient) == "transient"
+
+    other = Exception("connection reset by peer")
+    assert _rate_limit_scope(other) is None

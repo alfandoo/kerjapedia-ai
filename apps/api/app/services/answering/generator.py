@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import re
 
-from app.services.answering.citations import build_citations, build_related_documents, compact_text
+from app.services.answering.citations import (
+    build_citations,
+    build_related_documents,
+    compact_text,
+    select_citation_chunks,
+)
 from app.services.answering.claim_verifier import verify_claims_deterministically
 from app.services.answering.prompts import default_prompt_template
 from app.services.answering.schemas import AnswerResponse, HistoryTurn
@@ -254,7 +259,13 @@ class AnswerGenerator:
             )
 
         selected = retrieval.results[: self.max_citations]
-        citations = build_citations(selected)
+        citations = build_citations(
+            select_citation_chunks(
+                retrieval.results[: self.max_citations * 2],
+                max_documents=2,
+                max_citations=self.max_citations,
+            )
+        )
         if not citations:
             return self._refusal_response(
                 query=query,

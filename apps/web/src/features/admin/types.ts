@@ -122,8 +122,11 @@ export type EvaluationMetricSet = {
   mean_reciprocal_rank: number;
   citation_correctness: number;
   faithfulness: number;
+  answer_correctness: number;
+  answer_similarity: number;
   refusal_accuracy: number;
   hard_negative_recall_at_5: number;
+  ndcg_at_10: number;
 };
 
 export type EvaluationDatasetQuestion = {

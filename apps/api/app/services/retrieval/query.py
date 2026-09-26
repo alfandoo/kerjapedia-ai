@@ -129,6 +129,7 @@ INTENT_KEYWORDS = {
 
 ABBREVIATIONS = {
     "pkwt": "perjanjian kerja waktu tertentu",
+    "pkwtt": "perjanjian kerja waktu tidak tertentu",
     "phk": "pemutusan hubungan kerja",
     "thr": "tunjangan hari raya",
     "jht": "jaminan hari tua",
@@ -212,14 +213,49 @@ def detect_intents(query: str) -> list[str]:
     return intents or ["general_question"]
 
 
+def _expand_abbreviations(text: str) -> str:
+    expanded = text
+    for short, long_form in ABBREVIATIONS.items():
+        expanded = re.sub(rf"\b{re.escape(short)}\b", long_form, expanded)
+    return expanded
+
+
+def _comparison_entities(query: str) -> tuple[str, str] | None:
+    """Split "perbedaan X dan Y" into per-entity probes.
+
+    Comparison answers need chunks about both sides; a single fused query
+    lets the dominant entity drown out the other (e.g. PKWT drowning PKWTT).
+    """
+    match = re.search(
+        r"(perbedaan|perbedaan|bandingkan|beda)\s+(.+?)\s+(?:dan|dengan)\s+(.+?)(?:[?]|$)",
+        query,
+    )
+    if not match:
+        return None
+    left = match.group(2).strip().rstrip("?")
+    right = match.group(3).strip().rstrip("?")
+    if not left or not right or len(left) > 60 or len(right) > 60:
+        return None
+    return left, right
+
+
 def rewrite_query(
     query: str, *, topics: list[str] | None = None, has_regulation: bool = False
 ) -> list[str]:
     rewritten = [query]
-    expanded = query
-    for short, long_form in ABBREVIATIONS.items():
-        expanded = re.sub(rf"\b{re.escape(short)}\b", long_form, expanded)
-    if expanded != query:
+    entities = _comparison_entities(query)
+    if entities:
+        for entity in entities:
+            expanded_entity = _expand_abbreviations(entity)
+            probe = (
+                f"perbedaan {entity} {expanded_entity}"
+                if expanded_entity != entity
+                else f"perbedaan {entity}"
+            )
+            if probe not in rewritten:
+                rewritten.append(probe)
+    expanded = _expand_abbreviations(query)
+    if expanded != query and expanded not in rewritten:
         rewritten.append(expanded)
 
     # Legal compensation is written as "uang kompensasi" in PP 35/2021, while

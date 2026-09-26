@@ -116,8 +116,10 @@ export function ModeMetricsCard({ mode, metrics }: { mode: string; metrics: Eval
       </div>
       <div className="mt-3 space-y-2">
         <MetricBar label="MRR" value={metrics.mean_reciprocal_rank} />
+        <MetricBar label="NDCG@10" value={metrics.ndcg_at_10} />
         <MetricBar label="Citation" value={metrics.citation_correctness} />
         <MetricBar label="Faithfulness" value={metrics.faithfulness} />
+        <MetricBar label="Answer similarity" value={metrics.answer_similarity} />
         <MetricBar label="Refusal acc." value={metrics.refusal_accuracy} />
         <MetricBar label="Hard-neg" value={metrics.hard_negative_recall_at_5} />
       </div>
@@ -201,14 +203,16 @@ export function RunDetailDialog({
     );
   const pageCount = Math.max(1, Math.ceil(rows.length / 5));
   const currentPage = Math.min(page, pageCount);
-  const metrics: { label: string; key: keyof EvaluationMetricSet }[] = [
-    { label: "Recall@5", key: "recall_at_5" },
-    { label: "MRR", key: "mean_reciprocal_rank" },
-    { label: "Citation correctness", key: "citation_correctness" },
-    { label: "Faithfulness", key: "faithfulness" },
-    { label: "Refusal accuracy", key: "refusal_accuracy" },
-    { label: "Hard-negative recall@5", key: "hard_negative_recall_at_5" },
-  ];
+    const metrics: { label: string; key: keyof EvaluationMetricSet }[] = [
+      { label: "Recall@5", key: "recall_at_5" },
+      { label: "MRR", key: "mean_reciprocal_rank" },
+      { label: "NDCG@10", key: "ndcg_at_10" },
+      { label: "Citation correctness", key: "citation_correctness" },
+      { label: "Faithfulness", key: "faithfulness" },
+      { label: "Answer similarity", key: "answer_similarity" },
+      { label: "Refusal accuracy", key: "refusal_accuracy" },
+      { label: "Hard-negative recall@5", key: "hard_negative_recall_at_5" },
+    ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

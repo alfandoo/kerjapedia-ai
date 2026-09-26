@@ -108,12 +108,7 @@ export async function fetchWithAuthRetry(
 export async function signOut(): Promise<void> {
   await loadStoredSession();
   if (refreshInFlight) await refreshInFlight;
-  try {
-    const response = await fetchWithAuthRetry(`${API_URL}/auth/logout`, { method: "POST" });
-    if (!response.ok) throw new Error("Logout failed");
-  } catch {
-    throw new Error("Sesi server belum berhasil dicabut. Silakan coba keluar lagi.");
-  }
+  await fetchWithAuthRetry(`${API_URL}/auth/logout`, { method: "POST" }).catch(() => null);
   clearStoredSession();
 }
 export { clearStoredSession, getStoredSession } from "./session";

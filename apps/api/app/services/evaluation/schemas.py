@@ -51,6 +51,7 @@ class QuestionEvaluation:
     citation_correctness: float | None
     faithfulness: float | None
     answer_correctness: float | None
+    answer_similarity: float | None
     ragas_faithfulness: float | None
     recall_at_10: float | None
     ndcg_at_10: float | None
@@ -75,6 +76,7 @@ class AggregateMetrics:
     citation_correctness: float
     faithfulness: float
     answer_correctness: float
+    answer_similarity: float
     ragas_faithfulness: float
     refusal_accuracy: float
     hard_negative_recall_at_5: float

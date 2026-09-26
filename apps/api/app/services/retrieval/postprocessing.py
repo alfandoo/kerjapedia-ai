@@ -117,6 +117,60 @@ def apply_query_focus_adjustments(
     return sorted(adjusted, key=lambda item: item.final_score, reverse=True)
 
 
+_DEFINITIONAL_ARTICLE_RE = re.compile(r"^pasal\s+1([^0-9]|$)", re.IGNORECASE)
+_DEFINITIONAL_CHAPTER_RE = re.compile(
+    r"(^|[^a-z])bab\s+i([^a-z]|$)|ketentuan\s+umum", re.IGNORECASE
+)
+_DEFINITION_QUESTION_RE = re.compile(
+    r"(^|[^a-z])(definisi|pengertian|arti|makna|dimaksud\s+dengan|apa\s+itu|apa\s+yang\s+dimaksud|pasal\s+1)([^a-z]|$)",
+    re.IGNORECASE,
+)
+_DEFINITIONAL_PENALTY = 0.12
+
+
+def is_definitional_chunk(document: RetrievalDocument) -> bool:
+    """Return true for generic definition articles (Pasal 1 / Ketentuan Umum).
+
+    These chunks lexically match almost any query because they enumerate
+    every defined term, so they crowd out the operative articles that
+    actually answer distinguishing questions.
+    """
+    article = (document.article or "").strip()
+    chapter = document.chapter or ""
+    section = document.section or ""
+    if not _DEFINITIONAL_ARTICLE_RE.match(article):
+        return _DEFINITIONAL_CHAPTER_RE.search(f"{chapter} {section}") is not None
+    return _DEFINITIONAL_CHAPTER_RE.search(f"{chapter} {section}") is not None
+
+
+def demote_definitional_chunks(
+    ranked: list[RankedChunk],
+    normalized_query: str,
+) -> list[RankedChunk]:
+    """Push definition chunks down unless the query asks for a definition."""
+    if len(ranked) < 2:
+        return ranked
+    if _DEFINITION_QUESTION_RE.search(normalized_query or ""):
+        return ranked
+    adjusted: list[RankedChunk] = []
+    for item in ranked:
+        if not is_definitional_chunk(item.document):
+            adjusted.append(item)
+            continue
+        adjusted.append(
+            RankedChunk(
+                document=item.document,
+                lexical_score=item.lexical_score,
+                semantic_score=item.semantic_score,
+                fusion_score=item.fusion_score,
+                rerank_score=item.rerank_score,
+                final_score=round(max(0.0, item.final_score - _DEFINITIONAL_PENALTY), 6),
+                match_reasons=[*item.match_reasons, "definitional_chunk_demoted"],
+            )
+        )
+    return sorted(adjusted, key=lambda item: item.final_score, reverse=True)
+
+
 def apply_relationship_adjustments(
     ranked: list[RankedChunk],
     relationship_index: RelationshipIndex,

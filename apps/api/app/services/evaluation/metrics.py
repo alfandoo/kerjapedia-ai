@@ -5,6 +5,7 @@ import re
 from collections.abc import Iterable
 
 from app.services.answering.schemas import AnswerResponse
+from app.services.retrieval.scoring import cosine_similarity
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 _STOPWORDS = {
@@ -138,6 +139,21 @@ def answer_correctness(answer: AnswerResponse, expected_answer: str) -> float:
     intersection = answer_tokens & expected_tokens
     union = answer_tokens | expected_tokens
     return round(len(intersection) / len(union), 6)
+
+
+def answer_similarity(
+    answer_embedding: list[float] | None,
+    expected_embedding: list[float] | None,
+) -> float | None:
+    """Cosine similarity between answer and golden-answer embeddings.
+
+    Unlike token-overlap correctness, paraphrased-but-correct answers
+    score high. Returns None when either embedding is missing so the
+    aggregate can skip the question instead of scoring it zero.
+    """
+    if not answer_embedding or not expected_embedding:
+        return None
+    return round(max(0.0, min(1.0, cosine_similarity(answer_embedding, expected_embedding))), 6)
 
 
 def _content_tokens(value: str) -> set[str]:

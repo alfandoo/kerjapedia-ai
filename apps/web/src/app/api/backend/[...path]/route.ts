@@ -307,9 +307,10 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
               },
               upstream.status
             );
-        return action === "refresh" && [400, 401, 403].includes(upstream.status)
-          ? clearCookies(response)
-          : response;
+        const shouldClearCookies =
+          action === "logout" ||
+          (action === "refresh" && [400, 401, 403].includes(upstream.status));
+        return shouldClearCookies ? clearCookies(response) : response;
       }
       if (action === "logout") return clearCookies(json({ status: "ok" }));
       if (action === "account") return clearCookies(json({ status: "deleted" }));
