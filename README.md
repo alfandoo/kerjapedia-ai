@@ -1,146 +1,90 @@
 # KerjaPedia AI
 
-An AI-powered assistant for Indonesian employment regulations, built with Retrieval-Augmented Generation (RAG). Helps users search, understand, and verify answers from official regulation documents sourced from the Indonesian Audit Board (BPK) database.
+KerjaPedia AI membantu pengguna mencari dan memahami peraturan ketenagakerjaan Indonesia melalui retrieval dokumen dan jawaban bersitasi. Aplikasi ini bukan pengganti nasihat hukum.
 
-**Live:** [kerjapedia-web.vercel.app](https://kerjapedia-web.vercel.app)
+[Aplikasi web](https://kerjapedia-web.vercel.app) · [Dokumentasi API](docs/API.md) · [Panduan pengujian](docs/TESTING.md)
 
-## Stack
+## Fitur
 
-| Layer | Tech |
-|-------|------|
-| Frontend | Next.js (Vercel) |
-| Backend | Python FastAPI modular monolith (Render) |
-| Database | Neon PostgreSQL (relational system of record) |
-| Object Storage | Supabase Storage only (PDF/artifacts, private bucket) |
-| Vector Store | Upstash Vector HYBRID (dense text-embedding-3-small + BM25) |
-| Cache/Queue | Upstash Redis (Celery queue/cache/rate-limit) |
-| Async Worker | Celery Worker (Render `kerjapedia-worker`) |
-| LLM | Groq (openai/gpt-oss-120b) |
-| Auth | Google OAuth (via Supabase Auth) + Bearer + RBAC (backend authority) |
+- Chat dengan mode cepat dan mendalam, riwayat, ringkasan konteks percakapan panjang, dan pembatalan request.
+- Sitasi dokumen, pasal, ayat, dan halaman; verifikasi klaim serta penolakan saat sumber tidak memadai.
+- Chat tamu yang dapat diklaim setelah login, autentikasi pengguna, dan mode personal berdasarkan profil kerja.
+- Pencarian dokumen, kalkulator, tinjauan CV, halaman kepatuhan, serta dashboard admin.
+- Observability chat per mode dan antarmuka bahasa Indonesia serta Inggris.
 
-## Features
+## Struktur dan layanan
 
-- Chat with regulation retrieval for Indonesian employment law
-- Citation tracking (article, clause, page, source)
-- Admin dashboard (document management, evaluation, feedback)
-- Hybrid search (dense + sparse embedding)
-- Heuristic reranker
-- Claim verification (LLM-backed)
-- Multi-language support (ID/EN)
+| Lokasi | Isi |
+| --- | --- |
+| `apps/web/` | Next.js 16, React 19, proxy API, tes unit/integrasi, Playwright |
+| `apps/api/` | FastAPI, Alembic, RAG, autentikasi, worker Celery |
+| `dataset/` | Dokumen peraturan dan metadata sumber |
+| `evaluation/` | Evaluasi retrieval dan jawaban |
+| `docs/` | PRD dan dokumentasi teknis |
+| `scripts/` | Alat bantu pengembangan dan tes |
 
-## Project Structure
+PostgreSQL menyimpan data relasional; Supabase Storage menyimpan berkas; Upstash Vector menyimpan indeks retrieval; Redis mendukung cache, antrean, dan rate limit. Provider LLM produksi adalah Groq atau OpenRouter. Lihat [arsitektur](docs/ARCHITECTURE.md).
 
-```
-apps/web/          Next.js frontend
-apps/api/          FastAPI backend
-dataset/           Regulation metadata (PDFs ignored)
-docs/              Product & technical documentation
-evaluation/        RAG evaluation scripts
-scripts/           Utility scripts
-```
+## Menjalankan lokal
 
-## Local Development
+Gunakan Node.js 22, Python 3.12, dan PostgreSQL yang dapat diakses melalui `DATABASE_URL`. Perintah ini memakai PowerShell dari akar repo.
 
-### Prerequisites
+1. Salin `.env.example` ke `.env` dan isi `DATABASE_URL` serta kredensial layanan yang dipakai. Jangan commit `.env`.
+2. Jika memakai Redis lokal, jalankan `docker compose up -d redis`. `compose.yaml` hanya menyediakan Redis; siapkan PostgreSQL pengembangan secara terpisah.
+3. Siapkan API dan migrasikan database:
 
-- Node.js 18+
-- Python 3.11+
-- Docker (for Redis)
+   ```powershell
+   cd apps/api
+   python -m venv .venv
+   .\.venv\Scripts\python -m pip install -r requirements-dev.txt
+   .\.venv\Scripts\python -m alembic upgrade head
+   .\.venv\Scripts\python -m alembic current
+   .\.venv\Scripts\python -m uvicorn app.main:app --reload
+   ```
 
-### Setup
+4. Di terminal lain, jalankan web:
 
-```bash
-# Clone
-git clone https://github.com/alfandoo/kerjapedia-ai.git
-cd kerjapedia-ai
+   ```powershell
+   cd apps/web
+   npm ci
+   npm run dev
+   ```
 
-# Copy environment
-cp .env.example .env
-# Fill in required variables (see .env.example)
+Web tersedia di `http://localhost:3000`, dokumentasi API di `http://127.0.0.1:8000/docs`, dan kesiapan API di `http://127.0.0.1:8000/ready`. Web memilih alamat backend dari `API_INTERNAL_URL`, lalu `NEXT_PUBLIC_API_URL`, lalu `http://127.0.0.1:8000`.
 
-# Start Redis
-docker compose up -d
+Jika startup API melaporkan `Database schema is out of date`, jalankan `python -m alembic upgrade head` dari `apps/api` memakai `DATABASE_URL` yang sama dengan proses API. Verifikasi dengan `python -m alembic current`.
 
-# Frontend
-cd apps/web
-npm install
-npm run dev
+Lihat [`.env.example`](.env.example) untuk konfigurasi dan [panduan deployment](docs/DEPLOYMENT.md) untuk produksi. `compose.production.yaml` menyediakan stack mandiri dengan PostgreSQL, Redis, API, worker, scheduler, dan web.
 
-# Backend
-cd apps/api
-python -m venv .venv
-.venv\Scripts\pip install -r requirements-dev.txt
-.venv\Scripts\python -m alembic upgrade head
-.venv\Scripts\python -m uvicorn app.main:app --reload
-```
+## Pengujian
 
-Frontend: `http://localhost:3000`
-Backend: `http://127.0.0.1:8000/docs`
+CI menjalankan job `Web` dan `API` pada push ke `main` dan pull request. Jalankan pemeriksaan lokal berikut:
 
-### Environment Variables
+```powershell
+# Dari akar repo: PostgreSQL uji sementara, migrasi, dan pytest
+.\scripts\test_api.ps1
 
-Minimal for production mode:
+# Dari apps/api
+.\.venv\Scripts\python -m ruff check app tests
 
-```bash
-VECTOR_STORE=upstash_vector
-UPSTASH_VECTOR_REST_URL=
-UPSTASH_VECTOR_REST_TOKEN=
-LLM_PROVIDER=groq
-GROQ_API_KEY=
-```
-
-See `.env.example` for the full list.
-
-## Testing
-
-```bash
-# Frontend
-cd apps/web
+# Dari apps/web
 npm run lint
 npm run build
+npm run test:unit
+npx playwright install chromium
+npm run test:integration
 npm run test:e2e
-
-# Backend
-cd apps/api
-ruff check app tests
-pytest
 ```
 
-## Deployment
+Script API memerlukan Docker dan memakai database uji terpisah pada port `5433`. CI juga memeriksa migrasi naik dan turun. Lihat [panduan pengujian](docs/TESTING.md).
 
-Auto-deploys on push to `main`:
+## Dokumentasi
 
-- **Frontend** → Vercel
-- **Backend** → Render
+- [PRD](docs/PRD_KerjaPedia_AI.md)
+- [Arsitektur](docs/ARCHITECTURE.md)
+- [API](docs/API.md)
+- [Ingestion](docs/INGESTION_PIPELINE.md)
+- [Evaluasi](docs/EVALUATION.md)
+- [Deployment](docs/DEPLOYMENT.md)
 
-```bash
-git push origin main
-```
-
-See `docs/DEPLOYMENT.md` for the full guide.
-
-## Cost
-
-| Service | Plan | Cost |
-|---------|------|------|
-| Vercel | Hobby | $0/month |
-| Render | Free | $0/month |
-| Supabase | Free | $0/month |
-| Upstash | Free | $0/month |
-| Groq | Free tier | $0-5/month |
-| **Total** | | **$0-5/month** |
-
-## Documentation
-
-- [PRD](docs/PRD_KerjaPedia_AI.md) - Product Requirements
-- [Architecture](docs/ARCHITECTURE.md) - System design
-- [Deployment](docs/DEPLOYMENT.md) - Deploy guide
-- [API](docs/API.md) - Endpoint reference
-- [RAG Pipeline](docs/RAG_PIPELINE.md) - Retrieval & generation
-- [Ingestion](docs/INGESTION_PIPELINE.md) - Document processing
-- [Evaluation](docs/EVALUATION.md) - RAG evaluation
-- [Testing](docs/TESTING.md) - Test coverage
-
-## Disclaimer
-
-KerjaPedia AI is not a substitute for legal counsel, industrial relations mediators, or government agencies. Answers should always be based on official sources with verifiable citations.
+Periksa peraturan yang dikutip sebelum memakai jawaban untuk keputusan hukum atau hubungan industrial.
