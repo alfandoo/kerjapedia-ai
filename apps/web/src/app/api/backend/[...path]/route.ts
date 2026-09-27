@@ -159,6 +159,13 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
     storedGuest &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(storedGuest);
   const guest = guestRequest ? (validGuest ? storedGuest : randomUUID()) : null;
+  const claimRequest =
+    path[0] === "chat" &&
+    path[1] === "conversations" &&
+    path.length === 4 &&
+    path[3] === "claim" &&
+    request.method === "POST";
+  if (claimRequest && !access) return json({ detail: "Login is required." }, 401);
   let oversized = false;
   try {
     const base = new URL(
@@ -181,7 +188,8 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
       const value = request.headers.get(name);
       if (value) headers.set(name, value);
     }
-    if (guest) headers.set("x-kerjapedia-guest-id", guest);
+    if (guest || (claimRequest && validGuest))
+      headers.set("x-kerjapedia-guest-id", guest ?? storedGuest!);
     // Browser Authorization and Cookie headers are never forwarded.
     if (
       access &&
@@ -308,7 +316,7 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
               upstream.status
             );
         const shouldClearCookies =
-          action === "logout" ||
+          (action === "logout" && [400, 401, 403].includes(upstream.status)) ||
           (action === "refresh" && [400, 401, 403].includes(upstream.status));
         return shouldClearCookies ? clearCookies(response) : response;
       }

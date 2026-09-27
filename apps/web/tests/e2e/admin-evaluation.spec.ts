@@ -21,6 +21,13 @@ const dataset = {
 };
 
 async function mockEvaluationApi(page: Page) {
+  await page.context().addCookies([{
+    name: "kp-access",
+    value: "mock-admin-access",
+    url: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3100",
+    httpOnly: true,
+    sameSite: "Lax",
+  }]);
   await page.route("**/api/backend/auth/session", (route) =>
     route.fulfill({
       status: 200,
@@ -75,12 +82,10 @@ test("Upstash live evaluation always runs four ranking strategies", async ({ pag
   await page.getByRole("button", { name: "Jalankan evaluasi" }).click();
   const dialog = page.getByRole("dialog", { name: "Jalankan evaluasi" });
 
-  await expect(dialog.getByText("Sumber retrieval")).toBeVisible();
-  await expect(dialog.getByText("Upstash live")).toBeVisible();
+  await expect(
+    dialog.getByText("Upstash live · Baseline, Dense, Hybrid, Re-ranker")
+  ).toBeVisible();
   await expect(dialog.getByText("Mode eksperimen")).toHaveCount(0);
-  for (const mode of ["Baseline", "Dense", "Hybrid", "Re-ranker"]) {
-    await expect(dialog.getByText(mode, { exact: true })).toBeVisible();
-  }
 
   const runRequest = page.waitForRequest(
     (request) =>

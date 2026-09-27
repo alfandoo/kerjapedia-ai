@@ -43,6 +43,29 @@ export type AnswerPayload = {
   trace_id?: string | null;
 };
 
+export type ReasoningMode = "fast" | "standard" | "deep";
+
+export type WorkProfile = {
+  province: string | null;
+  employment_status: "PKWT" | "PKWTT" | null;
+  start_date: string | null;
+  monthly_wage: number | null;
+};
+
+
+export type TokenUsageSnapshot = {
+  usage_date: string;
+  timezone: "Asia/Jakarta";
+  reset_at: string;
+  limit_tokens: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  used_tokens: number;
+  reserved_tokens: number;
+  remaining_tokens: number;
+  estimated_tokens: number;
+};
+
 export type AskResponse = {
   conversation_id: string;
   answer: AnswerPayload;
@@ -52,6 +75,7 @@ export type AskResponse = {
     prompt_tokens: number;
     completion_tokens: number;
   };
+  reasoning_mode: ReasoningMode;
 };
 
 export type ConversationSummary = {
@@ -60,6 +84,7 @@ export type ConversationSummary = {
   created_at: string;
   updated_at: string;
   message_count: number;
+  personalized_mode: boolean;
 };
 
 export type ConversationMessage = {
@@ -80,6 +105,7 @@ export type ConversationDetail = {
   conversation_id: string;
   title: string;
   messages: ConversationMessage[];
+  personalized_mode: boolean;
   created_at: string;
   updated_at: string;
 };

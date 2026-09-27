@@ -429,10 +429,13 @@ def test_openrouter_generator_sends_configured_fallback_models() -> None:
     )
 
     assert answer.answer_status == "answered"
-    assert client.requests[0]["extra_body"] == {"models": list(fallbacks)}
+    assert client.requests[0]["extra_body"] == {
+        "models": list(fallbacks),
+        "reasoning": {"effort": "medium", "exclude": True},
+    }
 
 
-def test_openrouter_generator_omits_fallback_models_when_unconfigured() -> None:
+def test_openrouter_generator_sends_hidden_reasoning_when_fallbacks_are_unconfigured() -> None:
     client = FakeOpenRouterClient(_valid_pkwt_payload())
     generator = OpenRouterAnswerGenerator(api_key="test-key")
     generator._client = client
@@ -443,7 +446,7 @@ def test_openrouter_generator_omits_fallback_models_when_unconfigured() -> None:
     )
 
     assert answer.answer_status == "answered"
-    assert "extra_body" not in client.requests[0]
+    assert client.requests[0]["extra_body"] == {"reasoning": {"effort": "medium", "exclude": True}}
 
 
 def test_openrouter_generator_keeps_verified_primary_claim_when_repair_fails() -> None:
@@ -528,10 +531,7 @@ def test_openrouter_generator_salvages_answer_with_missing_claims() -> None:
 
 
 def test_openrouter_generator_salvages_prose_without_json() -> None:
-    prose = (
-        "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15. "
-        "Langit berwarna hijau."
-    )
+    prose = "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15. Langit berwarna hijau."
     client = FakeOpenRouterClient([prose, prose])
     generator = OpenRouterAnswerGenerator(api_key="test-key")
     generator._client = client
@@ -548,10 +548,7 @@ def test_openrouter_generator_salvages_prose_without_json() -> None:
 
 
 def test_openrouter_generator_salvage_declines_unsupported_lead() -> None:
-    prose = (
-        "Langit berwarna hijau. "
-        "Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15."
-    )
+    prose = "Langit berwarna hijau. Pekerja PKWT memperoleh kompensasi berdasarkan Pasal 15."
     client = FakeOpenRouterClient([prose, prose])
     generator = OpenRouterAnswerGenerator(api_key="test-key")
     generator._client = client

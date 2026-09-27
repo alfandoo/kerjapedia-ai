@@ -9,12 +9,12 @@ from app.services.retrieval.token_budget import TokenBudget, count_tokens
 
 logger = logging.getLogger("kerjapedia.context")
 
-PROMPT_VERSION_ID = "kerjapedia-grounded-answer-v7"
+PROMPT_VERSION_ID = "kerjapedia-grounded-answer-v8"
 
 # Context budget: only citable chunks reach the model, each truncated so a
 # single long chunk cannot crowd out the rest of the evidence.
 MAX_CONTEXT_CHUNK_CHARS = 2000
-MAX_HISTORY_TURNS = 2
+MAX_HISTORY_TURNS = 3
 MAX_HISTORY_ENTRY_CHARS = 500
 
 SYSTEM_PROMPT = "\n".join(
@@ -76,16 +76,7 @@ USER_TEMPLATE = """Pertanyaan pengguna:
 {history_block}Konteks terpilih (sumber hukum, hanya chunk ini yang boleh dikutip):
 {context}
 
-Mulai langsung dari inti jawaban. Pertanyaan sederhana dijawab dalam 2-5 kalimat.
-Pertanyaan kompleks memakai 2-4 paragraf atau maksimal 4 bullet hanya jika memang
-memerlukan daftar syarat, tahapan, pengecualian, atau perbandingan. Sintesis dengan bahasa
-sendiri; jangan menyalin chunk mentah, judul BAB/Bagian tanpa penjelasan, atau teks terpotong.
-Sebut pasal/peraturan secara alami dan gunakan **bold** hanya untuk istilah penting.
-
-Jangan tulis chunk ID, citation ID, reference tag, atau daftar sumber di dalam answer body.
-Tanpa tabel, heading, atau blok kode. Setiap claims[].text harus sama persis dengan satu
-kalimat klaim hukum dalam answer, seluruh klaim hukum harus tercakup, dan citation setiap
-claim hanya boleh menunjuk chunk yang mendukung seluruh kalimat tersebut."""
+Jawab pertanyaan dengan menggunakan konteks terpilih sesuai instruksi sistem."""
 
 
 _ACTIVE_TEMPLATE: PromptTemplate | None = None
@@ -112,11 +103,7 @@ def load_active_prompt_template(session) -> PromptTemplate | None:
     """Read the active `prompt_versions` row; None when bare/missing."""
     from app.models.business import PromptVersion
 
-    row = (
-        session.query(PromptVersion)
-        .filter(PromptVersion.status == "active")
-        .first()
-    )
+    row = session.query(PromptVersion).filter(PromptVersion.status == "active").first()
     if row is None:
         return None
     return PromptTemplate(
@@ -171,12 +158,15 @@ def render_user_prompt(
     selected: list[RankedChunk] | None = None,
     max_chunk_chars: int = MAX_CONTEXT_CHUNK_CHARS,
     history: tuple[HistoryTurn, ...] | list[HistoryTurn] | None = None,
+    template: PromptTemplate | None = None,
+    personalized_context: str = "",
 ) -> str:
     """Render the user prompt with context chunks.
 
     This is the standard rendering path. For token-aware selection, use
     ``render_user_prompt_with_budget`` instead.
     """
+    active_template = template or default_prompt_template()
     chunks = list(selected) if selected is not None else retrieval.results
     context_lines = []
     for index, item in enumerate(chunks, start=1):
@@ -192,11 +182,12 @@ def render_user_prompt(
         )
 
     context = "\n\n".join(context_lines) if context_lines else "Tidak ada konteks."
-    return USER_TEMPLATE.format(
+    rendered = active_template.user_template.format(
         query=query,
         history_block=render_history_block(history),
         context=context,
     )
+    return rendered + ("\n\n" + personalized_context if personalized_context else "")
 
 
 def render_user_prompt_with_budget(
@@ -207,19 +198,31 @@ def render_user_prompt_with_budget(
     budget: TokenBudget | None = None,
     max_chunk_chars: int = MAX_CONTEXT_CHUNK_CHARS,
     history: tuple[HistoryTurn, ...] | list[HistoryTurn] | None = None,
+    template: PromptTemplate | None = None,
+    additional_prompt_tokens: int = 0,
+    personalized_context: str = "",
 ) -> tuple[str, dict[str, int]]:
     """Render the user prompt with token-budget-aware chunk selection.
 
     Returns (rendered_prompt, token_usage) where token_usage contains
     breakdown of token consumption.
     """
+    active_template = template or default_prompt_template()
     chunks = list(selected) if selected is not None else retrieval.results
     history_block = render_history_block(history)
 
     # Token budget allocation
     if budget is not None:
-        system_tokens = count_tokens(SYSTEM_PROMPT)
-        query_tokens = count_tokens(query)
+        system_tokens = count_tokens(active_template.system_prompt)
+        template_overhead = active_template.user_template.format(
+            query="", history_block="", context=""
+        )
+        query_tokens = (
+            count_tokens(query)
+            + count_tokens(template_overhead)
+            + additional_prompt_tokens
+            + count_tokens(personalized_context)
+        )
         history_tokens = count_tokens(history_block)
         budget = TokenBudget(
             model_window=budget.model_window,
@@ -249,18 +252,25 @@ def render_user_prompt_with_budget(
         )
 
     context = "\n\n".join(context_lines) if context_lines else "Tidak ada konteks."
-    prompt = USER_TEMPLATE.format(
+    prompt = active_template.user_template.format(
         query=query,
         history_block=history_block,
         context=context,
     )
 
+    if personalized_context:
+        prompt += "\n\n" + personalized_context
+
     # Token usage tracking
     context_tokens = count_tokens(context)
-    total_tokens = count_tokens(SYSTEM_PROMPT) + count_tokens(prompt)
+    total_tokens = (
+        count_tokens(active_template.system_prompt)
+        + count_tokens(prompt)
+        + additional_prompt_tokens
+    )
     token_usage = {
-        "system_tokens": count_tokens(SYSTEM_PROMPT),
-        "query_tokens": count_tokens(query),
+        "system_tokens": count_tokens(active_template.system_prompt),
+        "query_tokens": count_tokens(query) + count_tokens(personalized_context),
         "history_tokens": count_tokens(history_block),
         "context_tokens": context_tokens,
         "total_prompt_tokens": total_tokens,

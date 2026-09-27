@@ -1,12 +1,39 @@
 import { API_URL, parseJsonResponse } from "@/lib/api-client";
 import { fetchWithAuthRetry } from "@/features/auth";
-import type { AskResponse, ConversationDetail, ConversationSummary } from "./types";
+import type { AskResponse, ConversationDetail, ConversationSummary, ReasoningMode, TokenUsageSnapshot, WorkProfile } from "./types";
 import { chatHeaders } from "./request-headers";
+
+export class DailyTokenQuotaError extends Error {
+  constructor(public readonly resetAt: string, public readonly duringProcessing = false) {
+    super("daily_token_quota_exceeded");
+    this.name = "DailyTokenQuotaError";
+  }
+}
+
+async function throwIfQuotaExceeded(response: Response): Promise<void> {
+  if (response.status !== 429) return;
+  const payload = (await response.clone().json().catch(() => null)) as {
+    detail?: { code?: string; reset_at?: string };
+  } | null;
+  if (payload?.detail?.code === "daily_token_quota_exceeded")
+    throw new DailyTokenQuotaError(payload.detail.reset_at ?? "");
+}
+
+export async function fetchTokenUsage(signal?: AbortSignal): Promise<TokenUsageSnapshot> {
+  const response = await fetchWithAuthRetry(
+    API_URL + "/chat/usage",
+    { headers: chatHeaders() },
+    signal
+  );
+  return parseJsonResponse<TokenUsageSnapshot>(response);
+}
 
 export async function askQuestion(
   question: string,
   conversationId: string | null,
-  signal: AbortSignal
+  signal: AbortSignal,
+  reasoningMode: ReasoningMode = "standard",
+  personalizedMode = false
 ): Promise<AskResponse> {
   const response = await fetchWithAuthRetry(
     `${API_URL}/chat/ask`,
@@ -17,10 +44,13 @@ export async function askQuestion(
         question,
         conversation_id: conversationId,
         top_k: 5,
+        reasoning_mode: reasoningMode,
+        personalized_mode: personalizedMode,
       }),
     },
     signal
   );
+  await throwIfQuotaExceeded(response);
   return parseJsonResponse<AskResponse>(response);
 }
 
@@ -36,13 +66,15 @@ type ChatStreamEvent =
   | { event: "ping" }
   | { event: "delta"; content: string }
   | { event: "done"; response: AskResponse }
-  | { event: "error"; detail: string };
+  | { event: "error"; detail: string; code?: string; reset_at?: string };
 
 export async function askQuestionStream(
   question: string,
   conversationId: string | null,
   signal: AbortSignal,
-  handlers: StreamHandlers
+  handlers: StreamHandlers,
+  reasoningMode: ReasoningMode = "standard",
+  personalizedMode = false
 ): Promise<AskResponse> {
   const response = await fetchWithAuthRetry(
     `${API_URL}/chat/ask/stream`,
@@ -53,10 +85,13 @@ export async function askQuestionStream(
         question,
         conversation_id: conversationId,
         top_k: 5,
+        reasoning_mode: reasoningMode,
+        personalized_mode: personalizedMode,
       }),
     },
     signal
   );
+  await throwIfQuotaExceeded(response);
   if (!response.ok || !response.body) return parseJsonResponse<AskResponse>(response);
 
   const reader = response.body.getReader();
@@ -82,6 +117,8 @@ export async function askQuestionStream(
       } else if (event.event === "done") {
         completed = event.response;
       } else if (event.event === "error") {
+        if (event.code === "daily_token_quota_exceeded")
+          throw new DailyTokenQuotaError(event.reset_at ?? "", true);
         throw new Error(event.detail);
       }
     }
@@ -112,6 +149,18 @@ export async function fetchConversation(
   return parseJsonResponse<ConversationDetail>(response);
 }
 
+export async function claimGuestConversation(
+  conversationId: string,
+  signal?: AbortSignal
+): Promise<ConversationSummary> {
+  const response = await fetchWithAuthRetry(
+    `${API_URL}/chat/conversations/${conversationId}/claim`,
+    { method: "POST", headers: chatHeaders() },
+    signal
+  );
+  return parseJsonResponse<ConversationSummary>(response);
+}
+
 export async function renameConversation(
   conversationId: string,
   title: string
@@ -135,3 +184,44 @@ export async function deleteConversation(conversationId: string): Promise<void> 
 export { submitFeedback } from "./feedback-api";
 export type { FeedbackIssue, FeedbackRating } from "./feedback-api";
 export { documentPdfUrl } from "@/features/documents";
+
+
+export async function fetchWorkProfile(): Promise<WorkProfile> {
+  return parseJsonResponse<WorkProfile>(
+    await fetchWithAuthRetry(`${API_URL}/auth/work-profile`, { headers: chatHeaders() })
+  );
+}
+
+export async function saveWorkProfile(profile: WorkProfile): Promise<WorkProfile> {
+  return parseJsonResponse<WorkProfile>(
+    await fetchWithAuthRetry(`${API_URL}/auth/work-profile`, {
+      method: "PUT",
+      headers: chatHeaders(true),
+      body: JSON.stringify(profile),
+    })
+  );
+}
+
+export async function deleteWorkProfile(): Promise<void> {
+  const response = await fetchWithAuthRetry(`${API_URL}/auth/work-profile`, {
+    method: "DELETE",
+    headers: chatHeaders(),
+  });
+  if (!response.ok) await parseJsonResponse(response);
+}
+
+export async function setPersonalizedMode(
+  conversationId: string,
+  enabled: boolean
+): Promise<ConversationSummary> {
+  return parseJsonResponse<ConversationSummary>(
+    await fetchWithAuthRetry(
+      `${API_URL}/chat/conversations/${conversationId}/personalized-mode`,
+      {
+        method: "PATCH",
+        headers: chatHeaders(true),
+        body: JSON.stringify({ personalized_mode: enabled }),
+      }
+    )
+  );
+}

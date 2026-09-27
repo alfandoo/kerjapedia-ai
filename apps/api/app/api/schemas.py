@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -21,25 +21,80 @@ _EMAIL_PATTERN = re.compile(
 # sign-ups with obvious misspellings such as "gmial.co" when "gmail.com" was meant.
 _TYPO_DOMAINS: set[str] = {
     # gmail
-    "gmial.com", "gmial.co", "gmial.id", "gamil.com", "gamil.co", "gmail.co",
-    "gmail.ocm", "gmail.cmo", "gmailcom.com", "gmaill.com", "gmai.com",
-    "gmaill.co", "gmale.com", "gmali.com", "gmiall.com", "gmail.con",
-    "gmail.c.om", "gmaill.net", "gmaill.org", "gmail1.com",
-    "gmiall.co", "gmails.com", "gmailss.com", "gmil.com", "gmeil.com",
-    "geemail.com", "gmial.net", "gamil.net", "gmailcon",
+    "gmial.com",
+    "gmial.co",
+    "gmial.id",
+    "gamil.com",
+    "gamil.co",
+    "gmail.co",
+    "gmail.ocm",
+    "gmail.cmo",
+    "gmailcom.com",
+    "gmaill.com",
+    "gmai.com",
+    "gmaill.co",
+    "gmale.com",
+    "gmali.com",
+    "gmiall.com",
+    "gmail.con",
+    "gmail.c.om",
+    "gmaill.net",
+    "gmaill.org",
+    "gmail1.com",
+    "gmiall.co",
+    "gmails.com",
+    "gmailss.com",
+    "gmil.com",
+    "gmeil.com",
+    "geemail.com",
+    "gmial.net",
+    "gamil.net",
+    "gmailcon",
     "gmiall.com.co",
     # yahoo
-    "ahoo.com", "yhhhoo.com", "yahho.com", "yahooo.com", "yahoo.cm",
-    "yahoo.co", "yhooo.com", "yahoo.con", "yahhoo.com", "yahuu.com",
-    "yaho.com", "yhoo.com",
+    "ahoo.com",
+    "yhhhoo.com",
+    "yahho.com",
+    "yahooo.com",
+    "yahoo.cm",
+    "yahoo.co",
+    "yhooo.com",
+    "yahoo.con",
+    "yahhoo.com",
+    "yahuu.com",
+    "yaho.com",
+    "yhoo.com",
     # hotmail / outlook
-    "hotmal.com", "hotmil.com", "hotmial.com", "hotmail.cm", "hotmail.co",
-    "hotmaill.com", "hotmail.con", "hotmial.co", "oeutlook.com",
-    "outlok.com", "outloo.com", "outloook.com", "outllook.com", "outllok.com",
-    "outlokk.com", "outook.com", "outllook.co", "outlook.co", "outlok.co",
+    "hotmal.com",
+    "hotmil.com",
+    "hotmial.com",
+    "hotmail.cm",
+    "hotmail.co",
+    "hotmaill.com",
+    "hotmail.con",
+    "hotmial.co",
+    "oeutlook.com",
+    "outlok.com",
+    "outloo.com",
+    "outloook.com",
+    "outllook.com",
+    "outllok.com",
+    "outlokk.com",
+    "outook.com",
+    "outllook.co",
+    "outlook.co",
+    "outlok.co",
     # proton / icloud / others
-    "protonmal.com", "protonmial.com", "pmail.com", "iclod.com", "icloud.co",
-    "iclod.co", "icloud.cm", "icloud.com.co", "icloudd.com", "icloudid.com",
+    "protonmal.com",
+    "protonmial.com",
+    "pmail.com",
+    "iclod.com",
+    "icloud.co",
+    "iclod.co",
+    "icloud.cm",
+    "icloud.com.co",
+    "icloudd.com",
+    "icloudid.com",
 }
 
 # Known providers mapped to their acceptable domains. If the first label of a
@@ -157,6 +212,29 @@ class ProfileUpdateRequest(ApiModel):
     name: str = Field(min_length=1, max_length=80)
 
 
+class WorkProfileUpdateRequest(ApiModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    province: str | None = Field(default=None, max_length=80)
+    employment_status: Literal["PKWT", "PKWTT"] | None = None
+    start_date: date | None = None
+    monthly_wage: int | None = Field(default=None, ge=0, le=2_000_000_000)
+
+    @field_validator("province")
+    @classmethod
+    def validate_province(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        from app.services.answering.personalized_context import PROVINCES
+
+        if value not in PROVINCES:
+            raise ValueError("Unknown Indonesian province")
+        return value
+
+
+class WorkProfileResponse(WorkProfileUpdateRequest):
+    pass
+
+
 class EmailOtpVerifyRequest(ApiModel):
     email: str = Field(min_length=3, max_length=160)
     token: str = Field(min_length=4, max_length=64)
@@ -215,6 +293,8 @@ class AskRequest(ApiModel):
     question: str = Field(min_length=4, max_length=2000)
     conversation_id: str | None = Field(default=None, max_length=80)
     top_k: int = Field(default=5, ge=1, le=8)
+    reasoning_mode: Literal["fast", "standard", "deep"] = "standard"
+    personalized_mode: bool | None = None
 
 
 class AskResponse(ApiModel):
@@ -223,6 +303,7 @@ class AskResponse(ApiModel):
     latency_ms: int
     retrieval_score: float | None
     token_usage: dict[str, int]
+    reasoning_mode: Literal["fast", "standard", "deep"] = "standard"
 
 
 class ConversationSummary(ApiModel):
@@ -231,14 +312,20 @@ class ConversationSummary(ApiModel):
     created_at: datetime
     updated_at: datetime
     message_count: int
+    personalized_mode: bool = False
 
 
 class ConversationDetail(ApiModel):
     conversation_id: str
     title: str
     messages: list[MessageResponse]
+    personalized_mode: bool = False
     created_at: datetime
     updated_at: datetime
+
+
+class PersonalizedModeUpdateRequest(ApiModel):
+    personalized_mode: bool
 
 
 class ConversationUpdateRequest(ApiModel):

@@ -35,6 +35,29 @@ Faithfulness utama menggunakan hasil claim verification. Ragas Faithfulness dija
 sebagai metrik sekunder untuk membantu diagnosis, tetapi tidak menggantikan verified
 held-out gate atau menentukan promosi release sendirian.
 
+## Perbandingan versi prompt sebelum publikasi
+
+Jalankan kandidat berstatus `draft` dan versi prompt aktif pada dataset terverifikasi
+**yang sama** sebelum memanggil endpoint `publish`. Perbandingan menggunakan split
+`development` untuk kalibrasi dan split `test` held-out untuk keputusan. Kasus held-out
+wajib mencakup `hard_negative` (jawaban tanpa dukungan), `follow_up`, `prompt_injection`
+(dalam pertanyaan atau dokumen), dan `bilingual`. Metrik `citation_precision` memeriksa
+sitasi keliru. Perubahan ditolak oleh pemeriksa bila gate kualitas gagal atau metrik
+sitasi, refusal, bahasa, maupun unsupported claim memburuk.
+
+```powershell
+cd apps/api
+.venv\Scripts\python -m app.services.evaluation.prompt_comparison `
+  --dataset ../../evaluation/verified_questions.json `
+  --candidate-version kerjapedia-grounded-answer-v8 `
+  --output ../../storage/evaluation/prompt-v8-comparison.json
+```
+
+Periksa `regressions`, `metric_deltas`, dan hasil per pertanyaan pada laporan sebelum
+publikasi. Dataset seed di repo belum berstatus verified dan tidak dapat dipakai untuk
+lolos pemeriksaan ini. Evaluasi ini memakai provider dan Upstash aktif sehingga
+memerlukan konfigurasi serta kredensial development/production yang sesuai.
+
 ## Menjalankan
 
 Eksperimen artifact untuk development tetap tersedia melalui CLI:

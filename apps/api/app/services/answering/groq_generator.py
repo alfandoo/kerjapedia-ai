@@ -36,23 +36,24 @@ class GroqAnswerGenerator(OpenRouterAnswerGenerator):
         verifier_provider = kwargs.get("verifier_provider", "deterministic")
         if verifier_provider not in ("groq", "deterministic"):
             raise ValueError(
-                "CLAIM_VERIFIER_PROVIDER must be groq or deterministic "
-                "when LLM_PROVIDER=groq."
+                "CLAIM_VERIFIER_PROVIDER must be groq or deterministic when LLM_PROVIDER=groq."
             )
         super().__init__(api_key=api_key, model_name=model_name, **kwargs)
 
     def _request_options(self) -> dict[str, Any]:
-        # Groq has no OpenRouter-style automatic model fallback parameter.
-        # reasoning_effort=low keeps the reasoning model from spending its
-        # token budget on hidden reasoning and returning empty output
-        # (which Groq rejects server-side as json_validate_failed).
-        return {"reasoning_effort": "low"}
+        return {
+            "reasoning_effort": self.reasoning_effort,
+            "extra_body": {"include_reasoning": False},
+        }
 
-    def _response_formats_to_try(self) -> list[dict[str, str] | None]:
-        # If Groq's server-side JSON validator rejects an empty generation,
-        # retry once in plain mode; the shared client-side parser still
-        # extracts the first balanced JSON object from prose.
-        return [{"type": "json_object"}, None]
+    def _response_formats_to_try(
+        self, output_kind: str = "answer"
+    ) -> list[dict[str, Any] | None]:
+        # Groq does not support streaming with strict Structured Outputs.
+        formats = super()._response_formats_to_try(output_kind)
+        if self.token_budget is not None:
+            formats = [fmt for fmt in formats if fmt and fmt["type"] != "json_schema"]
+        return [*formats, None]
 
     def _openrouter_client(self):
         if self._client is None:

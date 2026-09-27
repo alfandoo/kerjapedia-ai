@@ -8,7 +8,7 @@ from test_api_routes import _mock_supabase_auth, admin_headers
 from app.api.state import now_utc
 from app.db.session import create_session
 from app.main import app
-from app.models.business import Conversation, DailyUsage, Message, UserProfile
+from app.models.business import Conversation, DailyUsage, Message, UserProfile, UserRole
 
 pytestmark = pytest.mark.usefixtures("verify_test_schema")
 
@@ -24,10 +24,21 @@ def client() -> TestClient:
 def clean_usage_tables() -> Iterator[None]:
     yield
     with create_session() as session:
-        session.query(Message).delete()
-        session.query(Conversation).delete()
-        session.query(DailyUsage).delete()
-        session.query(UserProfile).delete()
+        session.query(Message).filter(
+            Message.conversation_id.in_(["conv-today", "conv-yesterday"])
+        ).delete(synchronize_session=False)
+        session.query(Conversation).filter(
+            Conversation.conversation_id.in_(["conv-today", "conv-yesterday"])
+        ).delete(synchronize_session=False)
+        session.query(DailyUsage).filter(DailyUsage.user_key.in_(["u1", "u2"])).delete(
+            synchronize_session=False
+        )
+        session.query(UserRole).filter(UserRole.user_id == "test-user-0").delete(
+            synchronize_session=False
+        )
+        session.query(UserProfile).filter(UserProfile.user_id == "test-user-0").delete(
+            synchronize_session=False
+        )
         session.commit()
 
 
@@ -38,9 +49,7 @@ def test_returns_zero_filled_daily_series(client: TestClient, monkeypatch) -> No
     yesterday = today - timedelta(days=1)
     with create_session() as session:
         session.add(Conversation(conversation_id="conv-today", title="t", created_at=today))
-        session.add(
-            Conversation(conversation_id="conv-yesterday", title="y", created_at=yesterday)
-        )
+        session.add(Conversation(conversation_id="conv-yesterday", title="y", created_at=yesterday))
         session.add(
             Message(
                 message_id="m1",

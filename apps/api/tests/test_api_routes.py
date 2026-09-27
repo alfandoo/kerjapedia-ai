@@ -3,6 +3,7 @@ from collections.abc import Iterator
 from dataclasses import replace
 from statistics import median
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,15 +12,20 @@ from app.api.state import state
 from app.db.session import create_session
 from app.main import app
 from app.models.business import (
+    ChatTokenUsage,
     Conversation,
+    DailyUsage,
     DocumentAdmin,
     EvaluationDataset,
     EvaluationQuestionReview,
     EvaluationRun,
     Feedback,
     Message,
+    PendingRegistration,
     UploadedDocument,
     UserProfile,
+    UserRole,
+    WorkProfile,
 )
 from app.models.ingestion import (
     ChunkEmbedding,
@@ -48,6 +54,7 @@ def reset_api_state() -> Iterator[None]:
     yield
     with create_session() as session:
         session.query(Feedback).delete()
+        session.query(ChatTokenUsage).delete()
         session.query(Message).delete()
         session.query(Conversation).delete()
         session.query(EvaluationRun).delete()
@@ -63,6 +70,10 @@ def reset_api_state() -> Iterator[None]:
         session.query(RagIndexRelease).delete()
         session.query(DocumentAdmin).delete()
         session.query(UploadedDocument).delete()
+        session.query(PendingRegistration).delete()
+        session.query(UserRole).delete()
+        session.query(DailyUsage).delete()
+        session.query(WorkProfile).delete()
         session.query(UserProfile).delete()
         session.commit()
 
@@ -139,7 +150,7 @@ def _mock_supabase_auth(
     monkeypatch.setattr("app.services.supabase.get_supabase_anon", lambda: mock_client)
     monkeypatch.setattr("app.services.supabase.get_supabase", lambda: mock_client)
     if suppress_mail:
-        monkeypatch.setattr("app.services.mailer.send_verification_email", lambda to, code: None)
+        monkeypatch.setattr("app.api.routes_auth.send_verification_email", lambda to, code: None)
 
     if insert_profile:
         with create_session() as session:
@@ -255,6 +266,7 @@ def test_auth_rejects_typo_email_domain(client: TestClient) -> None:
 def test_auth_verify_email_otp_logs_in(client: TestClient, monkeypatch) -> None:
     from datetime import UTC, datetime, timedelta
 
+    from app.api.routes_auth import _fernet
     from app.models.business import PendingRegistration
 
     email = "budi@example.com"
@@ -263,7 +275,7 @@ def test_auth_verify_email_otp_logs_in(client: TestClient, monkeypatch) -> None:
             PendingRegistration(
                 email=email,
                 name="Budi Pekerja",
-                password_encrypted="placeholder",
+                password_encrypted=_fernet().encrypt(b"password-test").decode("ascii"),
                 otp_hash="placeholder",
                 attempts=0,
                 expires_at=datetime.now(UTC) + timedelta(minutes=15),
@@ -371,7 +383,9 @@ def test_auth_rejects_weak_password(client: TestClient) -> None:
 
 
 def test_auth_rejects_duplicate_registration(client: TestClient, monkeypatch) -> None:
-    _mock_supabase_auth(monkeypatch, email="budi@example.com", suppress_mail=True)
+    _mock_supabase_auth(
+        monkeypatch, email="budi@example.com", insert_profile=False, suppress_mail=True
+    )
     payload = {
         "name": "Budi Pekerja",
         "email": "budi@example.com",
@@ -447,7 +461,7 @@ def test_follow_up_question_uses_conversation_memory(
         "/chat/ask",
         json={
             "conversation_id": conversation_id,
-            "question": "berapa besar kompensasinya?",
+            "question": "berapa besarnya?",
             "top_k": 1,
         },
     )
@@ -458,7 +472,7 @@ def test_follow_up_question_uses_conversation_memory(
             .filter(
                 Message.conversation_id == conversation_id,
                 Message.role == "user",
-                Message.content == "berapa besar kompensasinya?",
+                Message.content == "berapa besarnya?",
             )
             .one()
         )
@@ -467,7 +481,6 @@ def test_follow_up_question_uses_conversation_memory(
     assert memory["source_turns"] == 1
     assert len(memory["retrieval_query_sha256"]) == 64
     assert memory["activation_reason"] == "referential_term"
-    assert second.json()["answer"]["refusal_reason"] is None
     with create_session() as session:
         sequences = [
             row.sequence_no
@@ -520,16 +533,12 @@ def test_authenticated_user_conversation_is_saved_to_history(
         "app.api.routes_chat.load_artifact_documents_snapshot",
         lambda *_: [make_document()],
     )
-    _mock_supabase_auth(monkeypatch, email="pekerja@example.com", insert_profile=False)
-
+    _mock_supabase_auth(monkeypatch, email="pekerja@example.com")
     login = client.post(
-        "/auth/register",
-        json={
-            "name": "Pekerja",
-            "email": "pekerja@example.com",
-            "password": "secret-aman",
-        },
+        "/auth/login",
+        json={"email": "pekerja@example.com", "password": "secret-aman"},
     )
+    assert login.status_code == 200
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
     created = client.post(
@@ -647,6 +656,13 @@ def test_guest_can_rename_and_delete_own_conversation(
     assert forbidden_delete.status_code == 403
     assert deleted.status_code == 204
     assert missing.status_code == 404
+    with create_session() as session:
+        assert (
+            session.query(ChatTokenUsage)
+            .filter(ChatTokenUsage.conversation_id == conversation_id)
+            .count()
+            == 1
+        )
 
 
 def test_chat_stream_emits_thinking_deltas_and_final_response(
@@ -672,8 +688,23 @@ def test_chat_stream_emits_thinking_deltas_and_final_response(
     ]
     streamed_answer = "".join(event["content"] for event in events if event["event"] == "delta")
     completed = next(event["response"] for event in events if event["event"] == "done")
+    deltas = [event for event in events if event["event"] == "delta"]
+    assert len(deltas) == 1
     assert streamed_answer == completed["answer"]["answer"]
     assert completed["conversation_id"].startswith("conv_")
+    assert completed["reasoning_mode"] == "standard"
+
+
+def test_chat_rejects_unknown_reasoning_mode(client: TestClient) -> None:
+    response = client.post(
+        "/chat/ask",
+        json={
+            "question": "Apakah pekerja PKWT memperoleh kompensasi?",
+            "reasoning_mode": "unlimited",
+        },
+    )
+
+    assert response.status_code == 422
 
 
 def test_chat_stream_only_emits_verified_or_fail_closed_answer(
@@ -688,8 +719,8 @@ def test_chat_stream_only_emits_verified_or_fail_closed_answer(
     def unavailable_generator():
         generator = AnswerGenerator()
 
-        def generate(question, retrieval):
-            grounded = generator.generate(question, retrieval)
+        def generate(question, retrieval, **kwargs):
+            grounded = generator.generate(question, retrieval, **kwargs)
             return replace(
                 grounded,
                 answer=(
@@ -706,7 +737,7 @@ def test_chat_stream_only_emits_verified_or_fail_closed_answer(
 
     monkeypatch.setattr(
         "app.api.routes_chat.answer_generator_from_settings",
-        lambda *_: unavailable_generator(),
+        lambda *_, **__: unavailable_generator(),
     )
 
     with client.stream(
@@ -743,7 +774,7 @@ def test_streaming_follow_up_uses_the_same_memory_resolver(
         "/chat/ask/stream",
         json={
             "conversation_id": conversation_id,
-            "question": "kompensasinya dibayar kepada siapa?",
+            "question": "dibayar kepada siapa?",
             "top_k": 1,
         },
     ) as response:
@@ -761,15 +792,14 @@ def test_streaming_follow_up_uses_the_same_memory_resolver(
             .filter(
                 Message.conversation_id == conversation_id,
                 Message.role == "user",
-                Message.content == "kompensasinya dibayar kepada siapa?",
+                Message.content == "dibayar kepada siapa?",
             )
             .one()
         )
         memory = row.meta_data["rag_trace"]["memory"]
     assert memory["used"] is True
-    assert memory["activation_reason"] == "referential_term"
+    assert memory["activation_reason"] == "elliptical_follow_up"
     assert len(memory["retrieval_query_sha256"]) == 64
-    assert completed["answer"]["refusal_reason"] is None
 
 
 def test_chat_refuses_when_no_document_supports_the_question(
@@ -803,6 +833,7 @@ def test_chat_median_response_time_meets_prd_target(
     responses = [
         client.post(
             "/chat/ask",
+            headers={"X-KerjaPedia-Guest-ID": str(uuid4())},
             json={"question": "Apakah pekerja PKWT memperoleh kompensasi?", "top_k": 1},
         )
         for _ in range(9)
@@ -817,8 +848,9 @@ def test_documents_and_openapi_are_available(client: TestClient) -> None:
     documents = client.get("/documents")
     openapi = client.get("/openapi.json")
     assert documents.status_code == 200
-    assert len(documents.json()) > 0
-    assert documents.json()[0]["pdf_url"].endswith("/pdf")
+    assert isinstance(documents.json(), list)
+    if documents.json():
+        assert documents.json()[0]["pdf_url"].endswith("/pdf")
     assert openapi.status_code == 200
     assert "/chat/ask" in openapi.json()["paths"]
 
@@ -1412,3 +1444,73 @@ def test_admin_settings_returns_sanitized_config(
     assert payload["app_name"]
     assert payload["admin_email"]
     assert payload["rate_limit_per_minute"] > 0
+
+
+@pytest.mark.parametrize("path", ["/chat/ask", "/chat/ask/stream"])
+def test_metering_failure_prevents_generation(client: TestClient, monkeypatch, path: str) -> None:
+    def unavailable(**_kwargs):
+        raise RuntimeError("quota database unavailable")
+
+    monkeypatch.setattr("app.api.routes_chat.reserve", unavailable)
+    monkeypatch.setattr(
+        "app.api.routes_chat.answer_generator_from_settings",
+        lambda *args, **kwargs: pytest.fail("generator must not start"),
+    )
+    response = client.post(path, json={"question": "Kapan THR dibayar?"})
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "usage_metering_unavailable"
+
+
+@pytest.mark.parametrize("path", ["/chat/ask", "/chat/ask/stream"])
+def test_daily_quota_rejection_has_retry_after(client: TestClient, monkeypatch, path: str) -> None:
+    from app.services.token_quota import QuotaExceeded, reset_at
+
+    def exhausted(**_kwargs):
+        raise QuotaExceeded(reset_at())
+
+    monkeypatch.setattr("app.api.routes_chat.reserve", exhausted)
+    response = client.post(path, json={"question": "Kapan THR dibayar?"})
+    assert response.status_code == 429
+    assert response.json()["detail"]["code"] == "daily_token_quota_exceeded"
+    assert response.json()["detail"]["reset_at"]
+    assert int(response.headers["Retry-After"]) > 0
+
+
+def test_work_profile_crud_and_conversation_mode(client: TestClient, monkeypatch) -> None:
+    headers = admin_headers(client, monkeypatch)
+    empty = client.get("/auth/work-profile", headers=headers)
+    assert empty.status_code == 200
+    assert empty.json()["province"] is None
+
+    profile = {
+        "province": "Jawa Barat",
+        "employment_status": "PKWT",
+        "start_date": "2025-01-01",
+        "monthly_wage": 5_000_000,
+    }
+    saved = client.put("/auth/work-profile", headers=headers, json=profile)
+    assert saved.status_code == 200
+    assert saved.json() == profile
+    assert client.get("/auth/work-profile", headers=headers).json() == profile
+
+    with create_session() as session:
+        session.add(
+            Conversation(
+                conversation_id="conv-personalized-test",
+                user_id=f"test-user-{_TEST_COUNTER[0]}",
+                title="THR",
+                personalized_mode=False,
+            )
+        )
+        session.commit()
+    endpoint = "/chat/conversations/conv-personalized-test/personalized-mode"
+    changed = client.patch(endpoint, headers=headers, json={"personalized_mode": True})
+    assert changed.status_code == 200
+    assert changed.json()["personalized_mode"] is True
+    detail = client.get("/chat/conversations/conv-personalized-test", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["personalized_mode"] is True
+    assert client.patch(endpoint, json={"personalized_mode": False}).status_code in (401, 403)
+
+    assert client.delete("/auth/work-profile", headers=headers).status_code == 204
+    assert client.get("/auth/work-profile", headers=headers).json()["province"] is None

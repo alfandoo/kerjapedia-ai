@@ -64,7 +64,7 @@ const user = {
     {
       env: {
         ...process.env,
-        NEXT_DIST_DIR: ".next-security-headers",
+        NEXT_DIST_DIR: process.env.TEST_NEXT_DIST_DIR || ".next",
         API_INTERNAL_URL: "http://127.0.0.1:3102",
         APP_ORIGIN: base,
       },
@@ -156,6 +156,7 @@ const user = {
     // Verify the shared logout flow via the actual admin menu.
     await page.getByText(user.name, { exact: true }).first().click();
     await page.getByRole("menuitem", { name: "Logout", exact: true }).click();
+    await page.getByRole("button", { name: "Ya, keluar" }).click();
     await page.waitForURL("**/login-admin");
     assert.equal(revoked, true);
     assert.equal(

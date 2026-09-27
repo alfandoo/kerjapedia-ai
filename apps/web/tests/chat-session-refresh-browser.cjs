@@ -19,7 +19,7 @@ const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
           if (
             document.querySelector(".session-pending-shell") &&
             document.querySelector(
-              ".chat-auth-login, .chat-auth-signup, nav[aria-label='Menu tamu']"
+              ".session-pending-shell .chat-auth-login, .session-pending-shell .chat-auth-signup, .session-pending-shell nav[aria-label='Menu tamu']"
             )
           )
             window.__guestFlashes++;
@@ -72,8 +72,8 @@ const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
         await requested;
         await expect(page.locator(".session-pending-shell")).toBeVisible();
         await expect(page.locator("header[aria-busy='true']")).toBeVisible();
-        await expect(page.locator(".chat-auth-login, .chat-auth-signup")).toHaveCount(0);
-        await expect(page.getByRole("navigation", { name: "Menu tamu", exact: true })).toHaveCount(
+        await expect(page.locator(".session-pending-shell .chat-auth-login, .session-pending-shell .chat-auth-signup")).toBeHidden();
+        await expect(page.locator(".session-pending-shell").getByRole("navigation", { name: "Menu tamu", exact: true })).toHaveCount(
           0
         );
         assert.equal(await page.evaluate(() => window.__guestFlashes), 0);
@@ -83,8 +83,8 @@ const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
         ).toBeVisible();
         if (authenticated) {
           await expect(page.getByText("Refresh User", { exact: true }).first()).toBeVisible();
-          await expect(page.locator(".chat-auth-login, .chat-auth-signup")).toHaveCount(0);
-        } else await expect(page.locator(".chat-auth-login")).toBeVisible();
+          await expect(page.locator(".authenticated-shell .chat-auth-login, .authenticated-shell .chat-auth-signup")).toBeHidden();
+        } else await expect(page.getByRole("button", { name: /Sign in|Masuk/ }).first()).toBeVisible();
         assert.equal(await page.evaluate(() => window.__guestFlashes), 0);
       }
       assert.deepEqual(errors, []);

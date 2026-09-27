@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import json
 import logging
+import math
 import random
 import re
 import threading
@@ -17,7 +19,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import DbSession, OptionalUser
+from app.api.dependencies import CurrentUser, DbSession, OptionalUser
 from app.api.schemas import (
     AskRequest,
     AskResponse,
@@ -25,12 +27,14 @@ from app.api.schemas import (
     ConversationSummary,
     ConversationUpdateRequest,
     MessageResponse,
+    PersonalizedModeUpdateRequest,
 )
 from app.api.state import UserRecord, now_utc
 from app.api.utils import storage_root
 from app.core.config import settings
 from app.db.session import create_session
-from app.models.business import Conversation, DailyUsage, Message, RagRequestObservation
+from app.models.business import Conversation, Message, RagRequestObservation, WorkProfile
+from app.services.answering.conversation_summary import append_summary
 from app.services.answering.guardrails import (
     apply_output_guardrail,
     build_guardrail_refusal,
@@ -40,6 +44,16 @@ from app.services.answering.memory_hardening import (
     MemoryContext,
     build_history_turns,
     build_memory_context,
+)
+from app.services.answering.openrouter_generator import ProcessingQuotaExhausted
+from app.services.answering.personalized_context import (
+    PersonalizedContext,
+    build_personalized_context,
+)
+from app.services.answering.provider_cancellation import (
+    ProviderCancelled,
+    ProviderRequestScope,
+    current_provider_scope,
 )
 from app.services.idempotency import IdempotencyStore, valid_idempotency_key
 from app.services.providers import answer_generator_from_settings
@@ -59,10 +73,18 @@ from app.services.telemetry import (
     reset_stage_accumulator,
     trace_stage,
 )
+from app.services.token_quota import (
+    QuotaExceeded,
+    mark_provider_started,
+    reserve,
+    reset_at,
+    settle,
+    snapshot,
+    transfer_conversation,
+)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 logger = logging.getLogger("kerjapedia.rag")
-_STREAM_TOKEN_RE = re.compile(r"\S[^\n]*\s*")
 _PENDING_TURN_TTL = timedelta(minutes=5)
 _HEARTBEAT_SECONDS = 15.0
 
@@ -74,6 +96,8 @@ def _idempotency_request_fingerprint(payload: AskRequest) -> dict:
         "question": payload.question,
         "conversation_id": payload.conversation_id,
         "top_k": payload.top_k,
+        "reasoning_mode": payload.reasoning_mode,
+        "personalized_mode": payload.personalized_mode,
     }
 
 
@@ -169,6 +193,7 @@ def _get_or_create_conversation(
         user_id=user_id,
         guest_id=guest_id,
         title=title,
+        personalized_mode=bool(payload.personalized_mode and user_id),
     )
     session.add(conversation)
     session.commit()
@@ -222,6 +247,7 @@ def _conversation_summary(
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         message_count=message_count,
+        personalized_mode=conversation.personalized_mode,
     )
 
 
@@ -247,6 +273,38 @@ def _recent_messages(
         }
         for row in reversed(rows)
     ]
+
+
+def _personalized_context(
+    conversation: Conversation, user: UserRecord, question: str, session: Session
+) -> PersonalizedContext | None:
+    if not conversation.personalized_mode or not conversation.user_id:
+        return None
+    if conversation.user_id != user.user_id:
+        return None
+    row = session.get(WorkProfile, user.user_id)
+    if row is None:
+        return build_personalized_context(question, {})
+    return build_personalized_context(
+        question,
+        {
+            "province": row.province,
+            "employment_status": row.employment_status,
+            "start_date": row.start_date.date().isoformat() if row.start_date else None,
+            "monthly_wage": row.monthly_wage,
+        },
+    )
+
+
+def _apply_personalized_retrieval(
+    memory: MemoryContext, context: PersonalizedContext | None
+) -> MemoryContext:
+    if context is None or not context.retrieval_hint:
+        return memory
+    return replace(
+        memory,
+        retrieval_query=f"{memory.retrieval_query} {context.retrieval_hint}".strip(),
+    )
 
 
 def _retrieve(memory: MemoryContext, top_k: int, session: Session):
@@ -312,15 +370,61 @@ def _retrieve(memory: MemoryContext, top_k: int, session: Session):
     )
 
 
-def _retrieve_with_isolated_session(memory: MemoryContext, top_k: int):
+def _rerank_personalized(retrieval, context: PersonalizedContext | None, top_k: int):
+    if (
+        context is None
+        or not context.facts.get("province")
+        or str(context.facts["province"]) not in context.retrieval_hint
+        or not retrieval.results
+    ):
+        return retrieval
+    province = str(context.facts["province"]).casefold()
+
+    def score(item):
+        metadata = item.document.metadata
+        location = " ".join(
+            str(metadata.get(key) or "")
+            for key in ("province", "jurisdiction", "region", "title", "short_title")
+        ).casefold()
+        return item.final_score + (0.02 if province in location else 0)
+
+    return replace(retrieval, results=sorted(retrieval.results, key=score, reverse=True)[:top_k])
+
+
+def _retrieve_with_isolated_session(
+    memory: MemoryContext,
+    top_k: int,
+    personalized_context: PersonalizedContext | None = None,
+):
     """Run threaded retrieval without sharing the request SQLAlchemy session."""
     with create_session() as isolated_session:
-        return _retrieve(memory, top_k, isolated_session)
+        pool_size = min(8, top_k + 3) if personalized_context else top_k
+        retrieval = _retrieve(memory, pool_size, isolated_session)
+        return _rerank_personalized(retrieval, personalized_context, top_k)
 
 
-def _generate_with_fresh_generator(question: str, retrieval, history):
+def _generate_with_fresh_generator(
+    question: str,
+    retrieval,
+    history,
+    reasoning_mode: str,
+    output_cap: int,
+    reserved_tokens: int,
+    personalized_context: PersonalizedContext | None = None,
+):
     """Run blocking LLM generation in a worker thread (fresh instance)."""
-    generator = answer_generator_from_settings(settings)
+    generator = copy.copy(
+        answer_generator_from_settings(
+            settings,
+            reasoning_mode=reasoning_mode,
+        )
+    )
+    if hasattr(generator, "max_tokens"):
+        generator.max_tokens = min(generator.max_tokens, output_cap)
+        generator.token_budget = reserved_tokens
+    generator.personalized_context = (
+        personalized_context.prompt_block if personalized_context else ""
+    )
     return generator.generate(question, retrieval, history=history)
 
 
@@ -330,7 +434,11 @@ def _generate_with_fresh_generator(question: str, retrieval, history):
 # histograms and provider-error counters tell Upstash slowness apart from
 # Groq slowness instead of one opaque "request too long".
 _RETRIEVAL_TIMEOUT_SECONDS = 60.0
-_GENERATION_TIMEOUT_SECONDS = 80.0
+_GENERATION_TIMEOUT_SECONDS = {
+    "fast": 45.0,
+    "standard": 65.0,
+    "deep": 80.0,
+}
 
 
 def _next_message_sequence(conversation_id: str, session: Session) -> int:
@@ -417,7 +525,7 @@ def _mark_turn_failed(
             return
         user_message.meta_data = {
             **(user_message.meta_data or {}),
-            "turn_status": "failed",
+            "turn_status": "cancelled" if failure_code == "stream_cancelled" else "failed",
             "memory_eligible": False,
             "failure_code": failure_code,
         }
@@ -435,45 +543,43 @@ def _usage_key(conversation: Conversation) -> str:
     return "unknown"
 
 
-def _record_usage(conversation: Conversation, answer) -> None:
-    """Persist per-identity token metering in an isolated session.
+def _quota_http_error(exc: QuotaExceeded) -> HTTPException:
+    retry_after = max(1, math.ceil((exc.reset_at - now_utc()).total_seconds()))
+    return HTTPException(
+        status_code=429,
+        headers={"Retry-After": str(retry_after)},
+        detail={
+            "code": "daily_token_quota_exceeded",
+            "message": "Batas token harian habis. Coba lagi setelah reset.",
+            "reset_at": exc.reset_at.isoformat(),
+        },
+    )
 
-    Isolation guarantees a metering failure can never poison the chat
-    turn's own transaction (a poisoned transaction fails everything
-    after it, including the answer insert).
-    """
+
+def _reserve_turn(
+    conversation: Conversation, pending_turn: _PendingTurn, payload: AskRequest, session: Session
+):
     try:
-        from datetime import date
-
-        usage = answer.debug.get(
-            "token_usage", {"prompt_tokens": 0, "completion_tokens": 0}
+        return reserve(
+            identity_key=_usage_key(conversation),
+            conversation_id=conversation.conversation_id,
+            turn_id=pending_turn.user_message_id,
+            question=payload.question,
+            previous_messages=pending_turn.previous_messages,
         )
-        user_key = _usage_key(conversation)
-        today = date.today()
-        with create_session() as metering_session:
-            row = metering_session.get(
-                DailyUsage, {"user_key": user_key, "usage_date": today}
-            )
-            if row is None:
-                row = DailyUsage(
-                    user_key=user_key,
-                    usage_date=today,
-                    requests=0,
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                )
-                metering_session.add(row)
-            row.requests = int(row.requests or 0) + 1
-            row.prompt_tokens = int(row.prompt_tokens or 0) + int(
-                usage.get("prompt_tokens", 0) or 0
-            )
-            row.completion_tokens = int(row.completion_tokens or 0) + int(
-                usage.get("completion_tokens", 0) or 0
-            )
-            row.updated_at = now_utc()
-            metering_session.commit()
-    except Exception:
-        logger.exception("usage_metering_not_persisted")
+    except QuotaExceeded as exc:
+        _mark_turn_failed(pending_turn.user_message_id, session, "daily_token_quota_exceeded")
+        raise _quota_http_error(exc) from exc
+    except Exception as exc:
+        _mark_turn_failed(pending_turn.user_message_id, session, "usage_metering_unavailable")
+        logger.exception("usage_reservation_failed")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "usage_metering_unavailable",
+                "message": "Pencatatan penggunaan sementara tidak tersedia.",
+            },
+        ) from exc
 
 
 def _store_answer(
@@ -536,7 +642,14 @@ def _store_answer(
         },
     )
     session.add(asst_msg)
-    _record_usage(conversation, answer)
+    if memory_eligible:
+        conversation.memory_summary = append_summary(
+            conversation.memory_summary,
+            user_msg.content,
+            user_message_id,
+            [asdict(citation) for citation in answer.citations],
+        )
+    settle(user_message_id, answer.debug.get("token_usage", {}), answer.answer)
     conversation.updated_at = now
     session.commit()
 
@@ -578,7 +691,12 @@ def _stream_event(event: str, **payload) -> bytes:
     return f"{serialized}\n".encode()
 
 
-async def _pings_while(task: asyncio.Task, timeout_seconds: float | None = None):
+async def _pings_while(
+    task: asyncio.Task,
+    timeout_seconds: float | None = None,
+    request: Request | None = None,
+    cancellation_scope: ProviderRequestScope | None = None,
+):
     """Yield keepalive pings until the awaited stage finishes.
 
     Proxies and load balancers drop idle SSE streams; a ping every
@@ -588,27 +706,33 @@ async def _pings_while(task: asyncio.Task, timeout_seconds: float | None = None)
     (the stream path is exempt from the 150s request-timeout middleware).
     """
     started_at = time.perf_counter()
+    next_ping_at = started_at + _HEARTBEAT_SECONDS
     try:
         while not task.done():
-            done, _ = await asyncio.wait({task}, timeout=_HEARTBEAT_SECONDS)
+            done, _ = await asyncio.wait({task}, timeout=0.5)
             if task in done:
                 break
-            if (
-                timeout_seconds is not None
-                and time.perf_counter() - started_at > timeout_seconds
-            ):
-                raise TimeoutError(
-                    f"Stage exceeded {timeout_seconds:.0f}s budget."
-                )
-            yield _stream_event("ping")
+            if request is not None and await request.is_disconnected():
+                if cancellation_scope is not None:
+                    cancellation_scope.cancel()
+                raise ProviderCancelled()
+            now = time.perf_counter()
+            if timeout_seconds is not None and now - started_at > timeout_seconds:
+                raise TimeoutError(f"Stage exceeded {timeout_seconds:.0f}s budget.")
+            if now >= next_ping_at:
+                yield _stream_event("ping")
+                next_ping_at = now + _HEARTBEAT_SECONDS
     finally:
         if not task.done():
+            if cancellation_scope is not None:
+                cancellation_scope.cancel()
             task.cancel()
 
 
-def _server_rag_trace(guardrail, memory, retrieval, answer) -> dict:
+def _server_rag_trace(guardrail, memory, retrieval, answer, reasoning_mode: str) -> dict:
     retrieval_items = retrieval.results if retrieval else []
     return {
+        "reasoning_mode": reasoning_mode,
         "guardrail": {"allowed": guardrail.allowed, "reason": guardrail.reason},
         "memory": {
             "used": memory.used,
@@ -633,9 +757,7 @@ def _server_rag_trace(guardrail, memory, retrieval, answer) -> dict:
                 settings.groq_model
                 if settings.llm_provider == "groq"
                 else (
-                    settings.openrouter_model
-                    if settings.llm_provider == "openrouter"
-                    else "local"
+                    settings.openrouter_model if settings.llm_provider == "openrouter" else "local"
                 )
             ),
             "verifier_model": settings.claim_verifier_model,
@@ -737,7 +859,19 @@ def _maybe_sample_ragas_online(question: str, answer, retrieval) -> None:
     thread.start()
 
 
-def _observe_request_completion(question: str, memory, answer, retrieval, latency_ms: int) -> None:
+def _observe_request_completion(
+    question: str,
+    memory,
+    answer,
+    retrieval,
+    latency_ms: int,
+    *,
+    turn_id: str | None = None,
+    reasoning_mode: str = "standard",
+    first_status_ms: int | None = None,
+    first_content_ms: int | None = None,
+    disconnected: bool = False,
+) -> None:
     try:
         topics = tuple(getattr(memory, "context_topics", ()) or ())
         topic = str(topics[0]) if topics else "unknown"
@@ -754,6 +888,11 @@ def _observe_request_completion(question: str, memory, answer, retrieval, latenc
             memory=memory,
             answer=answer,
             latency_ms=latency_ms,
+            turn_id=turn_id,
+            reasoning_mode=reasoning_mode,
+            first_status_ms=first_status_ms,
+            first_content_ms=first_content_ms,
+            disconnected=disconnected,
         )
     except Exception:
         logger.debug("observability_request_row_failed", exc_info=True)
@@ -763,11 +902,25 @@ def _observe_request_completion(question: str, memory, answer, retrieval, latenc
         logger.debug("observability_ragas_sampling_failed", exc_info=True)
 
 
-def _record_request_observation(outcome: str, memory=None, answer=None, latency_ms=None) -> None:
+def _record_request_observation(
+    outcome: str,
+    memory=None,
+    answer=None,
+    latency_ms=None,
+    *,
+    turn_id: str | None = None,
+    reasoning_mode: str = "standard",
+    first_status_ms: int | None = None,
+    first_content_ms: int | None = None,
+    disconnected: bool = False,
+    usage_override: dict | None = None,
+    provider_failure_override: bool = False,
+) -> None:
     """Durable per-turn metrics row; isolated session so it never poisons chat."""
     try:
         topics = tuple(getattr(memory, "context_topics", ()) or ()) if memory else ()
-        usage = (getattr(answer, "debug", {}) or {}).get(
+        debug = getattr(answer, "debug", {}) or {}
+        usage = usage_override or debug.get(
             "token_usage", {"prompt_tokens": 0, "completion_tokens": 0}
         )
         claims = getattr(answer, "claims", []) or []
@@ -776,12 +929,25 @@ def _record_request_observation(outcome: str, memory=None, answer=None, latency_
             observation_session.add(
                 RagRequestObservation(
                     outcome=str(outcome or "unknown")[:40],
+                    turn_id=turn_id,
+                    reasoning_mode=(
+                        reasoning_mode
+                        if reasoning_mode in {"fast", "standard", "deep"}
+                        else "standard"
+                    ),
+                    time_to_first_status_ms=first_status_ms,
+                    time_to_first_content_ms=first_content_ms,
+                    disconnected=disconnected,
+                    retry_count=max(0, int(debug.get("transient_retries", 0) or 0)),
+                    provider_failure=(
+                        provider_failure_override or bool(debug.get("provider_failure_type"))
+                    ),
                     request_latency_ms=float(latency_ms) if latency_ms is not None else None,
                     prompt_tokens=int(usage.get("prompt_tokens", 0) or 0),
                     completion_tokens=int(usage.get("completion_tokens", 0) or 0),
-                    llm_model=str(
-                        (getattr(answer, "debug", {}) or {}).get("llm_model", "non_llm")
-                    )[:160],
+                    llm_model=str((getattr(answer, "debug", {}) or {}).get("llm_model", "non_llm"))[
+                        :160
+                    ],
                     claims_supported=sum(1 for claim in claims if claim.supported),
                     claims_unsupported=sum(1 for claim in claims if not claim.supported),
                     topic=str(topics[0]) if topics else "unknown",
@@ -804,13 +970,14 @@ def _record_request_observation(outcome: str, memory=None, answer=None, latency_
 def _log_rag_completion(answer, latency_ms: int) -> None:
     logger.info(
         "rag_completed trace_id=%s status=%s latency_ms=%s citations=%s "
-        "prompt_version=%s answer_version=%s",
+        "prompt_version=%s answer_version=%s reasoning_mode=%s",
         answer.trace_id,
         answer.answer_status,
         latency_ms,
         len(answer.citations),
         answer.prompt_version_id,
         answer.answer_version,
+        answer.debug.get("reasoning_mode", "standard"),
     )
 
 
@@ -839,6 +1006,7 @@ async def ask_question(
                 latency_ms=stored["latency_ms"],
                 retrieval_score=stored.get("retrieval_score"),
                 token_usage=stored.get("token_usage", {"prompt_tokens": 0, "completion_tokens": 0}),
+                reasoning_mode=stored.get("reasoning_mode", payload.reasoning_mode),
             )
         if replayed is not None:
             raise HTTPException(
@@ -849,14 +1017,22 @@ async def ask_question(
                 },
             )
     conversation = _get_or_create_conversation(payload, active_user, session)
+    personalized_context = _personalized_context(
+        conversation, active_user, payload.question, session
+    )
     pending_turn = _begin_turn(conversation, payload, session)
+    reservation = _reserve_turn(conversation, pending_turn, payload, session)
     reset_stage_accumulator()
 
     try:
         guardrail = evaluate_input_guardrail(payload.question)
-        memory = build_memory_context(
-            payload.question,
-            pending_turn.previous_messages,
+        memory = _apply_personalized_retrieval(
+            build_memory_context(
+                payload.question,
+                pending_turn.previous_messages,
+                summary=conversation.memory_summary,
+            ),
+            personalized_context,
         )
         if not guardrail.allowed:
             answer = build_guardrail_refusal(
@@ -865,7 +1041,9 @@ async def ask_question(
             )
             retrieval = None
         else:
-            history = build_history_turns(pending_turn.previous_messages)
+            history = build_history_turns(
+                pending_turn.previous_messages, summary=conversation.memory_summary
+            )
             retrieval_started = time.perf_counter()
             try:
                 from app.services.monitoring.tracing import end_span as _end_span
@@ -879,6 +1057,7 @@ async def ask_question(
                                 _retrieve_with_isolated_session,
                                 memory,
                                 payload.top_k,
+                                personalized_context,
                             ),
                             timeout=_RETRIEVAL_TIMEOUT_SECONDS,
                         )
@@ -905,6 +1084,7 @@ async def ask_question(
                 settings.vector_store,
                 time.perf_counter() - retrieval_started,
             )
+            mark_provider_started(pending_turn.user_message_id)
             generation_started = time.perf_counter()
             try:
                 with trace_stage("generation_and_verification", settings.llm_provider):
@@ -916,8 +1096,12 @@ async def ask_question(
                                 payload.question,
                                 retrieval,
                                 history,
+                                payload.reasoning_mode,
+                                reservation.output_cap,
+                                reservation.reserved_tokens,
+                                personalized_context,
                             ),
-                            timeout=_GENERATION_TIMEOUT_SECONDS,
+                            timeout=_GENERATION_TIMEOUT_SECONDS[payload.reasoning_mode],
                         )
                     except Exception as exc:
                         _end_span("error", f"{type(exc).__name__}")
@@ -925,13 +1109,9 @@ async def ask_question(
                     _end_span("ok")
             except TimeoutError as exc:
                 elapsed = time.perf_counter() - generation_started
-                observe_stage(
-                    "generation_and_verification", settings.llm_provider, elapsed
-                )
+                observe_stage("generation_and_verification", settings.llm_provider, elapsed)
                 record_outcome("timeout_generation")
-                record_provider_error(
-                    "generation_and_verification", settings.llm_provider
-                )
+                record_provider_error("generation_and_verification", settings.llm_provider)
                 raise HTTPException(
                     status_code=status.HTTP_504_GATEWAY_TIMEOUT,
                     detail={
@@ -950,7 +1130,7 @@ async def ask_question(
         answer, output_warnings = apply_output_guardrail(answer)
         if output_warnings:
             answer = replace(answer, warnings=[*answer.warnings, *output_warnings])
-        rag_trace = _server_rag_trace(guardrail, memory, retrieval, answer)
+        rag_trace = _server_rag_trace(guardrail, memory, retrieval, answer, payload.reasoning_mode)
         answer.debug.update(rag_trace)
         answer = replace(answer, trace_id=trace_id)
         _store_answer(
@@ -961,15 +1141,34 @@ async def ask_question(
             rag_trace,
             session,
         )
+    except ProcessingQuotaExhausted as exc:
+        settle(pending_turn.user_message_id)
+        _mark_turn_failed(pending_turn.user_message_id, session, "daily_token_quota_exceeded")
+        raise _quota_http_error(QuotaExceeded(reset_at())) from exc
     except HTTPException:
+        try:
+            settle(pending_turn.user_message_id)
+        except Exception:
+            logger.exception("usage_settlement_failed")
         _mark_turn_failed(
             pending_turn.user_message_id,
             session,
             "rag_pipeline_failed",
         )
         record_outcome("failed")
+        _record_request_observation(
+            "failed",
+            latency_ms=int((time.perf_counter() - started_at) * 1000),
+            turn_id=pending_turn.user_message_id,
+            reasoning_mode=payload.reasoning_mode,
+            provider_failure_override=True,
+        )
         raise
     except Exception as exc:
+        try:
+            settle(pending_turn.user_message_id)
+        except Exception:
+            logger.exception("usage_settlement_failed")
         _mark_turn_failed(
             pending_turn.user_message_id,
             session,
@@ -978,7 +1177,11 @@ async def ask_question(
         record_outcome("failed")
         record_provider_error("rag_pipeline", f"{settings.vector_store}+{settings.llm_provider}")
         _record_request_observation(
-            "failed", latency_ms=int((time.perf_counter() - started_at) * 1000)
+            "failed",
+            latency_ms=int((time.perf_counter() - started_at) * 1000),
+            turn_id=pending_turn.user_message_id,
+            reasoning_mode=payload.reasoning_mode,
+            provider_failure_override=True,
         )
         logger.exception("rag_failed trace_id=%s", trace_id)
         raise HTTPException(
@@ -992,7 +1195,16 @@ async def ask_question(
     latency_ms = int((time.perf_counter() - started_at) * 1000)
     record_outcome(answer.answer_status)
     observe_rag_completion(answer, retrieval)
-    _observe_request_completion(payload.question, memory, answer, retrieval, latency_ms)
+    _observe_request_completion(
+        payload.question,
+        memory,
+        answer,
+        retrieval,
+        latency_ms,
+        turn_id=pending_turn.user_message_id,
+        reasoning_mode=payload.reasoning_mode,
+        first_content_ms=latency_ms,
+    )
     _log_rag_completion(answer, latency_ms)
     completed = AskResponse(
         conversation_id=conversation.conversation_id,
@@ -1003,6 +1215,7 @@ async def ask_question(
             "token_usage",
             {"prompt_tokens": 0, "completion_tokens": 0},
         ),
+        reasoning_mode=payload.reasoning_mode,
     )
     transient = completed.answer.get("answer_status") == "temporarily_unavailable"
     if idempotency_key is not None and not transient:
@@ -1017,6 +1230,7 @@ async def ask_question(
                     "latency_ms": completed.latency_ms,
                     "retrieval_score": completed.retrieval_score,
                     "token_usage": completed.token_usage,
+                    "reasoning_mode": completed.reasoning_mode,
                 },
             },
         )
@@ -1065,7 +1279,11 @@ def ask_question_stream(
             },
         )
     conversation = _get_or_create_conversation(payload, active_user, session)
+    personalized_context = _personalized_context(
+        conversation, active_user, payload.question, session
+    )
     pending_turn = _begin_turn(conversation, payload, session)
+    reservation = _reserve_turn(conversation, pending_turn, payload, session)
     trace_id = f"rag_{uuid4().hex}"
 
     async def event_stream():
@@ -1076,16 +1294,24 @@ def ask_question_stream(
         started_at = time.perf_counter()
         stored = False
         failure_code = "stream_cancelled"
-        yield _stream_event(
-            "start",
-            conversation_id=conversation.conversation_id,
-            status="Menganalisis pertanyaan",
-        )
+        cancellation_scope: ProviderRequestScope | None = None
+        first_status_ms = int((time.perf_counter() - started_at) * 1000)
+        first_content_ms: int | None = None
         try:
+            yield _stream_event(
+                "start",
+                conversation_id=conversation.conversation_id,
+                status="Menganalisis pertanyaan",
+                reasoning_mode=payload.reasoning_mode,
+            )
             guardrail = evaluate_input_guardrail(payload.question)
-            memory = build_memory_context(
-                payload.question,
-                pending_turn.previous_messages,
+            memory = _apply_personalized_retrieval(
+                build_memory_context(
+                    payload.question,
+                    pending_turn.previous_messages,
+                    summary=conversation.memory_summary,
+                ),
+                personalized_context,
             )
             if not guardrail.allowed:
                 yield _stream_event("thinking", status="Memeriksa keamanan permintaan")
@@ -1110,12 +1336,14 @@ def ask_question_stream(
                                 _retrieve_with_isolated_session,
                                 memory,
                                 payload.top_k,
+                                personalized_context,
                             )
                         )
                         try:
                             async for ping in _pings_while(
                                 retrieval_task,
                                 timeout_seconds=_RETRIEVAL_TIMEOUT_SECONDS,
+                                request=request,
                             ):
                                 yield ping
                             retrieval = retrieval_task.result()
@@ -1138,24 +1366,45 @@ def ask_question_stream(
                     time.perf_counter() - retrieval_started,
                 )
                 yield _stream_event("thinking", status="Menyusun jawaban berdasarkan sumber")
-                generator = answer_generator_from_settings(settings)
-                history = build_history_turns(pending_turn.previous_messages)
+                generator = copy.copy(
+                    answer_generator_from_settings(
+                        settings,
+                        reasoning_mode=payload.reasoning_mode,
+                    )
+                )
+                history = build_history_turns(
+                    pending_turn.previous_messages, summary=conversation.memory_summary
+                )
+                generator.personalized_context = (
+                    personalized_context.prompt_block if personalized_context else ""
+                )
+                if hasattr(generator, "max_tokens"):
+                    generator.max_tokens = min(generator.max_tokens, reservation.output_cap)
+                    generator.token_budget = reservation.reserved_tokens
+                mark_provider_started(pending_turn.user_message_id)
+                cancellation_scope = ProviderRequestScope(asyncio.get_running_loop())
                 generation_started = time.perf_counter()
                 try:
                     with trace_stage("generation_and_verification", settings.llm_provider):
                         _start_span("generation", settings.llm_provider)
-                        generation_task = asyncio.ensure_future(
-                            asyncio.to_thread(
-                                generator.generate,
-                                payload.question,
-                                retrieval,
-                                history=history,
+                        scope_token = current_provider_scope.set(cancellation_scope)
+                        try:
+                            generation_task = asyncio.ensure_future(
+                                asyncio.to_thread(
+                                    generator.generate,
+                                    payload.question,
+                                    retrieval,
+                                    history=history,
+                                )
                             )
-                        )
+                        finally:
+                            current_provider_scope.reset(scope_token)
                         try:
                             async for ping in _pings_while(
                                 generation_task,
-                                timeout_seconds=_GENERATION_TIMEOUT_SECONDS,
+                                timeout_seconds=_GENERATION_TIMEOUT_SECONDS[payload.reasoning_mode],
+                                request=request,
+                                cancellation_scope=cancellation_scope,
                             ):
                                 yield ping
                             answer = generation_task.result()
@@ -1170,9 +1419,7 @@ def ask_question_stream(
                         time.perf_counter() - generation_started,
                     )
                     record_outcome("timeout_generation")
-                    record_provider_error(
-                        "generation_and_verification", settings.llm_provider
-                    )
+                    record_provider_error("generation_and_verification", settings.llm_provider)
                     raise
                 observe_stage(
                     "generation_and_verification",
@@ -1182,12 +1429,16 @@ def ask_question_stream(
             best_score = (
                 retrieval.results[0].final_score if retrieval and retrieval.results else None
             )
-            rag_trace = _server_rag_trace(guardrail, memory, retrieval, answer)
+            rag_trace = _server_rag_trace(
+                guardrail, memory, retrieval, answer, payload.reasoning_mode
+            )
             answer.debug.update(rag_trace)
             answer = replace(answer, trace_id=trace_id)
             guarded, output_warnings = apply_output_guardrail(answer)
             if output_warnings:
                 answer = replace(guarded, warnings=[*guarded.warnings, *output_warnings])
+            if await request.is_disconnected():
+                raise ProviderCancelled()
             _store_answer(
                 conversation,
                 pending_turn.user_message_id,
@@ -1197,11 +1448,53 @@ def ask_question_stream(
                 session,
             )
             stored = True
+        except (ProviderCancelled, asyncio.CancelledError):
+            failure_code = "stream_cancelled"
+            if cancellation_scope is not None:
+                cancellation_scope.cancel()
+            _record_request_observation(
+                "cancelled",
+                latency_ms=int((time.perf_counter() - started_at) * 1000),
+                turn_id=pending_turn.user_message_id,
+                reasoning_mode=payload.reasoning_mode,
+                first_status_ms=first_status_ms,
+                disconnected=True,
+                usage_override=cancellation_scope.usage if cancellation_scope else None,
+            )
+            return
+        except GeneratorExit:
+            failure_code = "stream_cancelled"
+            if cancellation_scope is not None:
+                cancellation_scope.cancel()
+            _record_request_observation(
+                "cancelled",
+                latency_ms=int((time.perf_counter() - started_at) * 1000),
+                turn_id=pending_turn.user_message_id,
+                reasoning_mode=payload.reasoning_mode,
+                first_status_ms=first_status_ms,
+                disconnected=True,
+                usage_override=cancellation_scope.usage if cancellation_scope else None,
+            )
+            raise
+        except ProcessingQuotaExhausted:
+            failure_code = "daily_token_quota_exceeded"
+            yield _stream_event(
+                "error",
+                code="daily_token_quota_exceeded",
+                detail="Daily token quota was reached during processing.",
+                reset_at=reset_at().isoformat(),
+            )
+            return
         except TimeoutError:
             failure_code = "request_timeout"
             logger.exception("rag_stage_timeout trace_id=%s", trace_id)
             _record_request_observation(
-                "failed", latency_ms=int((time.perf_counter() - started_at) * 1000)
+                "failed",
+                latency_ms=int((time.perf_counter() - started_at) * 1000),
+                turn_id=pending_turn.user_message_id,
+                reasoning_mode=payload.reasoning_mode,
+                first_status_ms=first_status_ms,
+                provider_failure_override=True,
             )
             yield _stream_event(
                 "error",
@@ -1218,7 +1511,12 @@ def ask_question_stream(
                 f"{settings.vector_store}+{settings.llm_provider}",
             )
             _record_request_observation(
-                "failed", latency_ms=int((time.perf_counter() - started_at) * 1000)
+                "failed",
+                latency_ms=int((time.perf_counter() - started_at) * 1000),
+                turn_id=pending_turn.user_message_id,
+                reasoning_mode=payload.reasoning_mode,
+                first_status_ms=first_status_ms,
+                provider_failure_override=True,
             )
             logger.exception("rag_failed trace_id=%s", trace_id)
             yield _stream_event(
@@ -1230,23 +1528,40 @@ def ask_question_stream(
             return
         finally:
             if not stored:
+                try:
+                    if cancellation_scope is not None:
+                        cancellation_scope.cancel()
+                    settle(
+                        pending_turn.user_message_id,
+                        cancellation_scope.usage if cancellation_scope else None,
+                        cancelled=failure_code == "stream_cancelled",
+                    )
+                except Exception:
+                    logger.exception("usage_settlement_failed")
                 _mark_turn_failed(
                     pending_turn.user_message_id,
                     session,
                     failure_code,
                 )
 
-        if answer.answer_status != "temporarily_unavailable":
-            for token in _STREAM_TOKEN_RE.findall(answer.answer):
-                if await request.is_disconnected():
-                    return
-                yield _stream_event("delta", content=token)
-                await asyncio.sleep(0.012)
-
+        disconnected_after_store = await request.is_disconnected()
+        if answer.answer_status != "temporarily_unavailable" and not disconnected_after_store:
+            first_content_ms = int((time.perf_counter() - started_at) * 1000)
         latency_ms = int((time.perf_counter() - started_at) * 1000)
         record_outcome(answer.answer_status)
         observe_rag_completion(answer, retrieval)
-        _observe_request_completion(payload.question, memory, answer, retrieval, latency_ms)
+        _observe_request_completion(
+            payload.question,
+            memory,
+            answer,
+            retrieval,
+            latency_ms,
+            turn_id=pending_turn.user_message_id,
+            reasoning_mode=payload.reasoning_mode,
+            first_status_ms=first_status_ms,
+            first_content_ms=first_content_ms,
+            disconnected=disconnected_after_store,
+        )
         _log_rag_completion(answer, latency_ms)
         final_response = {
             "conversation_id": conversation.conversation_id,
@@ -1257,6 +1572,7 @@ def ask_question_stream(
                 "token_usage",
                 {"prompt_tokens": 0, "completion_tokens": 0},
             ),
+            "reasoning_mode": payload.reasoning_mode,
         }
         if idempotency_key is not None and answer.answer_status != "temporarily_unavailable":
             idempotency_store.remember(
@@ -1264,6 +1580,10 @@ def ask_question_stream(
                 idempotency_key,
                 {"request": fingerprint, "response": final_response},
             )
+        if disconnected_after_store:
+            return
+        if first_content_ms is not None:
+            yield _stream_event("delta", content=answer.answer)
         yield _stream_event("done", response=final_response)
 
     return StreamingResponse(
@@ -1273,9 +1593,7 @@ def ask_question_stream(
     )
 
 
-def _owned_conversations(
-    active_user: UserRecord, session: Session
-) -> list[Conversation]:
+def _owned_conversations(active_user: UserRecord, session: Session) -> list[Conversation]:
     if active_user.roles == ["guest"]:
         guest_id = active_user.user_id.removeprefix("guest:")
         return (
@@ -1312,6 +1630,7 @@ def export_my_data(
             {
                 "conversation_id": conversation.conversation_id,
                 "title": conversation.title,
+                "personalized_mode": conversation.personalized_mode,
                 "created_at": conversation.created_at,
                 "updated_at": conversation.updated_at,
                 "messages": [
@@ -1324,7 +1643,16 @@ def export_my_data(
                 ],
             }
         )
-    return {"user_id": active_user.user_id, "conversations": exported}
+    profile = session.get(WorkProfile, active_user.user_id) if user else None
+    work_profile = None
+    if profile is not None:
+        work_profile = {
+            "province": profile.province,
+            "employment_status": profile.employment_status,
+            "start_date": profile.start_date.date().isoformat() if profile.start_date else None,
+            "monthly_wage": profile.monthly_wage,
+        }
+    return {"user_id": active_user.user_id, "work_profile": work_profile, "conversations": exported}
 
 
 def purge_expired_conversations(session: Session, retention_days: int) -> dict[str, int]:
@@ -1345,9 +1673,9 @@ def purge_expired_conversations(session: Session, retention_days: int) -> dict[s
             .filter(Message.conversation_id.in_(stale_ids))
             .delete(synchronize_session=False)
         )
-        session.query(Conversation).filter(
-            Conversation.conversation_id.in_(stale_ids)
-        ).delete(synchronize_session=False)
+        session.query(Conversation).filter(Conversation.conversation_id.in_(stale_ids)).delete(
+            synchronize_session=False
+        )
         session.commit()
     return {"conversations": len(stale_ids), "messages": int(messages_deleted or 0)}
 
@@ -1370,6 +1698,44 @@ def list_conversations(
     return [_conversation_summary(item, session) for item in conversations]
 
 
+@router.get("/usage")
+def my_token_usage(
+    session: DbSession,
+    user: OptionalUser,
+    guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
+) -> dict:
+    active_user = user or _anonymous_user(guest_id)
+    return snapshot(active_user.user_id, session)
+
+
+@router.post("/conversations/{conversation_id}/claim", response_model=ConversationSummary)
+def claim_guest_conversation(
+    conversation_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    guest_id: str | None = Header(default=None, alias="X-KerjaPedia-Guest-ID"),
+) -> ConversationSummary:
+    conversation = session.execute(
+        select(Conversation)
+        .where(Conversation.conversation_id == conversation_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation was not found.")
+    if conversation.user_id == user.user_id:
+        return _conversation_summary(conversation, session)
+    if conversation.user_id:
+        raise HTTPException(status_code=403, detail="Conversation belongs to another user.")
+    normalized_guest_id = _anonymous_user(guest_id).user_id.removeprefix("guest:")
+    if not conversation.guest_id or conversation.guest_id != normalized_guest_id:
+        raise HTTPException(status_code=403, detail="Conversation belongs to another guest.")
+    transfer_conversation(session, conversation_id, f"guest:{normalized_guest_id}", user.user_id)
+    conversation.user_id = user.user_id
+    conversation.guest_id = None
+    session.commit()
+    return _conversation_summary(conversation, session)
+
+
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetail)
 def get_conversation(
     conversation_id: str,
@@ -1388,6 +1754,7 @@ def get_conversation(
     return ConversationDetail(
         conversation_id=conversation.conversation_id,
         title=conversation.title,
+        personalized_mode=conversation.personalized_mode,
         messages=[
             MessageResponse(
                 **{
@@ -1402,6 +1769,25 @@ def get_conversation(
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
+
+
+@router.patch(
+    "/conversations/{conversation_id}/personalized-mode",
+    response_model=ConversationSummary,
+)
+def update_personalized_mode(
+    conversation_id: str,
+    payload: PersonalizedModeUpdateRequest,
+    session: DbSession,
+    user: CurrentUser,
+) -> ConversationSummary:
+    conversation = _get_owned_conversation(conversation_id, user, session)
+    if conversation.user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="A guest conversation must be claimed first.")
+    conversation.personalized_mode = payload.personalized_mode
+    conversation.updated_at = now_utc()
+    session.commit()
+    return _conversation_summary(conversation, session)
 
 
 @router.patch("/conversations/{conversation_id}", response_model=ConversationSummary)

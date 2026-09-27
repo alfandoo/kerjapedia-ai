@@ -34,12 +34,9 @@ test("stored session hydrates the chat shell without mismatch", async ({ page })
 
   await page.goto("/");
 
-  await expect(page.locator(".chatgpt-account-avatar").first()).toHaveText("AD");
-  await expect(page.locator(".chatgpt-account strong").first()).toHaveText("Admin Demo");
-  await expect(
-    page.locator(".desktop-sidebar").getByRole("link", { name: "KerjaPedia AI beranda" })
-  ).toContainText("KerjaPedia AI");
-  const sidebarBrand = page.locator(".desktop-sidebar .chatgpt-sidebar-brand-full strong");
+  await expect(page.getByRole("button", { name: "Buka menu profil Admin Demo" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "KerjaPedia AI beranda" })).toContainText("KerjaPedia AI");
+  const sidebarBrand = page.getByRole("link", { name: "KerjaPedia AI beranda" }).locator("strong");
   await expect(sidebarBrand).toBeVisible();
   await expect
     .poll(() => sidebarBrand.evaluate((element) => element.scrollWidth <= element.clientWidth))
@@ -63,10 +60,16 @@ test("stored session hydrates the admin shell without mismatch", async ({ page }
     });
   });
 
-  await page.goto("/admin");
+  await page.context().addCookies([{
+    name: "kp-access",
+    value: "mock-admin-access",
+    url: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3100",
+    httpOnly: true,
+    sameSite: "Lax",
+  }]);
+  await page.goto("/admin/dashboard");
 
-  await expect(page.getByText("Admin Knowledge Base")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Knowledge Base" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Dashboard" })).toBeVisible();
   expect(runtimeErrors.filter((error) => /hydration|server rendered text/i.test(error))).toEqual(
     []
   );

@@ -330,6 +330,33 @@ export function AdminObservability() {
       </div>
 
       <SectionCard
+        title="Permintaan menurut mode"
+        hint="Rerata durasi dan pemakaian dari permintaan yang tercatat."
+        icon={Timer}
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          {(["fast", "standard", "deep"] as const).map((mode) => {
+            const row = metrics.by_mode?.[mode];
+            return (
+              <div key={mode} className="rounded-lg border border-[#e5e5e5] p-4">
+                <h3 className="font-semibold text-tinta">{mode === "fast" ? "Cepat" : mode === "deep" ? "Mendalam" : "Standar"}</h3>
+                <dl className="mt-2 space-y-1 text-xs text-muted-text">
+                  <div><dt className="inline">Permintaan: </dt><dd className="inline">{formatInt(row?.requests ?? 0)}</dd></div>
+                  <div><dt className="inline">Status pertama: </dt><dd className="inline">{row?.first_status_ms == null ? "—" : String(Math.round(row.first_status_ms)) + " ms"}</dd></div>
+                  <div><dt className="inline">Konten pertama: </dt><dd className="inline">{row?.first_content_ms == null ? "—" : String(Math.round(row.first_content_ms)) + " ms"}</dd></div>
+                  <div><dt className="inline">Total: </dt><dd className="inline">{row?.total_latency_ms == null ? "—" : String(Math.round(row.total_latency_ms)) + " ms"}</dd></div>
+                  <div><dt className="inline">Token: </dt><dd className="inline">{formatInt((row?.prompt_tokens ?? 0) + (row?.completion_tokens ?? 0))}</dd></div>
+                  <div><dt className="inline">Terputus: </dt><dd className="inline">{formatPct(row?.disconnect_rate ?? 0)}</dd></div>
+                  <div><dt className="inline">Retry: </dt><dd className="inline">{formatInt(row?.retries ?? 0)}</dd></div>
+                  <div><dt className="inline">Gagal provider: </dt><dd className="inline">{formatInt(row?.provider_failures ?? 0)}</dd></div>
+                </dl>
+              </div>
+            );
+          })}
+        </div>
+      </SectionCard>
+
+      <SectionCard
         title="Kesehatan pipeline RAG"
         hint="Distribusi hasil, latensi tiap tahap, dan verifikasi klaim dari Prometheus."
         icon={Activity}

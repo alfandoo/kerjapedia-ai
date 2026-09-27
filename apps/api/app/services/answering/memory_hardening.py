@@ -20,13 +20,11 @@ _EXPLICIT_FOLLOW_UP_PATTERN = re.compile(
 # that are never referential are excluded (hanya = "only", tanya-family =
 # the verb "to ask").
 _NYA_WORD_PATTERN = re.compile(r"\b([a-z]+nya|nya)\b", re.IGNORECASE)
-_NYA_NON_REFERENTIAL_WORDS = frozenset(
-    {"hanya", "tanya", "bertanya", "ditanya", "menanya"}
-)
+_NYA_NON_REFERENTIAL_WORDS = frozenset({"hanya", "tanya", "bertanya", "ditanya", "menanya"})
 _DEMONSTRATIVE_PATTERN = re.compile(
     r"\b(ini|itu|tersebut)\b|"
     r"\bhal (?:ini|itu|tersebut)\b|"
-    r"\byang (?:ini|itu|tersebut|sama|mana)\b|"
+    r"\byang (?:ini|itu|tadi|tersebut|sama|mana)\b|"
     r"\b(the penalty|the sanction|the payment|that payment|their rights?|"
     r"its rules?|what about it|how about that)\b",
     re.IGNORECASE,
@@ -86,7 +84,7 @@ def _guardrail_allowed(message: dict[str, Any]) -> bool:
     metadata = _metadata(message)
     if metadata.get("memory_eligible") is False:
         return False
-    if metadata.get("turn_status") in {"processing", "failed", "abandoned"}:
+    if metadata.get("turn_status") in {"processing", "failed", "abandoned", "cancelled"}:
         return False
     rag_trace = metadata.get("rag_trace") or {}
     if not isinstance(rag_trace, dict):
@@ -250,6 +248,7 @@ def build_memory_context(
     messages: list[dict[str, Any]],
     max_user_turns: int = 2,
     max_chars: int = 600,
+    summary: dict[str, Any] | None = None,
 ) -> MemoryContext:
     question_language = _detect_language(question)
     base = _base_context(question, max_chars, question_language)
@@ -265,8 +264,33 @@ def build_memory_context(
     if reason is None:
         return base
     eligible = _eligible_turns(messages)
-    if not eligible:
+    if (
+        re.search(r"\byang (?:tadi|itu)\b|\bthe previous\b", question, re.I)
+        and len(eligible) > 1
+        and not _turns_are_coherent(eligible[-2], eligible[-1])
+    ):
         return base
+    from app.services.answering.conversation_summary import summary_context
+
+    recalled = summary_context(question, summary)
+    if not eligible and recalled is None:
+        return base
+    if not eligible and recalled is not None:
+        clean_question, count = redact_retrieval_text(question)
+        combined = f"{recalled['text']}\n{clean_question}"
+        return MemoryContext(
+            original_question=question,
+            retrieval_query=_truncate_tail_at_word(combined, max_chars),
+            used=True,
+            source_turns=1,
+            activation_reason="structured_summary",
+            question_language=question_language,
+            context_topics=recalled["topics"],
+            context_document_ids=recalled["document_ids"],
+            context_articles=recalled["articles"],
+            source_message_ids=recalled["source_message_ids"],
+            redaction_count=count,
+        )
     selected = [eligible[-1]]
     if max_user_turns > 1 and len(eligible) > 1:
         previous = eligible[-2]
@@ -316,6 +340,7 @@ def build_memory_context(
 def build_history_turns(
     messages: list[dict[str, Any]],
     max_turns: int = 2,
+    summary: dict[str, Any] | None = None,
 ) -> tuple[HistoryTurn, ...]:
     """Collect the most recent answered turns for the LLM prompt.
 
@@ -346,4 +371,20 @@ def build_history_turns(
         if question_redactions or answer_redactions:
             continue
         turns.append(HistoryTurn(question=redacted_question, answer=redacted_answer))
-    return tuple(turns[-max(1, max_turns) :])
+    recent = turns[-max(1, max_turns) :]
+    if summary and summary.get("turns"):
+        older = summary["turns"][: -max(1, max_turns)]
+        if older:
+            entries = []
+            for item in older[-4:]:
+                question = str(item.get("question") or "")[:160]
+                titles = ", ".join(item.get("titles") or [])[:120]
+                entries.append(f"{question} ({titles})")
+            recent.insert(
+                0,
+                HistoryTurn(
+                    question="Ringkasan topik terdahulu, bukan sumber hukum",
+                    answer="; ".join(entries)[:500],
+                ),
+            )
+    return tuple(recent)

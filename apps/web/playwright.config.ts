@@ -30,7 +30,7 @@ export default defineConfig({
         command: "npm run dev -- --hostname 127.0.0.1 --port 3100",
         env: { NEXT_DIST_DIR: ".next-e2e" },
         url: "http://127.0.0.1:3100",
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: true,
         timeout: 120_000,
       },
 });

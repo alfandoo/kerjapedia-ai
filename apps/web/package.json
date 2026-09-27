@@ -10,7 +10,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed"
+    "test:e2e:headed": "playwright test --headed",
+    "test:unit": "node scripts/run-unit-tests.mjs",
+    "test:integration": "node scripts/run-browser-tests.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

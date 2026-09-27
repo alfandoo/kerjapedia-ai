@@ -474,13 +474,14 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
   const passwordOk = mode === "signup" ? passwordAcceptable(password, { email }) : true;
 
   const emailValid = isValidEmail(email.trim());
+  const canContinueEmail = emailValid && (mode !== "signup" || name.trim().length >= 2);
   const emailTouched = email.trim().length > 0 && !emailValid;
 
-  const labelClass = "mt-1 text-[13px] font-bold text-muted-text first:mt-0";
+  const labelClass = "mt-1 text-[13px] font-semibold text-[#557266] first:mt-0";
   const inputClass =
-    "h-11 w-full rounded-xl border border-[#e5e5e5] bg-[#f7f7f8] px-4 text-sm text-tinta outline-none transition placeholder:text-[#676767] focus:border-javanese focus:ring-2 focus:ring-javanese/10";
+    "h-11 w-full rounded-xl border border-[#e5e5e5] bg-[#f7f7f8] px-4 text-sm text-tinta outline-none transition focus:border-javanese focus:ring-2 focus:ring-javanese/10";
   const submitClass =
-    "grid w-full min-h-[54px] grid-flow-col items-center justify-center gap-2 rounded-full bg-javanese text-sm font-bold text-white transition hover:bg-forest disabled:cursor-wait disabled:opacity-70";
+    "chat-no-hover grid w-full min-h-[54px] grid-flow-col items-center justify-center gap-2 rounded-full bg-javanese text-sm font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese disabled:cursor-not-allowed disabled:bg-[#b9d2c2] disabled:text-white/85 disabled:opacity-100";
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center p-5 max-[760px]:p-3 max-[760px]:pb-[max(12px,env(safe-area-inset-bottom))]">
@@ -526,7 +527,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                 </p>
               </header>
 
-              <div className="mt-[34px] grid gap-2.5" aria-label="Pilihan masuk lainnya">
+              <div className="mt-8 grid gap-2.5" aria-label="Pilihan masuk lainnya">
                 <div className="relative grid min-h-[54px] place-items-center">
                   <div
                     ref={googleButtonRef}
@@ -588,7 +589,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
               </div>
 
               <div
-                className="my-[30px] grid grid-cols-[1fr_auto_1fr] items-center gap-[18px] text-[10px] font-bold text-[#676767] before:h-px before:bg-[#e5e5e5] before:content-[''] after:h-px after:bg-[#e5e5e5] after:content-['']"
+                className="my-7 grid grid-cols-[1fr_auto_1fr] items-center gap-[18px] text-[10px] font-bold text-[#676767] before:h-px before:bg-[#e5e5e5] before:content-[''] after:h-px after:bg-[#e5e5e5] after:content-['']"
                 aria-hidden="true"
               >
                 <span>{translate("auth.or")}</span>
@@ -597,7 +598,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
           ) : null}
 
           <form
-            className="grid gap-3"
+            className="grid gap-3.5"
             onSubmit={step === "verify" ? handleVerifyOtp : handleSubmit}
             noValidate
           >
@@ -617,7 +618,6 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   aria-label={translate("auth.otpVerify")}
-                  placeholder="00000000"
                   value={otp}
                   maxLength={8}
                   required
@@ -683,7 +683,6 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                       name="name"
                       type="text"
                       autoComplete="name"
-                      placeholder={translate("auth.fullName")}
                       value={name}
                       minLength={2}
                       required
@@ -701,7 +700,6 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                   name="email"
                   type="email"
                   autoComplete="email"
-                  placeholder={translate("auth.email")}
                   value={email}
                   required
                   aria-invalid={emailTouched || undefined}
@@ -730,7 +728,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                     <p className="mt-1">{translate("auth.googleOnlyDescription")}</p>
                   </div>
                 ) : (
-                  <button className={submitClass} type="submit" disabled={!emailValid}>
+                  <button className={submitClass} type="submit" disabled={!canContinueEmail}>
                     {translate("auth.continue")}
                   </button>
                 )}
@@ -762,7 +760,6 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                     name="password"
                     type={passwordVisible ? "text" : "password"}
                     autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                    placeholder={translate("auth.password")}
                     value={password}
                     minLength={mode === "signup" ? 8 : 1}
                     maxLength={mode === "signup" ? 64 : 256}
@@ -771,7 +768,7 @@ export function AuthModal({ open, mode, onClose, onSuccess }: AuthModalProps) {
                       setPassword(event.target.value);
                       setError(null);
                     }}
-                    className="min-w-0 border-0 bg-transparent px-4 text-sm text-tinta outline-none placeholder:text-[#676767]"
+                    className="min-w-0 border-0 bg-transparent px-4 text-sm text-tinta outline-none"
                   />
                   <button
                     type="button"

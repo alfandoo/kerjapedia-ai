@@ -49,8 +49,22 @@ def test_client_uses_groq_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     generator._openrouter_client()
     assert calls["base_url"] == GROQ_BASE_URL
     assert calls["api_key"] == "test-key"
-    assert generator._request_options() == {"reasoning_effort": "low"}
-    assert generator._response_formats_to_try() == [{"type": "json_object"}, None]
+    assert generator._request_options() == {
+        "reasoning_effort": "medium",
+        "extra_body": {"include_reasoning": False},
+    }
+    assert [fmt["type"] if fmt else None for fmt in generator._response_formats_to_try()] == [
+        "json_schema", "json_object", None
+    ]
+
+
+def test_reasoning_effort_is_configurable_and_hidden() -> None:
+    generator = GroqAnswerGenerator(api_key="test-key", reasoning_effort="high")
+
+    assert generator._request_options() == {
+        "reasoning_effort": "high",
+        "extra_body": {"include_reasoning": False},
+    }
 
 
 def test_json_validate_failed_falls_back_to_plain_mode(
@@ -58,16 +72,18 @@ def test_json_validate_failed_falls_back_to_plain_mode(
 ) -> None:
     from app.services.answering import openrouter_generator as parent
 
-    assert parent.OpenRouterAnswerGenerator._response_formats_to_try(
-        GroqAnswerGenerator(api_key="test-key")
-    ) == [{"type": "json_object"}]
+    assert [
+        fmt["type"] for fmt in parent.OpenRouterAnswerGenerator._response_formats_to_try(
+            GroqAnswerGenerator(api_key="test-key")
+        )
+    ] == ["json_schema", "json_object"]
 
     calls: dict = {"attempts": []}
 
     class FlakyCompletions:
         def create(self, **kwargs):
             calls["attempts"].append(kwargs)
-            if len(calls["attempts"]) == 1:
+            if len(calls["attempts"]) <= 2:
                 raise RuntimeError("json_validate_failed: empty failed_generation")
             return "plain-mode-completion"
 
@@ -83,8 +99,9 @@ def test_json_validate_failed_falls_back_to_plain_mode(
         max_tokens=600,
     )
     assert result == "plain-mode-completion"
-    assert calls["attempts"][0]["response_format"] == {"type": "json_object"}
-    assert "response_format" not in calls["attempts"][1]
+    assert calls["attempts"][0]["response_format"]["type"] == "json_schema"
+    assert calls["attempts"][1]["response_format"] == {"type": "json_object"}
+    assert "response_format" not in calls["attempts"][2]
 
 
 def test_factory_builds_groq_generator(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -102,6 +119,30 @@ def test_factory_builds_groq_generator(monkeypatch: pytest.MonkeyPatch) -> None:
     finally:
         providers.reset_provider_caches()
     assert isinstance(generator, GroqAnswerGenerator)
+    assert generator.reasoning_effort == "medium"
+
+
+def test_factory_caches_each_reasoning_mode_separately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.config import settings
+    from app.services import providers
+
+    monkeypatch.setattr(settings, "llm_provider", "groq", raising=False)
+    monkeypatch.setattr(settings, "groq_api_key", "test-key", raising=False)
+    monkeypatch.setattr(settings, "claim_verifier_provider", "deterministic", raising=False)
+    providers.reset_provider_caches()
+    try:
+        fast = providers.answer_generator_from_settings(settings, reasoning_mode="fast")
+        deep = providers.answer_generator_from_settings(settings, reasoning_mode="deep")
+        fast_again = providers.answer_generator_from_settings(settings, reasoning_mode="fast")
+    finally:
+        providers.reset_provider_caches()
+
+    assert fast.reasoning_effort == "low"
+    assert deep.reasoning_effort == "high"
+    assert fast is fast_again
+    assert fast is not deep
 
 
 def test_factory_requires_groq_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -169,3 +210,66 @@ def test_non_rate_limit_keeps_generic_notice() -> None:
     )
     assert "batas pemakaian" not in response.answer
     assert RATE_LIMITED_WARNING not in response.warnings
+
+
+def test_stream_quota_stops_generation_and_reports_usage():
+    import asyncio
+    from types import SimpleNamespace
+
+    from app.services.answering.openrouter_generator import (
+        OpenRouterAnswerGenerator,
+        ProcessingQuotaExhausted,
+    )
+    from app.services.answering.provider_cancellation import (
+        ProviderRequestScope,
+        current_provider_scope,
+    )
+
+    class FakeStream:
+        def __init__(self):
+            self.closed = False
+            self.index = 0
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            self.index += 1
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        delta=SimpleNamespace(content="jawaban " * 20), finish_reason=None
+                    )
+                ],
+                usage=None,
+            )
+
+        async def close(self):
+            self.closed = True
+
+    async def run():
+        stream = FakeStream()
+        generator = OpenRouterAnswerGenerator(api_key="test")
+        generator.token_budget = 500
+
+        async def fake_create(_kwargs):
+            return stream
+
+        generator._async_open_stream = fake_create
+        scope = ProviderRequestScope(asyncio.get_running_loop())
+        token = current_provider_scope.set(scope)
+        try:
+            with pytest.raises(ProcessingQuotaExhausted):
+                await asyncio.to_thread(
+                    generator._create_completion,
+                    model="test",
+                    messages=[{"role": "user", "content": "question"}],
+                    temperature=0,
+                    max_tokens=300,
+                )
+        finally:
+            current_provider_scope.reset(token)
+        assert stream.closed
+        assert scope.usage["completion_tokens"] > 0
+
+    asyncio.run(run())

@@ -81,6 +81,7 @@ export type RetrievalPlaygroundResult = {
 };
 
 export type AdminStats = {
+  usage: { today: { requests: number; prompt_tokens: number; completion_tokens: number; provider_tokens: number; estimated_tokens: number; unattributed_tokens: number; identities: number } };
   documents: {
     total: number;
     published: number;
@@ -201,6 +202,18 @@ export type HistogramStats = {
 };
 
 export type AdminMetrics = {
+  by_mode: Record<string, {
+    requests: number;
+    first_status_ms: number | null;
+    first_content_ms: number | null;
+    total_latency_ms: number | null;
+    prompt_tokens: number;
+    completion_tokens: number;
+    disconnects: number;
+    disconnect_rate: number;
+    retries: number;
+    provider_failures: number;
+  }>;
   ragas_enabled: boolean;
   ragas_sample_rate: number;
   outcomes: Record<string, number>;

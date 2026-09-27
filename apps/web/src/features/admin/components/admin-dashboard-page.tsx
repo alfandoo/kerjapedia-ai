@@ -792,6 +792,27 @@ export function AdminDashboardPage() {
         })}
       </div>
 
+      <section aria-label="Pemakaian token hari ini" className="rounded-xl border border-[#e5e5e5] bg-white px-5 py-4 shadow-[0_1px_3px_rgba(27,67,50,0.06)]">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold text-forest">Pemakaian token hari ini</h2>
+          <span className="text-xs text-muted-text">Reset 00.00 WIB</span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: "Total", value: stats.usage.today.prompt_tokens + stats.usage.today.completion_tokens },
+            { label: "Dari provider", value: stats.usage.today.provider_tokens },
+            { label: "Estimasi", value: stats.usage.today.estimated_tokens },
+            { label: "Data lama", value: stats.usage.today.unattributed_tokens },
+          ].map((item) => (
+            <div key={item.label} className="rounded-lg bg-[#f6f8f6] px-4 py-3">
+              <p className="text-xs text-muted-text">{item.label}</p>
+              <p className="mt-1 font-mono text-xl font-semibold text-forest tabular-nums">{new Intl.NumberFormat("id-ID").format(item.value)}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-muted-text">{new Intl.NumberFormat("id-ID").format(stats.usage.today.requests)} permintaan dari {new Intl.NumberFormat("id-ID").format(stats.usage.today.identities)} identitas</p>
+      </section>
+
       <section aria-label="Kesehatan RAG">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-center gap-3">

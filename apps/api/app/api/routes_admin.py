@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy import Float as sa_Float
+from sqlalchemy import Integer as sa_Integer
 from sqlalchemy import cast as sa_cast
 from sqlalchemy import func as sa_func
 from sqlalchemy import text as sa_text
@@ -35,6 +36,7 @@ from app.api.utils import project_root as get_project_root
 from app.core.config import settings
 from app.models.business import (
     CalculationRule,
+    ChatTokenUsage,
     Conversation,
     DailyUsage,
     DocumentAdmin,
@@ -163,9 +165,11 @@ def _admin_ingestion_status(version: DocumentVersion | None) -> str:
 
 def _usage_summary(session) -> dict:
     """Token/request metering per identity: today totals plus top consumers."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
-    today = date.today()
+    from app.services.token_quota import usage_day
+
+    today = usage_day()
     week_ago = today - timedelta(days=7)
     today_rows = session.query(DailyUsage).filter(DailyUsage.usage_date == today).all()
     top_rows = (
@@ -177,14 +181,31 @@ def _usage_summary(session) -> dict:
         )
         .filter(DailyUsage.usage_date >= week_ago)
         .group_by(DailyUsage.user_key)
-        .order_by(
-            sa_func.sum(DailyUsage.prompt_tokens + DailyUsage.completion_tokens).desc()
-        )
+        .order_by(sa_func.sum(DailyUsage.prompt_tokens + DailyUsage.completion_tokens).desc())
         .limit(10)
         .all()
     )
+    source_rows = (
+        session.query(
+            ChatTokenUsage.source,
+            sa_func.sum(ChatTokenUsage.prompt_tokens + ChatTokenUsage.completion_tokens),
+        )
+        .filter(ChatTokenUsage.usage_date == today, ChatTokenUsage.status != "pending")
+        .group_by(ChatTokenUsage.source)
+        .all()
+    )
+    source_tokens = {source: int(tokens or 0) for source, tokens in source_rows}
+    total_tokens = sum(
+        int(row.prompt_tokens or 0) + int(row.completion_tokens or 0) for row in today_rows
+    )
+    unattributed_tokens = max(
+        0, total_tokens - source_tokens.get("provider", 0) - source_tokens.get("estimated", 0)
+    )
     return {
         "today": {
+            "provider_tokens": source_tokens.get("provider", 0),
+            "estimated_tokens": source_tokens.get("estimated", 0),
+            "unattributed_tokens": unattributed_tokens,
             "requests": sum(row.requests or 0 for row in today_rows),
             "prompt_tokens": sum(row.prompt_tokens or 0 for row in today_rows),
             "completion_tokens": sum(row.completion_tokens or 0 for row in today_rows),
@@ -353,9 +374,7 @@ def admin_metrics(session: DbSession, _: AdminUser) -> dict:
         .group_by(RagRequestObservation.outcome)
         .all()
     }
-    request_count = int(
-        session.query(sa_func.count(RagRequestObservation.id)).scalar() or 0
-    )
+    request_count = int(session.query(sa_func.count(RagRequestObservation.id)).scalar() or 0)
     stage_rows = session.execute(
         sa_text(
             "SELECT s->>'stage' AS stage,"
@@ -386,9 +405,14 @@ def admin_metrics(session: DbSession, _: AdminUser) -> dict:
         .one()
     )
     request_latency = _metrics_histogram(
-        [("all", latency_row[0] or 0, (latency_row[1] or 0) / 1000.0, *[
-            (value / 1000.0) if value is not None else None for value in latency_row[2:]
-        ])]
+        [
+            (
+                "all",
+                latency_row[0] or 0,
+                (latency_row[1] or 0) / 1000.0,
+                *[(value / 1000.0) if value is not None else None for value in latency_row[2:]],
+            )
+        ]
     ).get("all", {})
     token_rows = (
         session.query(
@@ -408,12 +432,10 @@ def admin_metrics(session: DbSession, _: AdminUser) -> dict:
     }
     prompt_tokens = sum(entry["prompt"] for entry in tokens_by_model.values())
     completion_tokens = sum(entry["completion"] for entry in tokens_by_model.values())
-    supported, unsupported = (
-        session.query(
-            sa_func.sum(RagRequestObservation.claims_supported),
-            sa_func.sum(RagRequestObservation.claims_unsupported),
-        ).one()
-    )
+    supported, unsupported = session.query(
+        sa_func.sum(RagRequestObservation.claims_supported),
+        sa_func.sum(RagRequestObservation.claims_unsupported),
+    ).one()
     supported, unsupported = int(supported or 0), int(unsupported or 0)
     claim_total = supported + unsupported
     provider_rows = (
@@ -471,7 +493,42 @@ def admin_metrics(session: DbSession, _: AdminUser) -> dict:
         .group_by(RagRequestObservation.topic)
         .all()
     }
+    mode_rows = (
+        session.query(
+            RagRequestObservation.reasoning_mode,
+            sa_func.count(RagRequestObservation.id),
+            sa_func.avg(RagRequestObservation.time_to_first_status_ms),
+            sa_func.avg(RagRequestObservation.time_to_first_content_ms),
+            sa_func.avg(RagRequestObservation.request_latency_ms),
+            sa_func.sum(RagRequestObservation.prompt_tokens),
+            sa_func.sum(RagRequestObservation.completion_tokens),
+            sa_func.sum(sa_cast(RagRequestObservation.disconnected, sa_Integer)),
+            sa_func.sum(RagRequestObservation.retry_count),
+            sa_func.sum(sa_cast(RagRequestObservation.provider_failure, sa_Integer)),
+        )
+        .group_by(RagRequestObservation.reasoning_mode)
+        .all()
+    )
+    by_mode = {
+        str(mode): {
+            "requests": int(count),
+            "first_status_ms": float(first_status) if first_status is not None else None,
+            "first_content_ms": float(first_content) if first_content is not None else None,
+            "total_latency_ms": float(latency) if latency is not None else None,
+            "prompt_tokens": int(prompt or 0),
+            "completion_tokens": int(completion or 0),
+            "disconnects": int(disconnects or 0),
+            "disconnect_rate": int(disconnects or 0) / int(count) if count else 0,
+            "retries": int(retries or 0),
+            "provider_failures": int(failures or 0),
+        }
+        for (
+            mode, count, first_status, first_content, latency,
+            prompt, completion, disconnects, retries, failures,
+        ) in mode_rows
+    }
     return {
+        "by_mode": by_mode,
         "ragas_enabled": settings.ragas_enabled,
         "ragas_sample_rate": settings.ragas_sample_rate,
         "outcomes": outcomes,
@@ -911,7 +968,6 @@ def review_ingestion_build(
     }
 
 
-
 async def _read_upload_content(request: Request) -> bytes:
     """Bound buffering by actual streamed bytes, not the client's size claim."""
     declared_length = request.headers.get("content-length")
@@ -1098,9 +1154,7 @@ def audit_logs(
     response.headers["X-Total-Count"] = str(total)
     if page is not None:
         per_page = max(1, min(limit or 100, 500))
-        entries = list_audit_logs(
-            session, limit=per_page, offset=(page - 1) * per_page
-        )
+        entries = list_audit_logs(session, limit=per_page, offset=(page - 1) * per_page)
         return {"entries": entries, "total": total}
     return list_audit_logs(session, limit=limit, offset=offset)
 
@@ -1117,12 +1171,7 @@ def _prompt_payload(row: PromptVersion) -> dict:
 
 @router.get("/prompt-versions")
 def list_prompt_versions(session: DbSession, _: AdminUser) -> list[dict]:
-    rows = (
-        session.query(PromptVersion)
-        .order_by(PromptVersion.created_at.desc())
-        .limit(100)
-        .all()
-    )
+    rows = session.query(PromptVersion).order_by(PromptVersion.created_at.desc()).limit(100).all()
     return [_prompt_payload(row) for row in rows]
 
 

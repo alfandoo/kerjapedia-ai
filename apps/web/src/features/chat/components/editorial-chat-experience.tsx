@@ -5,7 +5,8 @@ import { readPreference, writePreference } from "@/lib/preference-cookie";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatComposer } from "./chat-composer";
-import type { ChatMessage } from "../types";
+import { PersonalizedControls } from "./personalized-controls";
+import type { ChatMessage, ReasoningMode, TokenUsageSnapshot, WorkProfile } from "../types";
 import { ChatWorkspaceShell } from "./chat-workspace-shell";
 import { ConversationThread } from "./conversation-thread";
 import { AlertTriangle } from "lucide-react";
@@ -13,8 +14,16 @@ import { SourcePanel } from "./source-panel";
 import { SourceSheet } from "./source-sheet";
 import { useConversationHistory } from "@/features/chat/use-conversation-history";
 import { useSettings } from "@/features/settings";
+import { useStoredSession } from "@/features/auth";
 import {
   askQuestionStream,
+  fetchWorkProfile,
+  saveWorkProfile,
+  deleteWorkProfile,
+  setPersonalizedMode,
+  DailyTokenQuotaError,
+  fetchTokenUsage,
+  claimGuestConversation,
   deleteConversation,
   fetchConversation,
   fetchConversations,
@@ -25,6 +34,8 @@ import type { Citation } from "@/features/chat/types";
 import type { TranslationKey } from "@/lib/translations";
 
 const SIDEBAR_STORAGE_KEY = "kerjapedia.chat.sidebar.v1";
+const REASONING_MODE_STORAGE_KEY = "kerjapedia.chat.reasoning-mode.v1";
+const REASONING_MODES = new Set<ReasoningMode>(["fast", "standard", "deep"]);
 
 const STREAM_STATUS_KEYS: Record<string, TranslationKey> = {
   analyzing_question: "chat.loading.analyzing",
@@ -47,7 +58,14 @@ export function EditorialChatExperience() {
     setHistoryLoading,
   } = useConversationHistory();
   const { t: translate } = useSettings();
+  const session = useStoredSession();
   const [question, setQuestion] = useState("");
+  const [reasoningMode, setReasoningMode] = useState<ReasoningMode>("standard");
+  const [personalizedMode, setPersonalizedModeState] = useState(false);
+  const [workProfile, setWorkProfile] = useState<WorkProfile | null>(null);
+  const [workProfileOwner, setWorkProfileOwner] = useState<string | null>(null);
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [citations, setCitations] = useState<Citation[]>([]);
@@ -60,11 +78,19 @@ export function EditorialChatExperience() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<TokenUsageSnapshot | null>(null);
+  const [usageStatus, setUsageStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [quotaBlocked, setQuotaBlocked] = useState(false);
+  const [quotaStoppedDuringProcessing, setQuotaStoppedDuringProcessing] = useState(false);
+  const [quotaResetAt, setQuotaResetAt] = useState<string | null>(null);
+  const [pendingClaimId, setPendingClaimId] = useState<string | null>(null);
+  const [claimErrorId, setClaimErrorId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, "helpful" | "not_helpful">>({});
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const conversationScrollRef = useRef<HTMLDivElement>(null);
   const conversationEndRef = useRef<HTMLDivElement>(null);
+  const openedFromUrlRef = useRef(false);
   const sourceTriggerRef = useRef<HTMLElement | null>(null);
   const streamingMessageRef = useRef<string | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -73,6 +99,37 @@ export function EditorialChatExperience() {
     setIsSourceSheetOpen(false);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, []);
+  const refreshUsage = useCallback(async () => {
+    setUsageStatus("loading");
+    try {
+      const current = await fetchTokenUsage();
+      setUsage(current);
+      setUsageStatus("ready");
+      if (current.remaining_tokens <= 0) setQuotaBlocked(true);
+    } catch {
+      setUsage(null);
+      setUsageStatus("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refreshUsage(), 0);
+    return () => window.clearTimeout(timer);
+  }, [refreshUsage]);
+
+  useEffect(() => {
+    const resetAt = quotaResetAt ?? usage?.reset_at;
+    if (!quotaBlocked || !resetAt) return;
+    const delay = Math.max(1000, new Date(resetAt).getTime() - Date.now() + 1000);
+    const timer = window.setTimeout(() => {
+      setQuotaBlocked(false);
+      setQuotaStoppedDuringProcessing(false);
+      setQuotaResetAt(null);
+      void refreshUsage();
+    }, Math.min(delay, 2_147_483_647));
+    return () => window.clearTimeout(timer);
+  }, [quotaBlocked, quotaResetAt, refreshUsage, usage?.reset_at]);
+
   const refreshHistory = useCallback(
     async (signal?: AbortSignal) => {
       setConversations(await fetchConversations(signal));
@@ -81,11 +138,112 @@ export function EditorialChatExperience() {
   );
 
   useEffect(() => {
+    if (!pendingClaimId || isLoading) return;
+    let active = true;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+    void claimGuestConversation(pendingClaimId, controller.signal)
+      .then((claimed) => {
+        if (!active) return;
+        setConversations((current) => [
+          claimed,
+          ...current.filter((item) => item.conversation_id !== claimed.conversation_id),
+        ]);
+        setClaimErrorId(null);
+        setPendingClaimId(null);
+        void refreshHistory().catch(() => {});
+        void refreshUsage();
+      })
+      .catch(() => {
+        if (!active) return;
+        setClaimErrorId(pendingClaimId);
+        setPendingClaimId(null);
+      })
+      .finally(() => window.clearTimeout(timeoutId));
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [pendingClaimId, isLoading, refreshHistory, refreshUsage, setConversations]);
+
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       setIsSidebarExpanded(readPreference(SIDEBAR_STORAGE_KEY) !== "collapsed");
+      const storedMode = readPreference(REASONING_MODE_STORAGE_KEY);
+      if (storedMode && REASONING_MODES.has(storedMode as ReasoningMode)) {
+        setReasoningMode(storedMode as ReasoningMode);
+      }
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const ownerId = session?.user.user_id;
+    if (!ownerId) return;
+    let active = true;
+    void fetchWorkProfile()
+      .then((profile) => {
+        if (active) {
+          setWorkProfile(profile);
+          setWorkProfileOwner(ownerId);
+        }
+      })
+      .catch(() => { if (active) setProfileError(translate("chat.personalized.loadError")); });
+    return () => { active = false; };
+  }, [session?.user.user_id, translate]);
+
+  async function handlePersonalizedToggle(enabled: boolean) {
+    if (!session || isLoading || profileBusy) return;
+    setProfileError(null);
+    if (!conversationId) {
+      setPersonalizedModeState(enabled);
+      return;
+    }
+    setProfileBusy(true);
+    setPersonalizedModeState(enabled);
+    try {
+      await setPersonalizedMode(conversationId, enabled);
+    } catch {
+      setPersonalizedModeState(!enabled);
+      setProfileError(translate("chat.personalized.modeError"));
+    } finally {
+      setProfileBusy(false);
+    }
+  }
+
+  async function handleWorkProfileSave(profile: WorkProfile) {
+    setProfileBusy(true);
+    setProfileError(null);
+    try {
+      setWorkProfile(await saveWorkProfile(profile));
+      setWorkProfileOwner(session?.user.user_id ?? null);
+    } catch {
+      setProfileError(translate("chat.personalized.saveError"));
+      throw new Error("Profile save failed");
+    } finally {
+      setProfileBusy(false);
+    }
+  }
+
+  async function handleWorkProfileDelete() {
+    setProfileBusy(true);
+    setProfileError(null);
+    try {
+      await deleteWorkProfile();
+      setWorkProfile({ province: null, employment_status: null, start_date: null, monthly_wage: null });
+      setWorkProfileOwner(session?.user.user_id ?? null);
+    } catch {
+      setProfileError(translate("chat.personalized.deleteError"));
+      throw new Error("Profile delete failed");
+    } finally {
+      setProfileBusy(false);
+    }
+  }
 
   const latestMessageContent = messages.at(-1)?.content ?? "";
 
@@ -130,50 +288,70 @@ export function EditorialChatExperience() {
     setActiveSourceMessageId(message.id);
     setSourceFeedbackError(null);
     setIsMobileSidebarOpen(false);
-    if (window.matchMedia("(max-width: 760px)").matches) {
+    if (window.matchMedia("(max-width: 1180px)").matches) {
       setIsSourceSheetOpen(true);
       setIsSourceDrawerOpen(false);
     } else {
       setIsSourceDrawerOpen(true);
     }
   }
-  async function handleConversationSelect(nextId: string) {
-    if (isLoading || nextId === conversationId) return;
-    setError(null);
-    setHistoryLoading(true);
-    try {
-      const detail = await fetchConversation(nextId);
-      const nextMessages = detail.messages.flatMap<ChatMessage>((message, index) => {
-        if (message.role !== "user" && message.role !== "assistant") return [];
-        return [
-          {
-            id: `${detail.conversation_id}-${index}`,
-            role: message.role,
-            content: message.content,
-            answer: message.metadata.answer,
-            createdAt: message.created_at,
-          },
-        ];
-      });
-      const latest = [...nextMessages].reverse().find((item) => item.answer)?.answer;
-      const latestMessageId = [...nextMessages].reverse().find((item) => item.answer)?.id ?? null;
-      shouldStickToBottomRef.current = true;
-      setConversationId(detail.conversation_id);
-      setMessages(nextMessages);
-      setCitations(latest?.citations ?? []);
-      setActiveSourceMessageId(latestMessageId);
-      setSourceFeedbackError(null);
-      setIsSourceSheetOpen(false);
-      setIsSourceDrawerOpen(false);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setHistoryLoading(false);
-    }
-  }
+  const handleConversationSelect = useCallback(
+    async (nextId: string) => {
+      if (isLoading || nextId === conversationId) return;
+      setError(null);
+      setHistoryLoading(true);
+      try {
+        const detail = await fetchConversation(nextId);
+        const nextMessages = detail.messages.flatMap<ChatMessage>((message, index) => {
+          if (message.role !== "user" && message.role !== "assistant") return [];
+          return [
+            {
+              id: `${detail.conversation_id}-${index}`,
+              role: message.role,
+              content: message.content,
+              answer: message.metadata.answer,
+              createdAt: message.created_at,
+            },
+          ];
+        });
+        const latest = [...nextMessages].reverse().find((item) => item.answer)?.answer;
+        const latestMessageId = [...nextMessages].reverse().find((item) => item.answer)?.id ?? null;
+        shouldStickToBottomRef.current = true;
+        setConversationId(detail.conversation_id);
+        setPersonalizedModeState(detail.personalized_mode ?? false);
+        setMessages(nextMessages);
+        setCitations(latest?.citations ?? []);
+        setActiveSourceMessageId(latestMessageId);
+        setSourceFeedbackError(null);
+        setIsSourceSheetOpen(false);
+        setIsSourceDrawerOpen(false);
+      } catch {
+        setError(translate("chat.error.generic"));
+      } finally {
+        setHistoryLoading(false);
+      }
+    },
+    [conversationId, isLoading, setHistoryLoading, translate]
+  );
+
+  useEffect(() => {
+    if (openedFromUrlRef.current) return;
+    const requestedId = new URLSearchParams(window.location.search).get("conversation");
+    if (!requestedId) return;
+    const timer = window.setTimeout(() => {
+      if (openedFromUrlRef.current) return;
+      openedFromUrlRef.current = true;
+      void handleConversationSelect(requestedId);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [handleConversationSelect]);
+
   function handleNewConversation() {
     if (isLoading) stopRequest();
+    setPendingClaimId(null);
+    setClaimErrorId(null);
     setConversationId(null);
+    setPersonalizedModeState(false);
     setMessages([]);
     setCitations([]);
     setActiveSourceMessageId(null);
@@ -209,19 +387,20 @@ export function EditorialChatExperience() {
   }
   async function handleSubmit(nextQuestion = question) {
     const trimmed = nextQuestion.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || isLoading || pendingClaimId || claimErrorId || quotaBlocked) return;
     setError(null);
     setQuestion("");
     setIsLoading(true);
     const controller = new AbortController();
     abortRef.current = controller;
+    const userMessageId = crypto.randomUUID();
     const assistantMessageId = crypto.randomUUID();
     streamingMessageRef.current = assistantMessageId;
     shouldStickToBottomRef.current = true;
     setMessages((current) => [
       ...current,
       {
-        id: crypto.randomUUID(),
+        id: userMessageId,
         role: "user",
         content: trimmed,
         createdAt: new Date().toISOString(),
@@ -236,27 +415,34 @@ export function EditorialChatExperience() {
       },
     ]);
     try {
-      const response = await askQuestionStream(trimmed, conversationId, controller.signal, {
-        onStart: setConversationId,
-        onThinking: (status) => {
-          const statusKey = STREAM_STATUS_KEYS[status] ?? "chat.loading.title";
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === assistantMessageId
-                ? { ...message, status: translate(statusKey) }
-                : message
-            )
-          );
+      const response = await askQuestionStream(
+        trimmed,
+        conversationId,
+        controller.signal,
+        {
+          onStart: setConversationId,
+          onThinking: (status) => {
+            const statusKey = STREAM_STATUS_KEYS[status] ?? "chat.loading.title";
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantMessageId
+                  ? { ...message, status: translate(statusKey) }
+                  : message
+              )
+            );
+          },
+          onDelta: (content) =>
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantMessageId
+                  ? { ...message, content, status: undefined }
+                  : message
+              )
+            ),
         },
-        onDelta: (content) =>
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === assistantMessageId
-                ? { ...message, content: message.content + content, status: undefined }
-                : message
-            )
-          ),
-      });
+        reasoningMode,
+        personalizedMode
+      );
       setConversationId(response.conversation_id);
       setCitations(response.answer.citations);
       setActiveSourceMessageId(assistantMessageId);
@@ -274,9 +460,26 @@ export function EditorialChatExperience() {
             : message
         )
       );
-      await refreshHistory();
+      void refreshHistory().catch(() => retryHistory());
+      void refreshUsage();
     } catch (err) {
-      if ((err as Error).name !== "AbortError") setError((err as Error).message);
+      if ((err as Error).name !== "AbortError" && !controller.signal.aborted) {
+        setMessages((current) =>
+          current.filter(
+            (message) => message.id !== userMessageId && message.id !== assistantMessageId
+          )
+        );
+        setQuestion(trimmed);
+        if (err instanceof DailyTokenQuotaError) {
+          setError(translate(session ? "chat.quota.userExceeded" : "chat.quota.guestExceeded"));
+          setQuotaBlocked(true);
+          setQuotaStoppedDuringProcessing(err.duringProcessing);
+          setQuotaResetAt(err.resetAt || null);
+          void refreshUsage();
+        } else {
+          setError(translate("chat.error.generic"));
+        }
+      }
     } finally {
       setIsLoading(false);
       abortRef.current = null;
@@ -371,6 +574,15 @@ export function EditorialChatExperience() {
       }}
       onConversationSelect={(id) => void handleConversationSelect(id)}
       onNewConversation={handleNewConversation}
+      onAuthenticated={() => {
+        setQuotaBlocked(false);
+        setQuotaStoppedDuringProcessing(false);
+        setQuotaResetAt(null);
+        void refreshUsage();
+        if (!conversationId) return;
+        setClaimErrorId(null);
+        setPendingClaimId(conversationId);
+      }}
       onConversationRename={handleConversationRename}
       onConversationDelete={handleConversationDelete}
     >
@@ -383,7 +595,7 @@ export function EditorialChatExperience() {
           ref={conversationScrollRef}
           className={`chat-scroll-region min-h-0 flex-1 overflow-y-auto overscroll-contain px-[clamp(24px,7vw,100px)] [scroll-padding-bottom:20px] [scrollbar-gutter:stable] max-[760px]:px-4 ${
             messages.length === 0
-              ? "flex flex-col py-5"
+              ? "flex flex-col py-4 max-[760px]:py-1"
               : "pb-[60px] pt-[36px] [@media(max-height:680px)]:min-[761px]:pt-5 max-[760px]:pb-[50px] max-[760px]:pt-[22px]"
           }`}
           aria-label={translate("chat.scrollRegion")}
@@ -392,17 +604,13 @@ export function EditorialChatExperience() {
         >
           {messages.length === 0 ? (
             <div className="mx-auto my-auto flex w-full max-w-[680px] shrink-0 flex-col items-center text-center">
-              <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-javanese/20 bg-teal-soft px-4 py-1.5 text-[11px] font-medium tracking-wide text-teal-strong">
-                <span className="size-1.5 rounded-full bg-javanese" />
-                {translate("chat.badge")}
-              </span>
-              <h1 className="font-display text-[clamp(28px,3.5vw,38px)] font-semibold leading-[1.12] tracking-[-0.03em] text-javanese-deep max-[760px]:text-[28px]">
+              <h1 className="font-display text-[clamp(28px,3.5vw,38px)] font-semibold leading-[1.12] tracking-[-0.03em] text-javanese-deep max-[760px]:text-[26px]">
                 {translate("chat.title")}
               </h1>
-              <p className="mb-8 mt-3 max-w-[420px] text-[13px] leading-[1.65] text-muted-text max-[760px]:mb-6 max-[760px]:mt-2.5">
+              <p className="mb-7 mt-3 max-w-[420px] text-[13px] leading-[1.65] text-muted-text max-[760px]:mb-4 max-[760px]:mt-2">
                 {translate("chat.subtitle")}
               </p>
-              <div className="grid w-full grid-cols-3 gap-3 max-[760px]:grid-cols-1 max-[760px]:gap-2.5">
+              <div className="grid w-full grid-cols-3 gap-3 max-[760px]:grid-cols-1 max-[760px]:gap-2">
                 {[
                   { text: translate("suggestion.thr"), tag: translate("category.pengupahan") },
                   { text: translate("suggestion.pkwt"), tag: translate("category.pkwt") },
@@ -412,12 +620,12 @@ export function EditorialChatExperience() {
                     key={item.text}
                     type="button"
                     onClick={() => void handleSubmit(item.text)}
-                    className="chat-suggestion group flex min-h-[90px] w-full flex-col justify-between rounded-xl border border-[#d8e8dc] bg-white px-4 py-3.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-javanese hover:border-javanese/40 hover:shadow-[0_2px_12px_rgba(22,128,63,0.1)] max-[760px]:min-h-[auto] max-[760px]:py-3"
+                    className="chat-suggestion group flex min-h-[90px] w-full flex-col justify-between rounded-xl border border-[#d8e8dc] bg-white px-4 py-3.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-javanese hover:border-javanese/40 hover:shadow-[0_2px_12px_rgba(22,128,63,0.1)] max-[760px]:min-h-[auto] max-[760px]:px-3.5 max-[760px]:py-2"
                   >
-                    <span className="mb-2 inline-flex self-start rounded-md bg-teal-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-strong">
+                    <span className="mb-2 inline-flex self-start rounded-md bg-teal-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-strong max-[760px]:mb-1">
                       {item.tag}
                     </span>
-                    <span className="text-[13px] leading-[1.55] text-foreground">{item.text}</span>
+                    <span className="text-[13px] leading-[1.55] text-foreground max-[760px]:text-[12px]">{item.text}</span>
                   </button>
                 ))}
               </div>
@@ -449,27 +657,154 @@ export function EditorialChatExperience() {
               </div>
             </div>
           ) : null}
-          {error ? (
+          {pendingClaimId ? (
             <div
-              className="mx-auto mb-5 flex max-w-[760px] items-start gap-2.5 rounded-lg border border-[#f0d6d2] bg-[#fef7f5] p-3 text-xs leading-[1.55] text-[#753328]"
+              className="mx-auto mb-4 max-w-[760px] rounded-lg border border-javanese/25 bg-teal-soft p-3 text-[13px] leading-relaxed text-javanese-deep"
+              role="status"
+              aria-live="polite"
+            >
+              {translate("chat.claim.saving")}
+            </div>
+          ) : null}
+          {claimErrorId ? (
+            <div
+              className="mx-auto mb-4 flex max-w-[760px] flex-wrap items-center gap-3 rounded-lg border border-amber/30 bg-amber-soft p-3 text-[13px] text-foreground"
+              role="alert"
+            >
+              <span className="min-w-0 flex-1">{translate("chat.claim.error")}</span>
+              <button
+                type="button"
+                className="min-h-11 rounded-lg bg-javanese px-3 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
+                onClick={() => {
+                  setPendingClaimId(claimErrorId);
+                  setClaimErrorId(null);
+                }}
+              >
+                {translate("chat.claim.retry")}
+              </button>
+            </div>
+          ) : null}
+          {(error || quotaBlocked) ? (
+            <div
+              className="mx-auto mb-5 flex max-w-[760px] flex-wrap items-center gap-2.5 rounded-lg border border-[#f0d6d2] bg-[#fef7f5] p-3 text-xs leading-[1.55] text-[#753328]"
               role="alert"
             >
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-              <span>{error}</span>
+              <span className="min-w-0 flex-1">
+                {quotaBlocked
+                  ? translate(
+                      session
+                        ? quotaStoppedDuringProcessing
+                          ? "chat.quota.userStopped"
+                          : "chat.quota.userExceeded"
+                        : quotaStoppedDuringProcessing
+                          ? "chat.quota.guestStopped"
+                          : "chat.quota.guestExceeded"
+                    )
+                  : error}
+              </span>
+              {question.trim() && !quotaBlocked ? (
+                <button
+                  type="button"
+                  className="min-h-11 rounded-lg border border-[#d9aaa1] px-3 font-semibold text-[#753328] transition hover:bg-[#fbe9e5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#753328]"
+                  onClick={() => void handleSubmit()}
+                >
+                  {translate("chat.error.retry")}
+                </button>
+              ) : null}
             </div>
           ) : null}
           <div ref={conversationEndRef} />
         </div>
+        {usage ? (
+          <div
+            className="relative z-10 mx-auto mb-2 w-full max-w-[800px] bg-background px-4 text-xs text-muted-text max-[760px]:px-3"
+            title={usage.estimated_tokens > 0 ? translate("chat.quota.estimated") : undefined}
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span>
+                <span className="font-semibold text-tinta">{translate("chat.quota.remaining")}:</span>{" "}
+                <span className="font-semibold tabular-nums text-tinta">
+                  {new Intl.NumberFormat("id-ID").format(usage.remaining_tokens)}
+                </span>{" "}
+                {translate("chat.quota.of")} {new Intl.NumberFormat("id-ID").format(usage.limit_tokens)} token
+                {usage.estimated_tokens > 0 ? (
+                  <span aria-label={translate("chat.quota.estimated")}> *</span>
+                ) : null}
+              </span>
+              <span className="shrink-0">{translate("chat.quota.reset")}</span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label={translate("chat.quota.label")}
+              aria-valuemin={0}
+              aria-valuemax={usage.limit_tokens}
+              aria-valuenow={Math.max(0, usage.limit_tokens - usage.remaining_tokens)}
+              className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#d8e8dc] dark:bg-white/15"
+            >
+              <div
+                className="h-full rounded-full bg-javanese transition-[width] dark:bg-[#84c99b]"
+                style={{
+                  width: `${usage.limit_tokens > 0
+                    ? Math.min(100, Math.max(0, (1 - usage.remaining_tokens / usage.limit_tokens) * 100))
+                    : 0}%`,
+                }}
+              />
+            </div>
+            {usage.remaining_tokens <= 0 ? (
+              <p className="mt-1 text-[#8a382d] dark:text-[#f0a99f]">{translate("chat.quota.empty")}</p>
+            ) : usage.remaining_tokens <= usage.limit_tokens * 0.1 ? (
+              <p className="mt-1 text-[#8a382d] dark:text-[#f0a99f]">{translate("chat.quota.low")}</p>
+            ) : null}
+          </div>
+        ) : (
+          <div
+            className="relative z-10 mx-auto mb-2 flex w-full max-w-[800px] items-center justify-between gap-3 bg-background px-4 text-xs text-muted-text max-[760px]:px-3"
+            role="status"
+            aria-live="polite"
+          >
+            <span>
+              {translate(usageStatus === "error" ? "chat.quota.unavailable" : "chat.quota.loading")}
+            </span>
+            {usageStatus === "error" ? (
+              <button
+                type="button"
+                className="min-h-9 rounded-lg px-2 font-semibold text-javanese underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
+                onClick={() => void refreshUsage()}
+              >
+                {translate("chat.quota.retry")}
+              </button>
+            ) : null}
+          </div>
+        )}
+        {session ? (
+          <PersonalizedControls
+            enabled={personalizedMode}
+            profile={workProfileOwner === session.user.user_id ? workProfile : null}
+            busy={profileBusy || isLoading}
+            error={profileError}
+            onToggle={(enabled) => void handlePersonalizedToggle(enabled)}
+            onSave={handleWorkProfileSave}
+            onDelete={handleWorkProfileDelete}
+          />
+        ) : null}
         <ChatComposer
           question={question}
           loading={isLoading}
+          disabled={Boolean(pendingClaimId || claimErrorId)}
+          quotaBlocked={quotaBlocked}
+          reasoningMode={reasoningMode}
           inputRef={inputRef}
           onQuestionChange={setQuestion}
+          onReasoningModeChange={(mode) => {
+            setReasoningMode(mode);
+            writePreference(REASONING_MODE_STORAGE_KEY, mode);
+          }}
           onSubmit={() => void handleSubmit()}
           onCancel={stopRequest}
         />
         {messages.length === 0 ? (
-          <p className="relative z-[3] mx-auto mb-2 mt-[-6px] max-w-[680px] px-6 text-center text-xs leading-relaxed text-muted-foreground max-[760px]:px-[18px]">
+          <p className="relative z-[3] mx-auto mb-2 max-w-[680px] px-6 text-center text-xs leading-relaxed text-muted-foreground max-[760px]:px-[18px]">
             {translate("footer.disclaimer")} {translate("footer.agreement")}{" "}
             <Link
               href="/legal/terms"

@@ -12,7 +12,7 @@ export function ChatAppHeader() {
   const { t: translate } = useSettings();
 
   const navigation = [
-    { href: "/chat", label: translate("chat.badge") },
+    { href: "/chat", label: translate("sidebar.chats") },
     { href: "/search", label: translate("sidebar.searchRegulations") },
     ...(session?.user.roles.includes("admin")
       ? [{ href: "/admin/dashboard", label: "Admin" }]

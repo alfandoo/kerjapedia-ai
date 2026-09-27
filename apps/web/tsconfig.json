@@ -54,7 +54,11 @@
     ".next-pdf-source-qa/types/**/*.ts",
     ".next-pdf-source-qa/dev/types/**/*.ts",
     ".next-pdf-page-qa/types/**/*.ts",
-    ".next-pdf-page-qa/dev/types/**/*.ts"
+    ".next-pdf-page-qa/dev/types/**/*.ts",
+    ".next-integration-dev/types/**/*.ts",
+    ".next-integration-dev/dev/types/**/*.ts",
+    ".next-integration-build/types/**/*.ts",
+    ".next-integration-build/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

@@ -22,6 +22,8 @@ from app.api.schemas import (
     RefreshRequest,
     RegisterRequest,
     UserResponse,
+    WorkProfileResponse,
+    WorkProfileUpdateRequest,
 )
 from app.api.state import UserRecord
 from app.core.config import settings
@@ -32,6 +34,7 @@ from app.models.business import (
     Message,
     PendingRegistration,
     UserProfile,
+    WorkProfile,
 )
 from app.services import supabase as supabase_service
 from app.services.mailer import send_verification_email
@@ -198,9 +201,7 @@ def _sync_user_profile(
         except Exception:
             import logging as _logging
 
-            _logging.getLogger("kerjapedia.auth").debug(
-                "user_roles sync skipped", exc_info=True
-            )
+            _logging.getLogger("kerjapedia.auth").debug("user_roles sync skipped", exc_info=True)
         session.commit()
     return UserRecord(user_id=uid, email=email, name=name, roles=resolved_roles)
 
@@ -575,23 +576,22 @@ def delete_account(user: CurrentUser, session: DbSession) -> dict[str, str]:
     """Permanently delete the authenticated user's account and personal data."""
     try:
         # Remove conversations and their messages first (messages reference conversations).
-        owned = (
-            session.query(Conversation)
-            .filter(Conversation.user_id == user.user_id)
-            .all()
-        )
+        owned = session.query(Conversation).filter(Conversation.user_id == user.user_id).all()
         owned_ids = [item.conversation_id for item in owned]
         if owned_ids:
-            session.query(Message).filter(
-                Message.conversation_id.in_(owned_ids)
-            ).delete(synchronize_session=False)
-            session.query(Conversation).filter(
-                Conversation.conversation_id.in_(owned_ids)
-            ).delete(synchronize_session=False)
+            session.query(Message).filter(Message.conversation_id.in_(owned_ids)).delete(
+                synchronize_session=False
+            )
+            session.query(Conversation).filter(Conversation.conversation_id.in_(owned_ids)).delete(
+                synchronize_session=False
+            )
         # Anonymize feedback rows (no FK, keep aggregate value without identity).
         session.query(Feedback).filter(Feedback.user_id == user.user_id).update(
             {Feedback.user_id: None}, synchronize_session=False
         )
+        work_profile = session.get(WorkProfile, user.user_id)
+        if work_profile is not None:
+            session.delete(work_profile)
         profile = session.get(UserProfile, user.user_id)
         if profile is not None:
             session.delete(profile)
@@ -641,3 +641,44 @@ def update_profile(payload: ProfileUpdateRequest, user: CurrentUser, session: Db
         session.rollback()
         raise HTTPException(status_code=503, detail="Profil belum dapat disimpan.") from exc
     return UserResponse(user_id=user.user_id, email=user.email, name=payload.name, roles=user.roles)
+
+
+@router.get("/work-profile", response_model=WorkProfileResponse)
+def get_work_profile(user: CurrentUser, session: DbSession) -> WorkProfileResponse:
+    row = session.get(WorkProfile, user.user_id)
+    if row is None:
+        return WorkProfileResponse()
+    return WorkProfileResponse(
+        province=row.province,
+        employment_status=row.employment_status,
+        start_date=row.start_date.date() if row.start_date else None,
+        monthly_wage=row.monthly_wage,
+    )
+
+
+@router.put("/work-profile", response_model=WorkProfileResponse)
+def put_work_profile(
+    payload: WorkProfileUpdateRequest, user: CurrentUser, session: DbSession
+) -> WorkProfileResponse:
+    row = session.get(WorkProfile, user.user_id)
+    if row is None:
+        row = WorkProfile(user_id=user.user_id)
+        session.add(row)
+    row.province = payload.province
+    row.employment_status = payload.employment_status
+    row.start_date = (
+        datetime.combine(payload.start_date, datetime.min.time(), tzinfo=UTC)
+        if payload.start_date
+        else None
+    )
+    row.monthly_wage = payload.monthly_wage
+    session.commit()
+    return WorkProfileResponse(**payload.model_dump())
+
+
+@router.delete("/work-profile", status_code=204)
+def delete_work_profile(user: CurrentUser, session: DbSession) -> None:
+    row = session.get(WorkProfile, user.user_id)
+    if row is not None:
+        session.delete(row)
+        session.commit()

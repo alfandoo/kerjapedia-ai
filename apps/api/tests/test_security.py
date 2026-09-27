@@ -61,7 +61,7 @@ def test_production_rejects_default_admin_password() -> None:
 
 
 def test_production_requires_provider_secrets() -> None:
-    with pytest.raises(ValidationError, match="UPSTASH_VECTOR_TOKEN"):
+    with pytest.raises(ValidationError, match="UPSTASH_VECTOR_REST_TOKEN"):
         Settings(**_production_payload(upstash_vector_token=""))
 
 
@@ -485,4 +485,19 @@ def test_memory_bounds_long_current_question_without_changing_original() -> None
 
     assert memory.original_question == question
     assert len(memory.retrieval_query) <= 120
+    assert memory.used is False
+
+
+def test_memory_asks_for_clarification_on_ambiguous_prior_topic() -> None:
+    messages = [
+        *_completed_turn(
+            "Apa aturan PKWT?", document_id="PP-35-2021",
+            short_title="PP 35/2021", article="Pasal 15",
+        ),
+        *_completed_turn(
+            "Kapan THR wajib dibayar?", document_id="PERMENAKER-6-2016",
+            short_title="Permenaker 6/2016", article="Pasal 5",
+        ),
+    ]
+    memory = build_memory_context("Bagaimana yang itu?", messages)
     assert memory.used is False

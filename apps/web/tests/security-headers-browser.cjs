@@ -10,7 +10,7 @@ const base = "http://127.0.0.1:3103";
     {
       env: {
         ...process.env,
-        NEXT_DIST_DIR: ".next-security-headers",
+        NEXT_DIST_DIR: process.env.TEST_NEXT_DIST_DIR || ".next",
         API_INTERNAL_URL: "http://127.0.0.1:1",
         APP_ORIGIN: base,
       },
@@ -56,14 +56,15 @@ const base = "http://127.0.0.1:3103";
     for (const path of ["/", "/login-admin", "/admin/dashboard", "/search", "/legal/privacy"]) {
       const response = await page.goto(base + path, { waitUntil: "networkidle" });
       assert.equal(response.status(), 200);
-      const headers = response.headers();
+      const documentResponse = await fetch(base + path);
+      const headers = Object.fromEntries(documentResponse.headers.entries());
       assert.equal(headers["x-frame-options"], "DENY");
       assert.equal(headers["x-content-type-options"], "nosniff");
       const nonce = headers["content-security-policy"].match(/nonce-([^']+)/)[1];
       nonces.push(nonce);
       // Check parser-inserted server scripts. Next may subsequently load trusted
       // dynamic chunks without nonce attributes under strict-dynamic.
-      const html = await response.text();
+      const html = await documentResponse.text();
       const scripts = html.match(/<script\b[^>]*>/g) ?? [];
       assert.ok(
         scripts.length > 0 && scripts.every((tag) => tag.includes(`nonce="${nonce}"`)),

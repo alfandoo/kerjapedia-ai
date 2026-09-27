@@ -56,6 +56,18 @@ class UserProfile(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class WorkProfile(Base):
+    __tablename__ = "work_profiles"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("user_profiles.user_id", ondelete="CASCADE"), primary_key=True
+    )
+    province: Mapped[str | None] = mapped_column(String(80))
+    employment_status: Mapped[str | None] = mapped_column(String(20))
+    start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    monthly_wage: Mapped[int | None] = mapped_column(Integer)
+
+
 class Role(Base):
     """Known RBAC role names; `user_roles` carries the assignments."""
 
@@ -70,15 +82,9 @@ class UserRole(Base):
 
     __tablename__ = "user_roles"
 
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("user_profiles.user_id"), primary_key=True
-    )
-    role_name: Mapped[str] = mapped_column(
-        ForeignKey("roles.name"), primary_key=True
-    )
-    assigned_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow
-    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("user_profiles.user_id"), primary_key=True)
+    role_name: Mapped[str] = mapped_column(ForeignKey("roles.name"), primary_key=True)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     assigned_by: Mapped[str] = mapped_column(String(160), nullable=False, default="system")
 
 
@@ -139,6 +145,8 @@ class Conversation(Base):
     user_id: Mapped[str | None] = mapped_column(ForeignKey("user_profiles.user_id"), nullable=True)
     guest_id: Mapped[str | None] = mapped_column(String(80))
     title: Mapped[str] = mapped_column(Text, nullable=False)
+    memory_summary: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    personalized_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -293,6 +301,30 @@ class DailyUsage(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ChatTokenUsage(Base):
+    """One metered chat turn; pending rows reserve capacity across workers."""
+
+    __tablename__ = "chat_token_usage"
+    __table_args__ = (
+        Index("ix_chat_token_usage_identity_day", "identity_key", "usage_date"),
+        Index("ix_chat_token_usage_conversation", "conversation_id"),
+    )
+
+    turn_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    identity_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    usage_date: Mapped[date] = mapped_column(Date, nullable=False)
+    prompt_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    reserved_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    estimated_prompt_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    provider_started: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class RagRequestObservation(Base):
     """One durable row per completed chat turn for the observability page."""
 
@@ -301,6 +333,13 @@ class RagRequestObservation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     outcome: Mapped[str] = mapped_column(String(40), nullable=False, default="unknown")
+    turn_id: Mapped[str | None] = mapped_column(String(120), nullable=True, unique=True)
+    reasoning_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="standard")
+    time_to_first_status_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    time_to_first_content_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    disconnected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    provider_failure: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     request_latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     prompt_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
@@ -335,9 +374,7 @@ class HttpRequestBucket(Base):
     count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     error_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     sum_latency_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    latency_histogram: Mapped[dict[str, int]] = mapped_column(
-        JSONB, nullable=False, default=dict
-    )
+    latency_histogram: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False, default=dict)
 
 
 class DependencyProbe(Base):

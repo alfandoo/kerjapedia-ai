@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from threading import Lock
+from typing import Literal
 
 from app.core.config import Settings
 from app.services.answering.generator import AnswerGenerator
@@ -13,6 +14,13 @@ from app.services.retrieval.upstash_vector_store import UpstashVectorConfig, Ups
 _provider_lock = Lock()
 _embedding_cache: dict[tuple, EmbeddingProvider] = {}
 _answer_cache: dict[tuple, AnswerGenerator] = {}
+
+ReasoningMode = Literal["fast", "standard", "deep"]
+_REASONING_EFFORT: dict[ReasoningMode, str] = {
+    "fast": "low",
+    "standard": "medium",
+    "deep": "high",
+}
 
 
 def embedding_provider_from_settings(
@@ -51,9 +59,7 @@ def upstash_vector_store_from_settings(
         tuple(
             sorted(
                 (k, tuple(v))
-                for k, v in (
-                    relationship_index.superseded_by if relationship_index else {}
-                ).items()
+                for k, v in (relationship_index.superseded_by if relationship_index else {}).items()
             )
         ),
     )
@@ -92,10 +98,14 @@ def upstash_vector_store_from_settings(
 def answer_generator_from_settings(
     settings: Settings,
     provider_name: str | None = None,
+    *,
+    reasoning_mode: ReasoningMode = "standard",
 ) -> AnswerGenerator:
     llm_provider = provider_name or settings.llm_provider
+    reasoning_effort = _REASONING_EFFORT[reasoning_mode]
     key = (
         llm_provider,
+        reasoning_mode,
         settings.openrouter_model,
         settings.openrouter_timeout_seconds,
         settings.openrouter_max_retries,
@@ -139,6 +149,7 @@ def answer_generator_from_settings(
             context_model_window=settings.context_model_window,
             context_reserved_output_tokens=settings.context_reserved_output_tokens,
             context_safety_margin_tokens=settings.context_safety_margin_tokens,
+            reasoning_effort=reasoning_effort,
         )
     elif llm_provider == "groq":
         if not settings.groq_api_key:
@@ -157,6 +168,7 @@ def answer_generator_from_settings(
             context_model_window=settings.context_model_window,
             context_reserved_output_tokens=settings.context_reserved_output_tokens,
             context_safety_margin_tokens=settings.context_safety_margin_tokens,
+            reasoning_effort=reasoning_effort,
         )
     elif llm_provider == "local":
         generator = AnswerGenerator(

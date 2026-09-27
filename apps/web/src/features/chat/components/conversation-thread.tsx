@@ -38,6 +38,14 @@ const WARNING_LABEL_KEYS: Record<string, TranslationKey> = {
 
 const LEGACY_FALLBACK_WARNING = "groq_answer_fallback_used";
 
+function citationStatusLabel(
+  status: string,
+  translate: (key: TranslationKey) => string
+): string | null {
+  if (status === "active") return translate("source.statusActive");
+  if (status === "needs_verification") return translate("source.statusNeedsVerification");
+  return null;
+}
 function formatMessageTime(value: string, language: "id" | "en") {
   return new Intl.DateTimeFormat(language === "id" ? "id-ID" : "en-US", {
     hour: "2-digit",
@@ -126,7 +134,7 @@ const AnswerContent = memo(function AnswerContent({
   return (
     <div
       lang={lang}
-      className="mb-2 mt-1 text-pretty text-[15px] leading-[26px] text-foreground [&_strong]:font-semibold [&_strong]:text-foreground"
+      className="editorial-answer-content mb-2 mt-1 min-w-0 break-words text-[15px] leading-[1.7] text-foreground [&_strong]:font-semibold [&_strong]:text-foreground"
     >
       {blocks.map((block, index) =>
         block.kind === "list" ? (
@@ -154,10 +162,7 @@ const AnswerContent = memo(function AnswerContent({
             </ul>
           )
         ) : (
-          <p
-            className="mb-2.5 max-w-[72ch] break-words text-justify hyphens-auto last:mb-0"
-            key={`p-${index}`}
-          >
+          <p className="mb-2.5 max-w-[72ch] break-words text-left last:mb-0" key={`p-${index}`}>
             {inlineRendered(block.text)}
           </p>
         )
@@ -246,7 +251,7 @@ export function ConversationThread({
               className="mb-5 flex flex-col items-end pl-[68px] max-[760px]:pl-0"
               key={message.id}
             >
-              <p className="user-message-bubble max-w-[min(82%,560px)] rounded-[18px_18px_4px_18px] border border-transparent bg-javanese px-4 py-[11px] text-[13px] leading-relaxed text-white">
+              <p className="user-message-bubble max-w-[min(88%,560px)] break-words rounded-[18px_18px_4px_18px] border border-transparent bg-javanese px-4 py-[11px] text-[14px] leading-relaxed text-white max-[360px]:max-w-[94%]">
                 {message.content}
               </p>
               <div className="mt-1 flex min-h-[28px] items-center justify-end gap-1">
@@ -314,6 +319,23 @@ export function ConversationThread({
                   streaming={Boolean(message.streaming)}
                 />
               )}
+              {message.answer?.citations[0] ? (
+                <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] leading-5 text-muted-foreground">
+                  <span>{translate("answer.basedOn")}</span>
+                  <span className="font-semibold text-foreground">
+                    {message.answer.citations[0].short_title ||
+                      message.answer.citations[0].document_title}
+                  </span>
+                  {message.answer.citations[0].article ? (
+                    <span>· {message.answer.citations[0].article}</span>
+                  ) : null}
+                  {citationStatusLabel(message.answer.citations[0].legal_status, translate) ? (
+                    <span>
+                      · {citationStatusLabel(message.answer.citations[0].legal_status, translate)}
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
               {message.answer?.citations.length ? (
                 <button
                   className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-transparent bg-javanese px-3 text-[11px] font-semibold text-white transition hover:bg-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
@@ -321,7 +343,8 @@ export function ConversationThread({
                   onClick={() => onShowSources(message)}
                 >
                   <FileText className="size-[16px]" />
-                  {message.answer.citations.length} {translate("answer.officialSources")}
+                  {translate("answer.viewSources")} · {message.answer.citations.length}{" "}
+                  {translate("answer.officialSources")}
                   <span aria-hidden="true" className="text-[10px]">
                     →
                   </span>

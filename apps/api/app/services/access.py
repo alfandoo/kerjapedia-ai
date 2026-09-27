@@ -105,7 +105,7 @@ def ensure_governance_seeds(session: Session) -> dict[str, int]:
                     version_id=PROMPT_VERSION_ID,
                     system_prompt=SYSTEM_PROMPT,
                     user_template=USER_TEMPLATE,
-                    status="active" if active is None else "retired",
+                    status="active" if active is None else "draft",
                     created_by="startup-seed",
                     activated_at=now_utc() if active is None else None,
                 )

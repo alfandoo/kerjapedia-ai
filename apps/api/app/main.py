@@ -35,9 +35,7 @@ class _AppState:
 
 state = _AppState()
 
-rate_limiter = RateLimiter(
-    settings.rate_limit_per_minute, redis_url=settings.redis_url
-)
+rate_limiter = RateLimiter(settings.rate_limit_per_minute, redis_url=settings.redis_url)
 
 
 @asynccontextmanager
@@ -186,6 +184,10 @@ async def rate_limit_and_log(request: Request, call_next):
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Trace-ID"] = trace_id
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         return response
     headers = {key.lower(): value for key, value in request.headers.items()}
     peer_ip = request.client.host if request.client else "unknown"
@@ -197,9 +199,7 @@ async def rate_limit_and_log(request: Request, call_next):
     if not decision.allowed:
         latency_ms = int((time.perf_counter() - started_at) * 1000)
         try:
-            await asyncio.to_thread(
-                sysmon.record_rate_limited, route=route_label
-            )
+            await asyncio.to_thread(sysmon.record_rate_limited, route=route_label)
             await asyncio.to_thread(
                 sysmon.persist_request_observation,
                 route=route_label,

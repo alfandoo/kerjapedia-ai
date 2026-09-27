@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import time
 from dataclasses import dataclass, replace
+from types import SimpleNamespace
 from typing import Any
 
 from app.services.answering.citations import (
@@ -24,6 +26,7 @@ from app.services.answering.generator import (
 )
 from app.services.answering.guardrails import evaluate_context_guardrail, redact_context_pii
 from app.services.answering.prompts import render_user_prompt_with_budget
+from app.services.answering.provider_cancellation import current_provider_scope
 from app.services.answering.schemas import (
     AnswerResponse,
     Citation,
@@ -32,7 +35,7 @@ from app.services.answering.schemas import (
     RelatedDocument,
 )
 from app.services.retrieval.schemas import RankedChunk, RetrievalResponse
-from app.services.retrieval.token_budget import TokenBudget
+from app.services.retrieval.token_budget import TokenBudget, count_tokens
 
 TEMPORARILY_UNAVAILABLE_ID = (
     "Maaf, jawaban terverifikasi belum dapat disusun saat ini. Silakan coba lagi "
@@ -69,6 +72,45 @@ EXTRACTIVE_INTRO_EN = "Here is an automated summary of the official sources foun
 _EXTRACTIVE_MAX_SENTENCES = 2
 _EXTRACTIVE_MAX_CHARS = 600
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+_ANSWER_RESPONSE_FORMAT: dict[str, Any] = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "grounded_answer",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "answer": {"type": "string"},
+                "cited_chunk_ids": {"type": "array", "items": {"type": "string"}},
+                "claims": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "text": {"type": "string"},
+                            "cited_chunk_ids": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["text", "cited_chunk_ids"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["answer", "cited_chunk_ids", "claims"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
+def _is_response_format_rejected(exc: Exception) -> bool:
+    if _provider_status_code(exc) not in (400, 422):
+        return False
+    detail = str(exc).lower()
+    return any(
+        term in detail for term in ("response_format", "json_schema", "schema", "unsupported")
+    )
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -79,6 +121,10 @@ class _VerifiedSubset:
     related_documents: list[RelatedDocument]
     claims: list[GroundedClaim]
     verifier_usage: dict[str, int]
+
+
+class ProcessingQuotaExhausted(Exception):
+    """A provider stream reached its safe per-turn token budget."""
 
 
 class AnswerValidationError(ValueError):
@@ -185,6 +231,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         transient_max_retries: int = 2,
         transient_backoff_seconds: float = 2.0,
         fallback_models: tuple[str, ...] | list[str] = (),
+        reasoning_effort: str = "medium",
     ) -> None:
         super().__init__(
             max_citations=max_citations,
@@ -207,6 +254,10 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         self.fallback_models = tuple(
             model.strip() for model in fallback_models if model and model.strip()
         )
+        self.reasoning_effort = reasoning_effort
+        self.personalized_context = ""
+        self.token_budget: int | None = None
+        self._quota_spent = 0
 
     def generate(
         self,
@@ -306,6 +357,8 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                     },
                     claims=claims,
                 )
+            except ProcessingQuotaExhausted:
+                raise
             except AnswerValidationError as exc:
                 failure_category = "validation_failure"
                 validation_issues = [str(exc)[:400]]
@@ -314,7 +367,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 candidate = (exc.candidate_answer or "").strip()
                 if candidate and candidate not in salvage_candidates:
                     salvage_candidates.append(candidate[:_SALVAGE_MAX_CHARS])
-                    del salvage_candidates[: -_SALVAGE_MAX_CANDIDATES]
+                    del salvage_candidates[:-_SALVAGE_MAX_CANDIDATES]
                 validation_failures += 1
                 if validation_failures >= 2:
                     break
@@ -419,9 +472,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
                 disclaimer=(DISCLAIMER_ID if _detect_language(query) == "id" else DISCLAIMER_EN),
                 prompt_version_id=self.prompt_template.prompt_version_id,
                 retrieved_chunk_ids=retrieved_chunk_ids,
-                warnings=list(
-                    dict.fromkeys([*retrieval.warnings, SALVAGE_REPAIR_WARNING])
-                ),
+                warnings=list(dict.fromkeys([*retrieval.warnings, SALVAGE_REPAIR_WARNING])),
                 debug={
                     "llm_provider": self.provider_label,
                     "llm_model": self.model_name,
@@ -489,9 +540,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             raise AnswerValidationError("answer is empty")
         raw_claims = _claims_from_payload(payload)
         if not raw_claims:
-            raise AnswerValidationError(
-                "structured claims are missing", candidate_answer=answer
-            )
+            raise AnswerValidationError("structured claims are missing", candidate_answer=answer)
         try:
             cited_chunk_ids = _resolved_cited_chunk_ids(
                 payload,
@@ -504,9 +553,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         cited_results = [item for item in selected if item.document.chunk_id in cited_ids]
         citations = build_citations(cited_results)
         if not citations:
-            raise AnswerValidationError(
-                "no valid citations remain", candidate_answer=answer
-            )
+            raise AnswerValidationError("no valid citations remain", candidate_answer=answer)
         claims, verifier_usage = self._verify_claims(query, raw_claims, citations)
         issues: list[str] = []
         if not claims:
@@ -597,9 +644,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             return None
         kept = [claim for claim in checked if claim.supported]
         cited_ids = {chunk_id for claim in kept for chunk_id in claim.cited_chunk_ids}
-        cited_results = [
-            item for item in selected if item.document.chunk_id in cited_ids
-        ]
+        cited_results = [item for item in selected if item.document.chunk_id in cited_ids]
         subset_citations = build_citations(cited_results)
         if not subset_citations:
             return None
@@ -678,9 +723,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             disclaimer=(DISCLAIMER_ID if lang == "id" else DISCLAIMER_EN),
             prompt_version_id=self.prompt_template.prompt_version_id,
             retrieved_chunk_ids=retrieved_chunk_ids,
-            warnings=list(
-                dict.fromkeys([*retrieval.warnings, EXTRACTIVE_FALLBACK_WARNING])
-            ),
+            warnings=list(dict.fromkeys([*retrieval.warnings, EXTRACTIVE_FALLBACK_WARNING])),
             debug={
                 "llm_provider": self.provider_label,
                 "llm_model": self.model_name,
@@ -779,9 +822,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
     ) -> dict[str, Any]:
         lang = _detect_language(query)
         # Filter out context chunks that contain embedded prompt-injection attempts.
-        context_guardrail = evaluate_context_guardrail(
-            [item.document for item in selected]
-        )
+        context_guardrail = evaluate_context_guardrail([item.document for item in selected])
         if context_guardrail.flagged_chunk_ids:
             logger.warning(
                 f"{self.provider_label}_context_injection_flagged chunk_ids=%s",
@@ -802,26 +843,21 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             else:
                 redacted_selected.append(item)
         selected = redacted_selected
-        if lang == "id":
-            lang_instruction = (
-                "Tulis answer dalam bahasa Indonesia. Mulai langsung dari inti jawaban tanpa "
-                "pembuka generik. Pertanyaan sederhana dijawab dalam 2-5 kalimat; pertanyaan "
-                "kompleks memakai 2-4 paragraf atau maksimal 4 bullet. Sintesis dengan bahasa "
-                "sendiri dan jangan salin chunk mentah atau judul BAB/Bagian tanpa penjelasan. "
-                "Namun untuk istilah operasional (pihak, kewajiban, angka, jangka waktu, syarat) "
-                "pakai kata yang sama seperti potongan sumber agar sitasi dapat diverifikasi. "
-                "Tanpa heading, tabel, blok kode, atau daftar sumber."
+        lang_instruction = (
+            "Write answer in English." if lang == "en" else "Tulis answer dalam bahasa Indonesia."
+        )
+        contract_parts = [
+            "Return valid JSON only with answer, cited_chunk_ids, and claims fields.",
+            "Each claim needs text and cited_chunk_ids. Output raw JSON without markdown.",
+            "cited_chunk_ids must use only these chunks: " + ", ".join(retrieved_chunk_ids),
+            lang_instruction,
+        ]
+        if validation_issues:
+            contract_parts.append(
+                "The previous response failed validation. Return a corrected complete "
+                "response that fixes these issues: " + "; ".join(validation_issues)
             )
-        else:
-            lang_instruction = (
-                "Write the answer in clear English. Start directly with the answer and avoid "
-                "generic introductions. Use 2-5 sentences for a simple question; use 2-4 "
-                "paragraphs or at most 4 bullets for a complex one. Synthesize in your own "
-                "words and do not copy raw chunks or unexplained section headings. "
-                "But keep the source chunks' operative wording for parties, obligations, "
-                "amounts, time periods, and conditions so citations stay verifiable. No headings, "
-                "tables, code blocks, or source lists."
-            )
+        contract_text = "\n\n".join(contract_parts)
         budget = TokenBudget(
             model_window=self.context_model_window,
             reserved_output_tokens=self.context_reserved_output_tokens,
@@ -834,42 +870,14 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             budget=budget,
             max_chunk_chars=self.max_context_chunk_chars,
             history=history,
+            template=self.prompt_template,
+            additional_prompt_tokens=count_tokens(contract_text),
+            personalized_context=self.personalized_context,
         )
-        user_prompt = "\n\n".join(
-            [
-                rendered_prompt,
-                "Return valid JSON only in this format:",
-                (
-                    '{"answer":"...","cited_chunk_ids":["..."],'
-                    '"claims":[{"text":"...","cited_chunk_ids":["..."]}]}'
-                ),
-                "Output raw JSON only. Do not wrap in markdown fences like ```json, "
-                "do not add explanations before or after the JSON.",
-                "cited_chunk_ids must use only these chunks: " + ", ".join(retrieved_chunk_ids),
-                (
-                    f"{lang_instruction}\n"
-                    "Do NOT write chunk IDs, citation IDs, reference tags like [chunk-id], "
-                    "or source lists inside the answer body; sources are displayed "
-                    "separately by the app."
-                ),
-                (
-                    "Write the answer as short sentences, one verifiable fact per "
-                    "sentence. Every claims[].text must copy one such sentence "
-                    "from answer verbatim, so a compound sentence would sink its "
-                    "whole claim when only one detail is citable. Together the "
-                    "claims must cover every legal assertion. Each claim must "
-                    "cite only chunks that support the entire sentence. State "
-                    "calculations with the source's literal numbers and formula "
-                    "(e.g. 6/12 x 1 month wage), never a bare computed result."
-                ),
-                (
-                    "The previous response failed validation. Return a corrected complete "
-                    "response that fixes these issues: " + "; ".join(validation_issues)
-                    if validation_issues
-                    else ""
-                ),
-            ]
-        )
+        user_prompt = "\n\n".join((rendered_prompt, contract_text))
+        token_usage["total_prompt_tokens"] = count_tokens(
+            self.prompt_template.system_prompt
+        ) + count_tokens(user_prompt)
         completion = self._create_completion(
             model=self.model_name,
             messages=[
@@ -956,6 +964,7 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             ],
             temperature=0,
             max_tokens=600,
+            output_kind="verifier",
         )
         try:
             payload = _parse_json_object(completion.choices[0].message.content)
@@ -1006,17 +1015,20 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         is tried automatically. Omitted entirely when unconfigured so the
         request shape stays unchanged.
         """
-        if not self.fallback_models:
-            return {}
-        return {"extra_body": {"models": list(self.fallback_models)}}
+        extra_body: dict[str, Any] = {
+            "reasoning": {
+                "effort": self.reasoning_effort,
+                "exclude": True,
+            }
+        }
+        if self.fallback_models:
+            extra_body["models"] = list(self.fallback_models)
+        return {"extra_body": extra_body}
 
-    def _response_formats_to_try(self) -> list[dict[str, str] | None]:
-        """Response formats attempted in order for one completion.
-
-        ``None`` means plain mode (no ``response_format``): the shared
-        client-side parser still extracts the first balanced JSON object.
-        """
-        return [{"type": "json_object"}]
+    def _response_formats_to_try(self, output_kind: str = "answer") -> list[dict[str, Any] | None]:
+        if output_kind == "verifier":
+            return [{"type": "json_object"}]
+        return [_ANSWER_RESPONSE_FORMAT, {"type": "json_object"}]
 
     def _create_completion(
         self,
@@ -1025,9 +1037,21 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
         messages: list[dict[str, str]],
         temperature: float,
         max_tokens: int,
+        output_kind: str = "answer",
     ):
-        """Create a completion, falling back to plain mode on validator reject."""
-        formats = self._response_formats_to_try()
+        """Create a completion with provider-compatible format fallback."""
+        scope = current_provider_scope.get()
+        if self.token_budget is not None:
+            spent = sum(scope.usage.values()) if scope is not None else self._quota_spent
+            # Byte count deliberately overestimates common Indonesian model tokens.
+            prompt_estimate = (
+                math.ceil(len(json.dumps(messages, ensure_ascii=False).encode("utf-8")) / 2) + 128
+            )
+            available = self.token_budget - spent - prompt_estimate
+            if available < 64:
+                raise ProcessingQuotaExhausted()
+            max_tokens = min(max_tokens, available)
+        formats = self._response_formats_to_try(output_kind)
         for position, fmt in enumerate(formats):
             kwargs: dict[str, Any] = {
                 "model": model,
@@ -1039,21 +1063,183 @@ class OpenRouterAnswerGenerator(AnswerGenerator):
             if fmt is not None:
                 kwargs["response_format"] = fmt
             try:
+                scope = current_provider_scope.get()
+                if scope is not None:
+                    return scope.submit(self._async_create_completion(kwargs))
+                if self.token_budget is not None:
+                    return self._sync_stream_completion(kwargs)
                 return self._openrouter_client().chat.completions.create(**kwargs)
             except Exception as exc:
                 if (
                     fmt is not None
                     and position + 1 < len(formats)
-                    and _is_json_validate_failed(exc)
+                    and (_is_json_validate_failed(exc) or _is_response_format_rejected(exc))
                 ):
                     logger.warning(
-                        f"{self.provider_label}_json_mode_fallback_to_plain "
-                        "detail=%.200s",
+                        f"{self.provider_label}_json_mode_fallback_to_plain detail=%.200s",
                         str(exc)[:200],
                     )
                     continue
                 raise
         raise AssertionError("unreachable response format loop")
+
+    def _sync_stream_completion(self, kwargs: dict[str, Any]):
+        prompt_estimate = (
+            math.ceil(len(json.dumps(kwargs["messages"], ensure_ascii=False).encode("utf-8")) / 2)
+            + 128
+        )
+        remaining = (self.token_budget or 0) - self._quota_spent - prompt_estimate
+        if remaining < 64:
+            raise ProcessingQuotaExhausted()
+        kwargs["max_tokens"] = min(kwargs["max_tokens"], remaining)
+        stream = self._openrouter_client().chat.completions.create(**kwargs, stream=True)
+        pieces: list[str] = []
+        finish_reason = None
+        provider_usage = None
+        completed_stream = False
+        try:
+            for chunk in stream:
+                provider_usage = getattr(chunk, "usage", None) or provider_usage
+                choices = getattr(chunk, "choices", None) or []
+                if choices:
+                    delta = getattr(choices[0], "delta", None)
+                    content = getattr(delta, "content", None)
+                    if content:
+                        pieces.append(content)
+                    finish_reason = getattr(choices[0], "finish_reason", None) or finish_reason
+                if math.ceil(len("".join(pieces).encode("utf-8")) / 2) >= remaining:
+                    raise ProcessingQuotaExhausted()
+            completed_stream = True
+        finally:
+            if not completed_stream:
+                self._quota_spent += prompt_estimate + math.ceil(
+                    len("".join(pieces).encode("utf-8")) / 2
+                )
+            stream.close()
+        self._quota_spent += int(
+            getattr(provider_usage, "prompt_tokens", 0) or prompt_estimate
+        ) + int(
+            getattr(provider_usage, "completion_tokens", 0)
+            or math.ceil(len("".join(pieces).encode("utf-8")) / 2)
+        )
+        if finish_reason == "length" and kwargs["max_tokens"] == remaining:
+            raise ProcessingQuotaExhausted()
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="".join(pieces)),
+                    finish_reason=finish_reason,
+                )
+            ],
+            usage=SimpleNamespace(
+                prompt_tokens=int(getattr(provider_usage, "prompt_tokens", 0) or prompt_estimate),
+                completion_tokens=int(
+                    getattr(provider_usage, "completion_tokens", 0)
+                    or math.ceil(len("".join(pieces).encode("utf-8")) / 2)
+                ),
+            ),
+        )
+
+    async def _async_create_completion(self, kwargs: dict[str, Any]):
+        if self.token_budget is not None:
+            return await self._async_stream_completion(kwargs)
+        from openai import AsyncOpenAI
+
+        base_url = (
+            "https://api.groq.com/openai/v1"
+            if self.provider_label == "groq"
+            else "https://openrouter.ai/api/v1"
+        )
+        async with AsyncOpenAI(
+            api_key=self.api_key,
+            base_url=base_url,
+            timeout=self.timeout_seconds,
+            max_retries=self.max_retries,
+        ) as client:
+            return await client.chat.completions.create(**kwargs)
+
+    async def _async_open_stream(self, kwargs: dict[str, Any]):
+        from openai import AsyncOpenAI
+
+        base_url = (
+            "https://api.groq.com/openai/v1"
+            if self.provider_label == "groq"
+            else "https://openrouter.ai/api/v1"
+        )
+        client = AsyncOpenAI(
+            api_key=self.api_key,
+            base_url=base_url,
+            timeout=self.timeout_seconds,
+            max_retries=self.max_retries,
+        )
+        try:
+            stream = await client.chat.completions.create(**kwargs, stream=True)
+        except BaseException:
+            await client.close()
+            raise
+        return stream, client
+
+    async def _async_stream_completion(self, kwargs: dict[str, Any]):
+        scope = current_provider_scope.get()
+        prompt_estimate = (
+            math.ceil(len(json.dumps(kwargs["messages"], ensure_ascii=False).encode("utf-8")) / 2)
+            + 128
+        )
+        spent = sum(scope.usage.values()) if scope is not None else 0
+        remaining = (self.token_budget or 0) - spent - prompt_estimate
+        if remaining < 64:
+            raise ProcessingQuotaExhausted()
+        kwargs["max_tokens"] = min(kwargs["max_tokens"], remaining)
+        opened = await self._async_open_stream(kwargs)
+        stream, client = opened if isinstance(opened, tuple) else (opened, None)
+        pieces: list[str] = []
+        finish_reason = None
+        provider_usage = None
+        completed_stream = False
+        try:
+            async for chunk in stream:
+                provider_usage = getattr(chunk, "usage", None) or provider_usage
+                choices = getattr(chunk, "choices", None) or []
+                if choices:
+                    delta = getattr(choices[0], "delta", None)
+                    content = getattr(delta, "content", None)
+                    if content:
+                        pieces.append(content)
+                    finish_reason = getattr(choices[0], "finish_reason", None) or finish_reason
+                generated = math.ceil(len("".join(pieces).encode("utf-8")) / 2)
+                if generated >= remaining:
+                    raise ProcessingQuotaExhausted()
+            completed_stream = True
+        finally:
+            if not completed_stream and scope is not None:
+                scope.record_usage(
+                    prompt_estimate,
+                    math.ceil(len("".join(pieces).encode("utf-8")) / 2),
+                )
+            await stream.close()
+            if client is not None:
+                await client.close()
+        prompt_tokens = int(getattr(provider_usage, "prompt_tokens", 0) or prompt_estimate)
+        completion_tokens = int(
+            getattr(provider_usage, "completion_tokens", 0)
+            or math.ceil(len("".join(pieces).encode("utf-8")) / 2)
+        )
+        if finish_reason == "length" and kwargs["max_tokens"] == remaining:
+            if scope is not None:
+                scope.record_usage(prompt_tokens, completion_tokens)
+            raise ProcessingQuotaExhausted()
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="".join(pieces)),
+                    finish_reason=finish_reason,
+                )
+            ],
+            usage=SimpleNamespace(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+            ),
+        )
 
     def _openrouter_client(self):
         if self._client is None:
@@ -1100,9 +1286,7 @@ def _parse_json_object(content: Any) -> dict[str, Any]:
         raise AnswerValidationError("response is not valid JSON")
     text = content.strip()
     # Strip a single markdown fence if the whole payload is wrapped.
-    fence_match = re.match(
-        r"^```(?:json|JSON)?\s*\n?(.*?)\n?\s*```$", text, re.DOTALL
-    )
+    fence_match = re.match(r"^```(?:json|JSON)?\s*\n?(.*?)\n?\s*```$", text, re.DOTALL)
     if fence_match:
         text = fence_match.group(1).strip()
     try:

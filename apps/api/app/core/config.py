@@ -11,9 +11,7 @@ class Settings(BaseSettings):
     project_root: Path | None = None
     # Production relational database = Neon PostgreSQL (system of record).
     # Supabase is storage-only; never use Supabase PostgreSQL as a second DB.
-    database_url: str = (
-        "postgresql+psycopg://postgres:postgres@localhost:5432/kerjapedia"
-    )
+    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/kerjapedia"
     database_connect_timeout_seconds: int = 10
     database_pool_timeout_seconds: int = 30
     supabase_url: str = ""
@@ -89,6 +87,8 @@ class Settings(BaseSettings):
     # finishing the answer+claims JSON. 3000 completes reliably.
     openrouter_max_tokens: int = 3000
     rate_limit_per_minute: int = 60
+    guest_daily_token_limit: int = 20_000
+    user_daily_token_limit: int = 100_000
     trust_proxy_headers: bool = False
     chat_retention_days: int = 90
     session_ttl_minutes: int = 480
@@ -105,20 +105,18 @@ class Settings(BaseSettings):
     smtp_sender_name: str = "KerjaPedia"
     smtp_use_tls: bool = True
     email_otp_expiry_minutes: int = 15
-    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
+    cors_origins: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
+    )
 
     @property
     def allowed_cors_origins(self) -> list[str]:
-        return [
-            origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
-        ]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def openrouter_fallback_model_list(self) -> list[str]:
         return [
-            model.strip()
-            for model in self.openrouter_fallback_models.split(",")
-            if model.strip()
+            model.strip() for model in self.openrouter_fallback_models.split(",") if model.strip()
         ]
 
     @model_validator(mode="after")
@@ -130,21 +128,13 @@ class Settings(BaseSettings):
         if self.ingestion_embedding_max_retries < 0:
             raise ValueError("INGESTION_EMBEDDING_MAX_RETRIES must not be negative.")
         if self.ingestion_embedding_retry_initial_seconds < 0:
-            raise ValueError(
-                "INGESTION_EMBEDDING_RETRY_INITIAL_SECONDS must not be negative."
-            )
+            raise ValueError("INGESTION_EMBEDDING_RETRY_INITIAL_SECONDS must not be negative.")
         if self.app_env.lower() != "production":
             return self
         if self.admin_password == "secret" or len(self.admin_password) < 12:
-            raise ValueError(
-                "ADMIN_PASSWORD must be changed and contain at least 12 characters."
-            )
-        if not (
-            self.supabase_url and self.supabase_service_key and self.supabase_anon_key
-        ):
-            raise ValueError(
-                "Supabase URL, service key, and anon key are required in production."
-            )
+            raise ValueError("ADMIN_PASSWORD must be changed and contain at least 12 characters.")
+        if not (self.supabase_url and self.supabase_service_key and self.supabase_anon_key):
+            raise ValueError("Supabase URL, service key, and anon key are required in production.")
         if self.vector_store != "upstash_vector":
             raise ValueError("VECTOR_STORE must be upstash_vector in production.")
         if not self.upstash_vector_url or not self.upstash_vector_token:
@@ -179,8 +169,7 @@ class Settings(BaseSettings):
         if not self.ragas_enabled:
             raise ValueError("RAGAS_ENABLED=true is required in production.")
         if any(
-            "localhost" in origin or "127.0.0.1" in origin
-            for origin in self.allowed_cors_origins
+            "localhost" in origin or "127.0.0.1" in origin for origin in self.allowed_cors_origins
         ):
             raise ValueError("CORS_ORIGINS must not contain localhost in production.")
         return self

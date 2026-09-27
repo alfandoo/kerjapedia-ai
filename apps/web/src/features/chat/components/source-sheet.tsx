@@ -78,9 +78,9 @@ export function SourceSheet({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="source-sheet-title"
+        aria-label={translate("source.sheetLabel")}
         onKeyDown={keepFocusInside}
-        className="absolute inset-x-0 bottom-0 max-h-[min(82vh,760px)] w-full overflow-y-auto rounded-t-[20px] border-t border-border bg-background shadow-[0_-24px_70px_rgba(0,0,0,0.22)] max-[760px]:max-h-[72svh] max-[760px]:rounded-t-[14px] max-[760px]:shadow-[0_-12px_32px_rgba(0,0,0,0.2)] max-[560px]:max-h-[88vh]"
+        className="absolute inset-x-0 bottom-0 max-h-[min(82dvh,760px)] w-full overflow-y-auto rounded-t-[20px] border-t border-border bg-background pb-[env(safe-area-inset-bottom)] shadow-[0_-24px_70px_rgba(0,0,0,0.22)] max-[760px]:max-h-[72dvh] max-[760px]:rounded-t-[14px] max-[760px]:shadow-[0_-12px_32px_rgba(0,0,0,0.2)] max-[560px]:max-h-[88dvh]"
       >
         <span
           className="mx-auto mb-0.5 mt-3 hidden h-1 w-[42px] rounded-full bg-muted-foreground/35 max-[760px]:block"

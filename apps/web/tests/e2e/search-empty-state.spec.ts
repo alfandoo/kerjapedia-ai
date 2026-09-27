@@ -53,15 +53,15 @@ test("search page filters and resets the regulation list", async ({ page }) => {
   await page.goto("/search");
 
   await expect(page.getByRole("heading", { name: "Temukan dasar hukum yang tepat" })).toBeVisible();
-  await expect(page.getByText("2 regulasi ditemukan")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("table").getByRole("rowgroup").last().getByRole("row")).toHaveCount(2, { timeout: 15_000 });
   await expect(page.getByLabel("Riwayat percakapan")).toHaveCount(0);
   await expect(page.getByLabel("Sumber dan kutipan")).toHaveCount(0);
 
   await page.getByLabel("Cari judul, nomor, atau topik regulasi").fill("PKWT");
-  await expect(page.getByText("1 regulasi ditemukan")).toBeVisible();
-  await expect(page.getByText("Peraturan Pemerintah Nomor 35 Tahun 2021")).toBeVisible();
+  await expect(page.getByRole("table").getByRole("rowgroup").last().getByRole("row")).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "Peraturan Pemerintah Nomor 35 Tahun 2021" })).toBeVisible();
   await page.getByRole("button", { name: "Reset pencarian" }).click();
-  await expect(page.getByText("2 regulasi ditemukan")).toBeVisible();
+  await expect(page.getByRole("table").getByRole("rowgroup").last().getByRole("row")).toHaveCount(2);
 
   await page.screenshot({ path: join(tmpdir(), "kerjapedia-search-landing-desktop.png") });
 });
@@ -76,7 +76,7 @@ test("search page has a readable mobile layout and empty state", async ({ page }
   });
   await expect(page.getByRole("button", { name: "Hapus filter" })).toBeVisible();
   await page.getByRole("button", { name: "Hapus filter" }).click();
-  await expect(page.getByText("2 regulasi ditemukan")).toBeVisible();
+  await expect(page.getByRole("table").getByRole("rowgroup").last().getByRole("row")).toHaveCount(2);
 
   await page.screenshot({ path: join(tmpdir(), "kerjapedia-search-landing-mobile.png") });
 });

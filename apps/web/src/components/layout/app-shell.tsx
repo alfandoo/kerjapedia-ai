@@ -28,7 +28,7 @@ function getNavigation(
   translate: (key: TranslationKey) => string
 ) {
   const base = [
-    { href: "/chat", label: translate("chat.badge"), icon: ChatIcon },
+    { href: "/chat", label: translate("sidebar.chats"), icon: ChatIcon },
     { href: "/search", label: translate("sidebar.searchRegulations"), icon: SearchIcon },
   ];
   if (session?.user.roles.includes("admin")) {

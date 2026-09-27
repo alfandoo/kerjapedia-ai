@@ -45,16 +45,16 @@ test("search filters the regulation catalog", async ({ page }) => {
   await page.goto("/search");
 
   await expect(page.getByRole("heading", { name: "Temukan dasar hukum yang tepat" })).toBeVisible();
-  await expect(page.getByText("2 regulasi ditemukan")).toBeVisible();
-  await expect(page.getByText("Jenis regulasi")).toBeVisible();
+  await expect(page.getByRole("table").getByRole("rowgroup").last().getByRole("row")).toHaveCount(2);
+  await expect(page.getByRole("columnheader", { name: "Jenis regulasi" })).toBeVisible();
 
   await page.getByLabel("Cari judul, nomor, atau topik regulasi").fill("35");
-  await expect(page.getByText("1 regulasi ditemukan")).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Peraturan Pemerintah Nomor 35/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Undang-Undang Nomor 13/ })).toBeHidden();
-  await expect(page.getByRole("link", { name: "Buka PDF PP 35/2021" })).toHaveAttribute(
+  await expect(page.getByRole("table").getByRole("rowgroup").last().getByRole("row")).toHaveCount(1);
+  await expect(page.getByRole("link", { name: /Peraturan Pemerintah Nomor 35/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Undang-Undang Nomor 13/ })).toBeHidden();
+  await expect(page.getByRole("link", { name: "Download PDF PP 35/2021" })).toHaveAttribute(
     "href",
-    /\/documents\/PP-35-2021\/pdf$/
+    /\/api\/backend\/documents\/PP-35-2021\/pdf$/
   );
 
   await page.screenshot({ path: join(tmpdir(), "kerjapedia-search-desktop-final.png") });
@@ -65,8 +65,8 @@ test("search remains readable on mobile", async ({ page }) => {
   await mockDocuments(page);
   await page.goto("/search");
 
-  await expect(page.getByText("Jenis regulasi")).toBeHidden();
-  await expect(page.getByRole("heading", { name: /Peraturan Pemerintah Nomor 35/ })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Jenis regulasi" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Peraturan Pemerintah Nomor 35/ })).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(

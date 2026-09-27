@@ -56,6 +56,7 @@ type ChatWorkspaceShellProps = {
   onSourceDrawerClose: () => void;
   onConversationSelect: (id: string) => void;
   onNewConversation: () => void;
+  onAuthenticated?: () => void;
   onConversationRename: (id: string, title: string) => Promise<void>;
   onConversationDelete: (id: string) => Promise<void>;
 };
@@ -127,6 +128,7 @@ export function ChatWorkspaceShell({
   onSourceDrawerClose,
   onConversationSelect,
   onNewConversation,
+  onAuthenticated,
   onConversationRename,
   onConversationDelete,
 }: ChatWorkspaceShellProps) {
@@ -138,6 +140,7 @@ export function ChatWorkspaceShell({
   const showGuest = sessionReady && !session;
 
   const mobileSidebarRef = useRef<HTMLElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLButtonElement>(null);
   const sourceCloseRef = useRef<HTMLButtonElement>(null);
@@ -178,6 +181,28 @@ export function ChatWorkspaceShell({
   const [pinnedExpanded, setPinnedExpanded] = useState(true);
   const [chatsExpanded, setChatsExpanded] = useState(true);
   const [sidebarContentTouchesFooter, setSidebarContentTouchesFooter] = useState(false);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const syncHeight = () => {
+      if (window.innerWidth > 760) {
+        shellRef.current?.style.removeProperty("--chat-viewport-height");
+        return;
+      }
+      shellRef.current?.style.setProperty(
+        "--chat-viewport-height",
+        `${Math.round(viewport.height)}px`
+      );
+    };
+    syncHeight();
+    viewport.addEventListener("resize", syncHeight);
+    window.addEventListener("resize", syncHeight);
+    return () => {
+      viewport.removeEventListener("resize", syncHeight);
+      window.removeEventListener("resize", syncHeight);
+    };
+  }, []);
 
   const visibleConversations = chatSearchQuery.trim()
     ? conversations.filter((conversation) =>
@@ -302,7 +327,7 @@ export function ChatWorkspaceShell({
 
   useEffect(() => {
     const scrollRegion = sidebarScrollRef.current;
-    if (!scrollRegion || !session) {
+    if (!scrollRegion) {
       setSidebarContentTouchesFooter(false);
       return;
     }
@@ -320,6 +345,7 @@ export function ChatWorkspaceShell({
     pinnedConversationIds.length,
     session,
     sidebarExpanded,
+    mobileSidebarOpen,
     chatSearchOpen,
   ]);
 
@@ -358,10 +384,7 @@ export function ChatWorkspaceShell({
 
   const sidebarBody = (
     <>
-      <div
-        ref={sidebarScrollRef}
-        className="sidebar-scroll-region min-h-0 flex-1 overflow-y-auto overscroll-contain"
-      >
+      <div ref={sidebarScrollRef} className="sidebar-scroll-region min-h-0 flex-1 overflow-hidden">
         <div className="px-3 pt-[14px]">
           <div className="flex min-h-11 items-center justify-between pb-2.5">
             {shownSession ? (
@@ -476,42 +499,36 @@ export function ChatWorkspaceShell({
               <Search className="size-[18px] text-javanese" />
               <span>{translate("sidebar.searchRegulations")}</span>
             </Link>
-            <Link
-              href="/kalkulator"
-              aria-current={isActive("/kalkulator") ? "page" : undefined}
-              className={`flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
-                isActive("/kalkulator")
-                  ? "bg-sidebar-accent font-semibold text-white"
-                  : "text-sidebar-foreground"
-              }`}
+            <div
+              aria-disabled="true"
+              className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-sidebar-foreground/70"
             >
               <Calculator className="size-[18px] text-javanese" />
-              <span>{translate("sidebar.kalkulator")}</span>
-            </Link>
-            <Link
-              href="/review-cv"
-              aria-current={isActive("/review-cv") ? "page" : undefined}
-              className={`flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
-                isActive("/review-cv")
-                  ? "bg-sidebar-accent font-semibold text-white"
-                  : "text-sidebar-foreground"
-              }`}
+              <span className="min-w-0 flex-1">{translate("sidebar.kalkulator")}</span>
+              <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em] text-sidebar-foreground/55">
+                {translate("sidebar.comingSoon")}
+              </span>
+            </div>
+            <div
+              aria-disabled="true"
+              className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-sidebar-foreground/70"
             >
               <FileSearch className="size-[18px] text-javanese" />
-              <span>{translate("sidebar.reviewCv")}</span>
-            </Link>
-            <Link
-              href="/compliance"
-              aria-current={isActive("/compliance") ? "page" : undefined}
-              className={`flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
-                isActive("/compliance")
-                  ? "bg-sidebar-accent font-semibold text-white"
-                  : "text-sidebar-foreground"
-              }`}
+              <span className="min-w-0 flex-1">{translate("sidebar.reviewCv")}</span>
+              <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em] text-sidebar-foreground/55">
+                {translate("sidebar.comingSoon")}
+              </span>
+            </div>
+            <div
+              aria-disabled="true"
+              className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-xs text-sidebar-foreground/70"
             >
               <Gavel className="size-[18px] text-javanese" />
-              <span>{translate("sidebar.compliance")}</span>
-            </Link>
+              <span className="min-w-0 flex-1">{translate("sidebar.compliance")}</span>
+              <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em] text-sidebar-foreground/55">
+                {translate("sidebar.comingSoon")}
+              </span>
+            </div>
           </nav>
           {shownSession ? (
             <nav className="-mx-3 grid gap-0.5 pt-2" aria-label="Kategori chat">
@@ -694,7 +711,7 @@ export function ChatWorkspaceShell({
             </p>
             <button
               type="button"
-              className="chat-auth-button chat-auth-sidebar mt-3 flex min-h-11 w-full items-center justify-center rounded-full bg-white text-[13px] font-semibold text-javanese transition hover:bg-[#e2f3e6]"
+              className="chat-auth-button chat-auth-sidebar mt-3 flex min-h-11 w-full items-center justify-center rounded-full bg-white text-[13px] font-semibold text-javanese"
               onClick={(event) => openAuthModal(event.currentTarget, "login")}
             >
               {translate("sidebar.loginButton")}
@@ -822,30 +839,30 @@ export function ChatWorkspaceShell({
       >
         <Search className="size-[21px] text-javanese" />
       </button>
-      <Link
-        href="/kalkulator"
-        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-        aria-label={translate("sidebar.kalkulator")}
-        title={translate("sidebar.kalkulator")}
+      <div
+        role="note"
+        aria-label={`${translate("sidebar.kalkulator")} — ${translate("sidebar.comingSoon")}`}
+        title={`${translate("sidebar.comingSoon")}: ${translate("sidebar.kalkulator")}`}
+        className="grid size-11 place-items-center rounded-[10px] text-tinta/80"
       >
         <Calculator className="size-[21px] text-javanese" />
-      </Link>
-      <Link
-        href="/review-cv"
-        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-        aria-label={translate("sidebar.reviewCv")}
-        title={translate("sidebar.reviewCv")}
+      </div>
+      <div
+        role="note"
+        aria-label={`${translate("sidebar.reviewCv")} — ${translate("sidebar.comingSoon")}`}
+        title={`${translate("sidebar.comingSoon")}: ${translate("sidebar.reviewCv")}`}
+        className="grid size-11 place-items-center rounded-[10px] text-tinta/80"
       >
         <FileSearch className="size-[21px] text-javanese" />
-      </Link>
-      <Link
-        href="/compliance"
-        className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-        aria-label={translate("sidebar.compliance")}
-        title={translate("sidebar.compliance")}
+      </div>
+      <div
+        role="note"
+        aria-label={`${translate("sidebar.compliance")} — ${translate("sidebar.comingSoon")}`}
+        title={`${translate("sidebar.comingSoon")}: ${translate("sidebar.compliance")}`}
+        className="grid size-11 place-items-center rounded-[10px] text-tinta/80"
       >
         <Gavel className="size-[21px] text-javanese" />
-      </Link>
+      </div>
       <Link
         href="/legal/disclaimer"
         className="grid size-11 place-items-center rounded-[10px] text-tinta transition hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
@@ -906,14 +923,14 @@ export function ChatWorkspaceShell({
       <Skeleton className="mt-auto h-12 w-full" />
     </div>
   );
-  const topbarColumns = !showGuest
-    ? "grid-cols-[44px_minmax(0,1fr)_44px] max-[760px]:grid-cols-[44px_34px_minmax(0,1fr)_44px]"
-    : "grid-cols-[44px_minmax(0,1fr)_auto] max-[760px]:grid-cols-[44px_34px_minmax(0,1fr)_auto]";
+  const topbarColumns =
+    "grid-cols-[44px_minmax(0,1fr)_auto] max-[760px]:grid-cols-[72px_minmax(0,1fr)_auto]";
 
   return (
     <div
+      ref={shellRef}
       className={[
-        "grid h-svh w-full overflow-hidden bg-arsip text-tinta max-[760px]:block max-[760px]:h-svh",
+        "chat-mobile-shell grid h-svh w-full overflow-hidden bg-arsip text-tinta max-[760px]:block",
         shellColumns,
         !sessionReady
           ? "session-pending-shell"
@@ -950,24 +967,16 @@ export function ChatWorkspaceShell({
           <button
             ref={mobileMenuRef}
             type="button"
-            className="hidden size-11 place-items-center rounded-[9px] text-javanese transition hover:bg-accent hover:text-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese max-[760px]:grid"
+            className="hidden min-h-11 items-center gap-1 rounded-[9px] px-1 text-javanese transition hover:bg-accent hover:text-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese max-[760px]:flex"
             aria-label={shownSession ? "Buka riwayat" : "Buka menu"}
             aria-expanded={mobileSidebarOpen}
             disabled={!sessionReady}
             onClick={() => onMobileSidebarOpenChange(true)}
           >
             <Menu className="size-[21px]" />
+            <span className="text-[11px] font-semibold">Menu</span>
           </button>
-          <div className="hidden max-[760px]:block">
-            <span className="grid size-[30px] place-items-center rounded-[7px] bg-javanese text-[9px] font-bold tracking-[0.04em] text-white">
-              KP
-            </span>
-          </div>
-          <h1
-            className={`m-0 truncate text-[13px] font-medium text-javanese ${
-              !showGuest ? "" : "max-[760px]:hidden"
-            }`}
-          >
+          <h1 className="m-0 min-w-0 truncate text-[13px] font-semibold text-javanese max-[760px]:text-[12px]">
             {pathname === "/search" ? translate("header.search") : translate("header.assistant")}
           </h1>
           {shownSession ? (
@@ -980,17 +989,10 @@ export function ChatWorkspaceShell({
               <Settings className="size-[20px]" />
             </button>
           ) : showGuest ? (
-            <div className="flex items-center justify-self-end gap-2 max-[760px]:gap-1.5">
+            <div className="flex items-center justify-self-end">
               <button
                 type="button"
-                className="chat-auth-button chat-auth-login inline-flex min-h-11 items-center justify-center rounded-full px-4 text-xs font-semibold text-foreground transition hover:bg-accent focus-visible:outline-2 focus-visible:outline-white max-[760px]:px-[11px] max-[760px]:text-[10px]"
-                onClick={(event) => openAuthModal(event.currentTarget, "login")}
-              >
-                {translate("header.login")}
-              </button>
-              <button
-                type="button"
-                className="chat-auth-button chat-auth-signup inline-flex min-h-11 items-center justify-center rounded-full bg-javanese px-4 text-xs font-semibold text-white transition hover:bg-forest max-[760px]:px-[11px] max-[760px]:text-[10px]"
+                className="chat-auth-button chat-auth-signup inline-flex min-h-11 items-center justify-center rounded-full bg-javanese px-4 text-xs font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese max-[760px]:hidden"
                 onClick={(event) => openAuthModal(event.currentTarget, "signup")}
               >
                 {translate("header.signup")}
@@ -1001,7 +1003,7 @@ export function ChatWorkspaceShell({
           )}
         </header>
         {shownSession && profileMenuOpen ? profileMenu : null}
-        <main className="chat-workspace-surface min-h-0 flex-1 overflow-hidden bg-white max-[760px]:h-full">
+        <main className="chat-workspace-surface min-h-0 flex-1 overflow-hidden bg-white">
           {children}
         </main>
       </div>
@@ -1053,7 +1055,7 @@ export function ChatWorkspaceShell({
         onClose={closeAuthModal}
         onSuccess={() => {
           setAuthModalOpen(false);
-          onNewConversation();
+          onAuthenticated?.();
         }}
       />
       {profileOpen && session ? (
