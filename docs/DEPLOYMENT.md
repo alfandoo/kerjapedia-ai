@@ -116,8 +116,8 @@ vercel
 When prompted:
 - Set up and deploy? → **Y**
 - Which scope? → (your account)
-- Link to existing project? → **N**
-- Project name? → `kerjapedia-web`
+- Link to existing project? → **Y**
+- Project name? → `kerjapedia-ai`
 - Directory where code is located? → `apps/web`
 - Want to override settings? → **N**
 
@@ -144,7 +144,7 @@ vercel --prod
 
 ### 2.5 Verify Web
 
-Your web URL: `https://kerjapedia-web.vercel.app`
+Your web URL: `https://kerjapedia-ai.vercel.app`
 
 1. Open the URL
 2. Test login with `admin@kerjapedia.ai`
@@ -159,7 +159,7 @@ Your web URL: `https://kerjapedia-web.vercel.app`
 In Render Dashboard → Environment → add:
 
 ```
-APP_URL = https://kerjapedia-web.vercel.app
+APP_URL = https://kerjapedia-ai.vercel.app
 ```
 
 ### 3.2 Update CORS
@@ -167,7 +167,7 @@ APP_URL = https://kerjapedia-web.vercel.app
 In Render Dashboard → Environment → add:
 
 ```
-CORS_ORIGINS = https://kerjapedia-web.vercel.app
+CORS_ORIGINS = https://kerjapedia-ai.vercel.app
 ```
 
 ### 3.3 Enable Auto-Deploy

@@ -2,7 +2,7 @@
 
 KerjaPedia AI membantu pengguna mencari dan memahami peraturan ketenagakerjaan Indonesia melalui retrieval dokumen dan jawaban bersitasi. Aplikasi ini bukan pengganti nasihat hukum.
 
-[Aplikasi web](https://kerjapedia-web.vercel.app) · [Dokumentasi API](docs/API.md) · [Panduan pengujian](docs/TESTING.md)
+[Aplikasi web](https://kerjapedia-ai.vercel.app) · [Dokumentasi API](docs/API.md) · [Panduan pengujian](docs/TESTING.md)
 
 ## Fitur
 

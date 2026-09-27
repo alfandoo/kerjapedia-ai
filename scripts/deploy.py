@@ -105,8 +105,8 @@ PREREQUISITE: Deploy API to Render first and get the API URL.
    When prompted:
    • Set up and deploy? → Y
    • Which scope? → (your account)
-   • Link to existing project? → N
-   • Project name? → kerjapedia-web
+   • Link to existing project? → Y
+   • Project name? → kerjapedia-ai
    • Directory where code is located? → apps/web
    • Want to override settings? → N
 
@@ -126,7 +126,7 @@ PREREQUISITE: Deploy API to Render first and get the API URL.
    → Run: vercel --prod
 
 5. VERIFY
-   → Your web URL will be: https://kerjapedia-web.vercel.app
+   → Your web URL will be: https://kerjapedia-ai.vercel.app
    → Open the URL and test login
 """)
 
