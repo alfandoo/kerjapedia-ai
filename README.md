@@ -1,90 +1,100 @@
 # KerjaPedia AI
 
-KerjaPedia AI membantu pengguna mencari dan memahami peraturan ketenagakerjaan Indonesia melalui retrieval dokumen dan jawaban bersitasi. Aplikasi ini bukan pengganti nasihat hukum.
+**Asisten regulasi ketenagakerjaan Indonesia dengan jawaban yang bisa ditelusuri ke sumbernya.**
+
+KerjaPedia AI adalah proyek portofolio AI engineering dan pengembangan web. Pengguna dapat bertanya dengan bahasa sehari-hari, lalu memeriksa dokumen, pasal, ayat, dan halaman yang mendasari jawaban. Fokus proyek ini adalah membangun pengalaman tanya jawab yang tetap berguna ketika dokumen hukum panjang, topik berubah, atau sumber tidak cukup untuk menjawab.
 
 Deploy : [https://kerjapedia-ai.vercel.app/](https://kerjapedia-ai.vercel.app/)
 
-## Fitur
+## Masalah yang diangkat
 
-- Chat dengan mode cepat dan mendalam, riwayat, ringkasan konteks percakapan panjang, dan pembatalan request.
-- Sitasi dokumen, pasal, ayat, dan halaman; verifikasi klaim serta penolakan saat sumber tidak memadai.
-- Chat tamu yang dapat diklaim setelah login, autentikasi pengguna, dan mode personal berdasarkan profil kerja.
-- Pencarian dokumen, kalkulator, tinjauan CV, halaman kepatuhan, serta dashboard admin.
-- Observability chat per mode dan antarmuka bahasa Indonesia serta Inggris.
+Aturan ketenagakerjaan tersebar di banyak dokumen dan dapat diubah oleh peraturan yang lebih baru. Mencari kata kunci saja sering belum cukup untuk menemukan pasal yang relevan. Di sisi lain, jawaban AI yang terdengar meyakinkan sulit dipakai jika pengguna tidak dapat memeriksa dasarnya.
 
-## Struktur dan layanan
+KerjaPedia AI menghubungkan pencarian dokumen resmi dengan percakapan yang mudah diikuti. Pengguna bisa mulai dari pertanyaan seperti “Apakah pekerja kontrak berhak atas kompensasi?”, membaca jawaban, lalu membuka sumber yang dikutip untuk menilai konteks hukumnya.
 
-| Lokasi | Isi |
-| --- | --- |
-| `apps/web/` | Next.js 16, React 19, proxy API, tes unit/integrasi, Playwright |
-| `apps/api/` | FastAPI, Alembic, RAG, autentikasi, worker Celery |
-| `dataset/` | Dokumen peraturan dan metadata sumber |
-| `evaluation/` | Evaluasi retrieval dan jawaban |
-| `docs/` | PRD dan dokumentasi teknis |
-| `scripts/` | Alat bantu pengembangan dan tes |
+## Pengalaman produk
 
-PostgreSQL menyimpan data relasional; Supabase Storage menyimpan berkas; Upstash Vector menyimpan indeks retrieval; Redis mendukung cache, antrean, dan rate limit. Provider LLM produksi adalah Groq atau OpenRouter. Lihat [arsitektur](docs/ARCHITECTURE.md).
+| Kebutuhan pengguna                                        | Implementasi                                                                                                       |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Memahami aturan tanpa membaca seluruh PDF terlebih dahulu | Chat merangkum bagian dokumen yang ditemukan dan menampilkan sitasi                                                |
+| Memeriksa dasar jawaban                                   | Rujukan dokumen, pasal, ayat, halaman, dan tautan sumber ditampilkan bersama jawaban                               |
+| Melanjutkan pertanyaan                                    | Riwayat turn dan ringkasan percakapan terstruktur membantu menjaga konteks; rujukan ambigu ditangani tanpa menebak |
+| Memilih kedalaman jawaban                                 | Mode cepat, standar, dan mendalam tersedia pada chat                                                               |
+| Berhenti saat jawaban tidak lagi dibutuhkan               | Pembatalan diteruskan dari browser sampai panggilan provider                                                       |
+| Menggunakan konteks pribadi                               | Pengguna yang login dapat mengaktifkan mode personal dan mengisi profil kerja                                      |
+| Menjelajah di luar chat                                   | Pencarian dokumen, kalkulator, tinjauan CV, dan halaman kepatuhan                                                  |
+| Mengelola mutu sistem                                     | Dashboard admin untuk dokumen, ingestion, evaluasi, feedback, penggunaan token, dan observability                  |
 
-## Menjalankan lokal
+Antarmuka tersedia dalam bahasa Indonesia dan Inggris. Percakapan tamu dapat dilanjutkan setelah pengguna login.
 
-Gunakan Node.js 22, Python 3.12, dan PostgreSQL yang dapat diakses melalui `DATABASE_URL`. Perintah ini memakai PowerShell dari akar repo.
+## Dari pertanyaan ke jawaban
 
-1. Salin `.env.example` ke `.env` dan isi `DATABASE_URL` serta kredensial layanan yang dipakai. Jangan commit `.env`.
-2. Jika memakai Redis lokal, jalankan `docker compose up -d redis`. `compose.yaml` hanya menyediakan Redis; siapkan PostgreSQL pengembangan secara terpisah.
-3. Siapkan API dan migrasikan database:
-
-   ```powershell
-   cd apps/api
-   python -m venv .venv
-   .\.venv\Scripts\python -m pip install -r requirements-dev.txt
-   .\.venv\Scripts\python -m alembic upgrade head
-   .\.venv\Scripts\python -m alembic current
-   .\.venv\Scripts\python -m uvicorn app.main:app --reload
-   ```
-
-4. Di terminal lain, jalankan web:
-
-   ```powershell
-   cd apps/web
-   npm ci
-   npm run dev
-   ```
-
-Web tersedia di `http://localhost:3000`, dokumentasi API di `http://127.0.0.1:8000/docs`, dan kesiapan API di `http://127.0.0.1:8000/ready`. Web memilih alamat backend dari `API_INTERNAL_URL`, lalu `NEXT_PUBLIC_API_URL`, lalu `http://127.0.0.1:8000`.
-
-Jika startup API melaporkan `Database schema is out of date`, jalankan `python -m alembic upgrade head` dari `apps/api` memakai `DATABASE_URL` yang sama dengan proses API. Verifikasi dengan `python -m alembic current`.
-
-Lihat [`.env.example`](.env.example) untuk konfigurasi dan [panduan deployment](docs/DEPLOYMENT.md) untuk produksi. `compose.production.yaml` menyediakan stack mandiri dengan PostgreSQL, Redis, API, worker, scheduler, dan web.
-
-## Pengujian
-
-CI menjalankan job `Web` dan `API` pada push ke `main` dan pull request. Jalankan pemeriksaan lokal berikut:
-
-```powershell
-# Dari akar repo: PostgreSQL uji sementara, migrasi, dan pytest
-.\scripts\test_api.ps1
-
-# Dari apps/api
-.\.venv\Scripts\python -m ruff check app tests
-
-# Dari apps/web
-npm run lint
-npm run build
-npm run test:unit
-npx playwright install chromium
-npm run test:integration
-npm run test:e2e
+```mermaid
+flowchart LR
+    A["Pertanyaan pengguna"] --> B["FastAPI"]
+    B --> C["Hybrid retrieval"]
+    C --> D["Dokumen dan metadata peraturan"]
+    D --> E["Reranking dan konteks"]
+    E --> F["LLM dan verifikasi klaim"]
+    F --> G["Jawaban dengan sitasi"]
+    B --> H["Riwayat, kuota, dan observability"]
 ```
 
-Script API memerlukan Docker dan memakai database uji terpisah pada port `5433`. CI juga memeriksa migrasi naik dan turun. Lihat [panduan pengujian](docs/TESTING.md).
+Pipeline ingestion mengekstrak struktur peraturan dan metadata dokumen sebelum bagian yang dapat dicari dikirim ke indeks. Saat chat berlangsung, retrieval mengambil kandidat yang relevan, menyusun konteks, lalu generator membuat jawaban dari sumber tersebut. Guardrail memeriksa dukungan klaim dan memungkinkan sistem menolak menjawab ketika dasar dokumen tidak memadai. Ringkasan percakapan membantu memahami pertanyaan lanjutan, tetapi tidak menjadi sumber klaim hukum.
 
-## Dokumentasi
+## Keputusan rekayasa yang menonjol
 
-- [PRD](docs/PRD_KerjaPedia_AI.md)
-- [Arsitektur](docs/ARCHITECTURE.md)
-- [API](docs/API.md)
-- [Ingestion](docs/INGESTION_PIPELINE.md)
-- [Evaluasi](docs/EVALUATION.md)
-- [Deployment](docs/DEPLOYMENT.md)
+- **Retrieval yang sadar struktur hukum.** Chunk dan metadata mempertahankan identitas peraturan, pasal, ayat, halaman, dan status dokumen. Pencarian menggabungkan sinyal dense dan sparse, lalu melakukan reranking.
+- **Jawaban yang dapat diaudit.** Sitasi melekat pada jawaban; proses evaluasi menguji retrieval, dukungan klaim, refusal, dan bahasa pada skenario yang mencakup follow-up serta pertanyaan bilingual.
+- **Percakapan yang aman saat panjang.** Ringkasan terstruktur hanya memakai turn selesai yang lolos guardrail dan memiliki sitasi. Turn gagal atau dibatalkan tidak masuk ke memori.
+- **Pembatalan sampai provider.** Sinyal abort melewati proxy Next.js dan API hingga transport provider. Request yang dibatalkan dicatat tanpa menyimpan jawaban parsial.
+- **Operasional yang terukur.** Observasi request memisahkan mode cepat, standar, dan mendalam, termasuk waktu status pertama, waktu konten pertama, latensi, token, retry, disconnect, dan kegagalan provider.
 
-Periksa peraturan yang dikutip sebelum memakai jawaban untuk keputusan hukum atau hubungan industrial.
+## Stack
+
+| Lapisan                   | Teknologi dan peran                                             |
+| ------------------------- | --------------------------------------------------------------- |
+| Web                       | Next.js 16, React 19, TypeScript                                |
+| API                       | FastAPI, Python 3.12, Alembic                                   |
+| Data relasional           | PostgreSQL                                                      |
+| Dokumen                   | Supabase Storage                                                |
+| Retrieval                 | Upstash Vector hybrid                                           |
+| Cache dan pekerjaan latar | Redis, Celery                                                   |
+| Model jawaban             | Groq atau OpenRouter                                            |
+| Pengujian                 | Pytest, Ruff, tes web berbasis Node, Playwright, GitHub Actions |
+
+Kode utama berada di `apps/web/` dan `apps/api/`. `dataset/` memuat bahan regulasi, `evaluation/` memuat bahan evaluasi, dan `docs/` menjelaskan arsitektur serta pipeline lebih rinci.
+
+## Verifikasi
+
+CI menjalankan lint dan build web, unit test, integration test, Playwright, lint API, migrasi database naik dan turun, serta pytest. Repo juga menyediakan database PostgreSQL uji yang terpisah melalui `scripts/test_api.ps1`.
+
+Dataset pertanyaan seed di repo masih berstatus `needs_human_review`. Target kualitas pada PRD dan dokumen evaluasi adalah kriteria yang harus diverifikasi, bukan angka performa produksi yang diklaim oleh README ini.
+
+<details>
+<summary>Menjalankan secara lokal</summary>
+
+Gunakan Node.js 22, Python 3.12, dan PostgreSQL yang dapat diakses melalui `DATABASE_URL`. Salin `.env.example` ke `.env`, lalu isi koneksi database dan kredensial layanan yang digunakan. `compose.yaml` menyediakan Redis lokal.
+
+```powershell
+docker compose up -d redis
+cd apps/api
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python -m alembic upgrade head
+.\.venv\Scripts\python -m uvicorn app.main:app --reload
+```
+
+Di terminal lain:
+
+```powershell
+cd apps/web
+npm ci
+npm run dev
+```
+
+Buka `http://localhost:3000`. Dokumentasi API tersedia di `http://127.0.0.1:8000/docs`. Jika API melaporkan revisi database tertinggal, jalankan `python -m alembic upgrade head` dengan `DATABASE_URL` yang sama seperti proses API.
+
+</details>
+
+KerjaPedia AI membantu penelusuran informasi regulasi. Untuk keputusan hukum atau hubungan industrial, periksa peraturan yang dikutip dan konsultasikan dengan pihak yang berwenang.
