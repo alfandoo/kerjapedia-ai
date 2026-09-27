@@ -1,80 +1,80 @@
 # KerjaPedia AI
 
-**Asisten regulasi ketenagakerjaan Indonesia dengan jawaban yang bisa ditelusuri ke sumbernya.**
+**An Indonesian employment law assistant that makes every answer traceable to its source.**
 
-KerjaPedia AI adalah proyek portofolio AI engineering dan pengembangan web. Pengguna dapat bertanya dengan bahasa sehari-hari, lalu memeriksa dokumen, pasal, ayat, dan halaman yang mendasari jawaban. Fokus proyek ini adalah membangun pengalaman tanya jawab yang tetap berguna ketika dokumen hukum panjang, topik berubah, atau sumber tidak cukup untuk menjawab.
+KerjaPedia AI is an AI engineering and web development portfolio project. People can ask questions in everyday language, then inspect the regulation, article, clause, and page behind each answer. The project focuses on making legal question answering useful even when documents are long, the conversation changes direction, or the available sources cannot support an answer.
 
 Deploy : [https://kerjapedia-ai.vercel.app/](https://kerjapedia-ai.vercel.app/)
 
-## Masalah yang diangkat
+## The problem
 
-Aturan ketenagakerjaan tersebar di banyak dokumen dan dapat diubah oleh peraturan yang lebih baru. Mencari kata kunci saja sering belum cukup untuk menemukan pasal yang relevan. Di sisi lain, jawaban AI yang terdengar meyakinkan sulit dipakai jika pengguna tidak dapat memeriksa dasarnya.
+Indonesian employment rules are spread across many documents, and newer regulations can amend earlier ones. Keyword search alone may miss the relevant article. An AI answer can also sound convincing while leaving the user unable to check its legal basis.
 
-KerjaPedia AI menghubungkan pencarian dokumen resmi dengan percakapan yang mudah diikuti. Pengguna bisa mulai dari pertanyaan seperti “Apakah pekerja kontrak berhak atas kompensasi?”, membaca jawaban, lalu membuka sumber yang dikutip untuk menilai konteks hukumnya.
+KerjaPedia AI connects official document search with a conversational interface. Someone can ask, “Are fixed-term employees entitled to compensation?”, read the answer, and open its citations to assess the legal context.
 
-## Pengalaman produk
+## Product experience
 
-| Kebutuhan pengguna                                        | Implementasi                                                                                                       |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Memahami aturan tanpa membaca seluruh PDF terlebih dahulu | Chat merangkum bagian dokumen yang ditemukan dan menampilkan sitasi                                                |
-| Memeriksa dasar jawaban                                   | Rujukan dokumen, pasal, ayat, halaman, dan tautan sumber ditampilkan bersama jawaban                               |
-| Melanjutkan pertanyaan                                    | Riwayat turn dan ringkasan percakapan terstruktur membantu menjaga konteks; rujukan ambigu ditangani tanpa menebak |
-| Memilih kedalaman jawaban                                 | Mode cepat, standar, dan mendalam tersedia pada chat                                                               |
-| Berhenti saat jawaban tidak lagi dibutuhkan               | Pembatalan diteruskan dari browser sampai panggilan provider                                                       |
-| Menggunakan konteks pribadi                               | Pengguna yang login dapat mengaktifkan mode personal dan mengisi profil kerja                                      |
-| Menjelajah di luar chat                                   | Pencarian dokumen, kalkulator, tinjauan CV, dan halaman kepatuhan                                                  |
-| Mengelola mutu sistem                                     | Dashboard admin untuk dokumen, ingestion, evaluasi, feedback, penggunaan token, dan observability                  |
+| User need                                             | Implementation                                                                                                              |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Understand a rule without reading an entire PDF first | Chat summarizes retrieved passages and shows citations                                                                      |
+| Check the basis for an answer                         | Regulation, article, clause, page, and source links appear alongside the answer                                             |
+| Ask a follow-up question                              | Recent turns and a structured conversation summary help preserve context; ambiguous references are handled without guessing |
+| Choose the level of detail                            | Fast, standard, and deep chat modes                                                                                         |
+| Stop an answer that is no longer needed               | Cancellation travels from the browser to the provider request                                                               |
+| Use personal context                                  | Signed-in users can enable personalized mode and provide a work profile                                                     |
+| Explore beyond chat                                   | Document search, calculators, CV review, and compliance pages                                                               |
+| Monitor quality                                       | Admin views for documents, ingestion, evaluation, feedback, token usage, and observability                                  |
 
-Antarmuka tersedia dalam bahasa Indonesia dan Inggris. Percakapan tamu dapat dilanjutkan setelah pengguna login.
+The interface supports Indonesian and English. Guests can continue their conversations after signing in.
 
-## Dari pertanyaan ke jawaban
+## From question to cited answer
 
 ```mermaid
 flowchart LR
-    A["Pertanyaan pengguna"] --> B["FastAPI"]
+    A["User question"] --> B["FastAPI"]
     B --> C["Hybrid retrieval"]
-    C --> D["Dokumen dan metadata peraturan"]
-    D --> E["Reranking dan konteks"]
-    E --> F["LLM dan verifikasi klaim"]
-    F --> G["Jawaban dengan sitasi"]
-    B --> H["Riwayat, kuota, dan observability"]
+    C --> D["Regulations and metadata"]
+    D --> E["Reranking and context"]
+    E --> F["LLM and claim verification"]
+    F --> G["Answer with citations"]
+    B --> H["History, quotas, and observability"]
 ```
 
-Pipeline ingestion mengekstrak struktur peraturan dan metadata dokumen sebelum bagian yang dapat dicari dikirim ke indeks. Saat chat berlangsung, retrieval mengambil kandidat yang relevan, menyusun konteks, lalu generator membuat jawaban dari sumber tersebut. Guardrail memeriksa dukungan klaim dan memungkinkan sistem menolak menjawab ketika dasar dokumen tidak memadai. Ringkasan percakapan membantu memahami pertanyaan lanjutan, tetapi tidak menjadi sumber klaim hukum.
+The ingestion pipeline extracts regulation structure and document metadata before adding searchable passages to the index. During a chat, retrieval finds candidate passages, builds context, and passes it to the answer generator. Guardrails check whether claims are supported and allow the system to refuse an answer when the documents are insufficient. Conversation summaries help interpret follow-up questions, but they are never treated as legal sources.
 
-## Keputusan rekayasa yang menonjol
+## Engineering decisions
 
-- **Retrieval yang sadar struktur hukum.** Chunk dan metadata mempertahankan identitas peraturan, pasal, ayat, halaman, dan status dokumen. Pencarian menggabungkan sinyal dense dan sparse, lalu melakukan reranking.
-- **Jawaban yang dapat diaudit.** Sitasi melekat pada jawaban; proses evaluasi menguji retrieval, dukungan klaim, refusal, dan bahasa pada skenario yang mencakup follow-up serta pertanyaan bilingual.
-- **Percakapan yang aman saat panjang.** Ringkasan terstruktur hanya memakai turn selesai yang lolos guardrail dan memiliki sitasi. Turn gagal atau dibatalkan tidak masuk ke memori.
-- **Pembatalan sampai provider.** Sinyal abort melewati proxy Next.js dan API hingga transport provider. Request yang dibatalkan dicatat tanpa menyimpan jawaban parsial.
-- **Operasional yang terukur.** Observasi request memisahkan mode cepat, standar, dan mendalam, termasuk waktu status pertama, waktu konten pertama, latensi, token, retry, disconnect, dan kegagalan provider.
+- **Legal structure in retrieval.** Chunks and metadata retain the regulation's identity, article, clause, page, and status. Search combines dense and sparse signals, then reranks the results.
+- **Auditable answers.** Answers carry citations. Evaluation covers retrieval, claim support, refusal, and language across follow-up and bilingual cases.
+- **Long conversation handling.** Structured summaries include only completed turns that pass guardrails and contain citations. Failed and cancelled turns stay out of memory.
+- **Provider-level cancellation.** Abort signals pass through the Next.js proxy and API to the provider transport. Cancelled requests are recorded without saving partial answers.
+- **Request observability.** Metrics are separated by fast, standard, and deep modes and include time to first status, time to first content, total latency, tokens, retries, disconnects, and provider failures.
 
 ## Stack
 
-| Lapisan                   | Teknologi dan peran                                             |
-| ------------------------- | --------------------------------------------------------------- |
-| Web                       | Next.js 16, React 19, TypeScript                                |
-| API                       | FastAPI, Python 3.12, Alembic                                   |
-| Data relasional           | PostgreSQL                                                      |
-| Dokumen                   | Supabase Storage                                                |
-| Retrieval                 | Upstash Vector hybrid                                           |
-| Cache dan pekerjaan latar | Redis, Celery                                                   |
-| Model jawaban             | Groq atau OpenRouter                                            |
-| Pengujian                 | Pytest, Ruff, tes web berbasis Node, Playwright, GitHub Actions |
+| Layer                     | Technology and role                                            |
+| ------------------------- | -------------------------------------------------------------- |
+| Web                       | Next.js 16, React 19, TypeScript                               |
+| API                       | FastAPI, Python 3.12, Alembic                                  |
+| Relational data           | PostgreSQL                                                     |
+| Documents                 | Supabase Storage                                               |
+| Retrieval                 | Upstash Vector hybrid                                          |
+| Cache and background jobs | Redis, Celery                                                  |
+| Answer models             | Groq or OpenRouter                                             |
+| Testing                   | Pytest, Ruff, Node-based web tests, Playwright, GitHub Actions |
 
-Kode utama berada di `apps/web/` dan `apps/api/`. `dataset/` memuat bahan regulasi, `evaluation/` memuat bahan evaluasi, dan `docs/` menjelaskan arsitektur serta pipeline lebih rinci.
+The main applications live in `apps/web/` and `apps/api/`. `dataset/` contains regulation materials, `evaluation/` contains evaluation materials, and `docs/` covers the architecture and pipelines in more detail.
 
-## Verifikasi
+## Verification
 
-CI menjalankan lint dan build web, unit test, integration test, Playwright, lint API, migrasi database naik dan turun, serta pytest. Repo juga menyediakan database PostgreSQL uji yang terpisah melalui `scripts/test_api.ps1`.
+CI runs web lint and build, unit tests, integration tests, Playwright, API lint, database migration upgrade and downgrade checks, and pytest. The repository also provides an isolated PostgreSQL test database through `scripts/test_api.ps1`.
 
-Dataset pertanyaan seed di repo masih berstatus `needs_human_review`. Target kualitas pada PRD dan dokumen evaluasi adalah kriteria yang harus diverifikasi, bukan angka performa produksi yang diklaim oleh README ini.
+The seed question dataset in this repository is still marked `needs_human_review`. Quality targets in the PRD and evaluation documentation are criteria to verify, not production performance claims.
 
 <details>
-<summary>Menjalankan secara lokal</summary>
+<summary>Run locally</summary>
 
-Gunakan Node.js 22, Python 3.12, dan PostgreSQL yang dapat diakses melalui `DATABASE_URL`. Salin `.env.example` ke `.env`, lalu isi koneksi database dan kredensial layanan yang digunakan. `compose.yaml` menyediakan Redis lokal.
+Use Node.js 22, Python 3.12, and PostgreSQL reachable through `DATABASE_URL`. Copy `.env.example` to `.env`, then fill in the database connection and credentials for the services you use. `compose.yaml` provides local Redis.
 
 ```powershell
 docker compose up -d redis
@@ -85,7 +85,7 @@ python -m venv .venv
 .\.venv\Scripts\python -m uvicorn app.main:app --reload
 ```
 
-Di terminal lain:
+In another terminal:
 
 ```powershell
 cd apps/web
@@ -93,8 +93,8 @@ npm ci
 npm run dev
 ```
 
-Buka `http://localhost:3000`. Dokumentasi API tersedia di `http://127.0.0.1:8000/docs`. Jika API melaporkan revisi database tertinggal, jalankan `python -m alembic upgrade head` dengan `DATABASE_URL` yang sama seperti proses API.
+Open `http://localhost:3000`. API documentation is available at `http://127.0.0.1:8000/docs`. If the API reports an outdated database schema, run `python -m alembic upgrade head` with the same `DATABASE_URL` used by the API process.
 
 </details>
 
-KerjaPedia AI membantu penelusuran informasi regulasi. Untuk keputusan hukum atau hubungan industrial, periksa peraturan yang dikutip dan konsultasikan dengan pihak yang berwenang.
+KerjaPedia AI helps people find and understand regulatory information. For legal or employment decisions, check the cited regulations and consult a qualified professional or relevant authority.
