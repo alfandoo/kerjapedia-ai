@@ -110,6 +110,7 @@ const id = {
   "chat.quota.retry": "Coba lagi memuat kuota",
   "chat.quota.label": "Penggunaan hari ini",
   "chat.quota.remaining": "Sisa kuota hari ini",
+  "chat.quota.remainingShort": "Sisa",
   "chat.quota.of": "dari",
   "chat.quota.low": "Kuota hampir habis.",
   "chat.quota.empty": "Kuota hari ini habis.",
@@ -118,6 +119,7 @@ const id = {
   "chat.quota.guestStopped": "Jawaban dihentikan karena kuota guest habis. Masuk atau daftar untuk mendapat kuota harian yang lebih besar.",
   "chat.quota.userStopped": "Jawaban dihentikan karena kuota hari ini habis. Anda dapat bertanya lagi setelah reset pukul 00.00 WIB.",
   "chat.quota.reset": "Reset pukul 00.00 WIB",
+  "chat.quota.resetShort": "00.00 WIB",
   "chat.quota.exceeded": "Batas token harian tercapai. Anda dapat bertanya lagi setelah reset pukul 00.00 WIB.",
   "chat.quota.estimated": "Sebagian penggunaan diperkirakan karena provider tidak mengirim jumlah token.",
   "chat.claim.saving":

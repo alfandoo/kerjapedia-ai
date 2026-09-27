@@ -111,6 +111,7 @@ const en = {
   "chat.quota.retry": "Retry loading quota",
   "chat.quota.label": "Usage today",
   "chat.quota.remaining": "Daily quota remaining",
+  "chat.quota.remainingShort": "Left",
   "chat.quota.of": "of",
   "chat.quota.low": "Quota is almost used up.",
   "chat.quota.empty": "Daily quota used up.",
@@ -119,6 +120,7 @@ const en = {
   "chat.quota.guestStopped": "The answer was stopped because your guest quota ran out. Sign in or create an account for a larger daily quota.",
   "chat.quota.userStopped": "The answer was stopped because your daily quota ran out. You can ask again after the reset at 00:00 WIB.",
   "chat.quota.reset": "Resets at 00:00 WIB",
+  "chat.quota.resetShort": "00:00 WIB",
   "chat.quota.exceeded": "Daily token limit reached. You can ask again after the reset at 00:00 WIB.",
   "chat.quota.estimated": "Some usage is estimated because the provider did not report token counts.",
   "chat.claim.saving":

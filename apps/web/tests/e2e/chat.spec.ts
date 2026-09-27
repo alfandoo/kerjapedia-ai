@@ -922,8 +922,8 @@ test("guest sees daily quota on a narrow screen", async ({ page }) => {
     body: JSON.stringify({ usage_date: "2026-09-27", timezone: "Asia/Jakarta", reset_at: new Date(Date.now() + 86_400_000).toISOString(), limit_tokens: 20000, prompt_tokens: 1000, completion_tokens: 500, used_tokens: 1500, reserved_tokens: 0, remaining_tokens: 18500, estimated_tokens: 300 }),
   }));
   await page.goto("/chat");
-  await expect(page.getByText(/Sisa kuota hari ini: 18\.500 dari 20\.000 token/)).toBeVisible();
-  await expect(page.getByRole("progressbar", { name: "Penggunaan hari ini" })).toHaveAttribute("aria-valuenow", "1500");
+  await expect(page.getByText("Sisa", { exact: true })).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "Sisa kuota hari ini" })).toHaveAttribute("aria-valuenow", "18500");
   await expect(page.getByText("0/2.000 karakter")).toBeVisible();
   await expect(page.getByLabel("Ketik pertanyaan Anda")).toBeVisible();
   await expect(page.getByText("Asisten Hukum Ketenagakerjaan")).toHaveCount(0);
@@ -950,6 +950,42 @@ test("guest sees daily quota on a narrow screen", async ({ page }) => {
   await page.screenshot({ path: join(tmpdir(), "kerjapedia-chat-empty-en-mobile.png") });
 });
 
+test("dark quota card shows the remaining balance without overflowing", async ({ page }) => {
+  await mockGuestSession(page);
+  await mockChat(page);
+  await page.route("**/chat/usage", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      usage_date: "2026-09-27", timezone: "Asia/Jakarta",
+      reset_at: new Date(Date.now() + 86_400_000).toISOString(),
+      limit_tokens: 20000, prompt_tokens: 12000, completion_tokens: 3795,
+      used_tokens: 15795, reserved_tokens: 0, remaining_tokens: 4205, estimated_tokens: 0,
+    }),
+  }));
+  await page.context().addCookies([
+    { name: "settings-theme", value: "dark", url: "http://127.0.0.1:3100" },
+    { name: "settings-language", value: "en", url: "http://127.0.0.1:3100" },
+  ]);
+  await page.goto("/chat");
+
+  const progress = page.getByRole("progressbar", { name: "Daily quota remaining" });
+  await expect(page.getByText("Daily quota remaining", { exact: true })).toBeVisible();
+  await expect(progress).toHaveAttribute("aria-valuenow", "4205");
+  const fillRatio = await progress.locator("div").evaluate((fill) => {
+    const track = fill.parentElement;
+    return track ? fill.getBoundingClientRect().width / track.getBoundingClientRect().width : 0;
+  });
+  expect(fillRatio).toBeCloseTo(4205 / 20000, 1);
+  await expect(progress.locator("..")).toHaveCSS("background-color", "rgb(16, 23, 19)");
+  await page.screenshot({ path: join(tmpdir(), "kerjapedia-chat-quota-dark.png") });
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expect(page.getByText("Left", { exact: true })).toBeVisible();
+  await expect(progress).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: join(tmpdir(), "kerjapedia-chat-quota-dark-mobile.png") });
+});
 test("daily quota stays visible as a recoverable status when usage request fails", async ({ page }) => {
   await mockGuestSession(page);
   await mockChat(page);
@@ -974,7 +1010,7 @@ test("daily quota stays visible as a recoverable status when usage request fails
   await page.goto("/chat");
   await expect(page.getByText("Kuota belum dapat dimuat.")).toBeVisible();
   await page.getByRole("button", { name: "Coba lagi memuat kuota" }).click();
-  await expect(page.getByText(/Sisa kuota hari ini: 18\.500 dari 20\.000 token/)).toBeVisible();
+  await expect(page.getByText("Sisa kuota hari ini", { exact: true })).toBeVisible();
 });
 
 test("chat explains exhausted daily quota", async ({ page }) => {

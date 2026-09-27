@@ -718,35 +718,46 @@ export function EditorialChatExperience() {
         </div>
         {usage ? (
           <div
-            className="relative z-10 mx-auto mb-2 w-full max-w-[800px] bg-background px-4 text-xs text-muted-text max-[760px]:px-3"
+            className="relative z-10 mx-auto mb-3 w-[calc(100%-2rem)] max-w-[768px] rounded-xl border border-[#d8e8dc] bg-[#f5faf6] px-4 py-2.5 text-xs leading-5 text-muted-text dark:border-[#294034] dark:bg-[#101713] max-[760px]:w-[calc(100%-1.5rem)] max-[760px]:px-3 max-[420px]:mb-2 max-[420px]:px-2.5 max-[420px]:py-1.5 max-[420px]:leading-4"
             title={usage.estimated_tokens > 0 ? translate("chat.quota.estimated") : undefined}
           >
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <span>
-                <span className="font-semibold text-tinta">{translate("chat.quota.remaining")}:</span>{" "}
+              <span className="min-w-0">
+                <span className="font-semibold text-tinta">
+                  <span className="max-[420px]:hidden">{translate("chat.quota.remaining")}</span>
+                  <span className="hidden max-[420px]:inline">{translate("chat.quota.remainingShort")}</span>:
+                </span>{" "}
                 <span className="font-semibold tabular-nums text-tinta">
                   {new Intl.NumberFormat("id-ID").format(usage.remaining_tokens)}
                 </span>{" "}
-                {translate("chat.quota.of")} {new Intl.NumberFormat("id-ID").format(usage.limit_tokens)} token
+                <span className="max-[420px]:hidden">
+                  {translate("chat.quota.of")} {new Intl.NumberFormat("id-ID").format(usage.limit_tokens)} token
+                </span>
+                <span className="hidden max-[420px]:inline">
+                  / {new Intl.NumberFormat("id-ID").format(usage.limit_tokens)}
+                </span>
                 {usage.estimated_tokens > 0 ? (
                   <span aria-label={translate("chat.quota.estimated")}> *</span>
                 ) : null}
               </span>
-              <span className="shrink-0">{translate("chat.quota.reset")}</span>
+              <span className="shrink-0 text-[11px] text-muted-text" aria-label={translate("chat.quota.reset")}>
+                <span className="max-[420px]:hidden">{translate("chat.quota.reset")}</span>
+                <span className="hidden max-[420px]:inline">{translate("chat.quota.resetShort")}</span>
+              </span>
             </div>
             <div
               role="progressbar"
-              aria-label={translate("chat.quota.label")}
+              aria-label={translate("chat.quota.remaining")}
               aria-valuemin={0}
               aria-valuemax={usage.limit_tokens}
-              aria-valuenow={Math.max(0, usage.limit_tokens - usage.remaining_tokens)}
-              className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#d8e8dc] dark:bg-white/15"
+              aria-valuenow={Math.min(usage.limit_tokens, Math.max(0, usage.remaining_tokens))}
+              className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#d8e8dc] dark:bg-[#294034] max-[420px]:mt-1"
             >
               <div
                 className="h-full rounded-full bg-javanese transition-[width] dark:bg-[#84c99b]"
                 style={{
                   width: `${usage.limit_tokens > 0
-                    ? Math.min(100, Math.max(0, (1 - usage.remaining_tokens / usage.limit_tokens) * 100))
+                    ? Math.min(100, Math.max(0, (usage.remaining_tokens / usage.limit_tokens) * 100))
                     : 0}%`,
                 }}
               />
