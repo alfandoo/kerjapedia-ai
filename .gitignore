@@ -53,6 +53,9 @@ compose.production.yaml
 skills-lock.json
 .gitattributes
 
+# Documentation
+/docs/
+
 # Evaluation artifacts (regenerable)
 evaluation/*.json
 
