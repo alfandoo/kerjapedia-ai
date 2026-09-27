@@ -485,6 +485,10 @@
 }
 
 /* Chat canvas and composer */
+.dark header.chat-workspace-topbar[class*="bg-white"] {
+  background-color: var(--card) !important;
+}
+
 .dark .chat-workspace-surface {
   background-color: var(--card) !important;
 }

@@ -949,7 +949,7 @@ export function ChatWorkspaceShell({
       <div className="relative flex min-h-0 min-w-0 flex-col bg-white max-[760px]:h-full">
         <header
           aria-busy={!sessionReady}
-          className={`relative z-[5] grid min-h-[58px] items-center gap-2 border-b border-border bg-white/95 px-3.5 py-1.5 backdrop-blur-xl ${topbarColumns}`}
+          className={`chat-workspace-topbar relative z-[5] grid min-h-[58px] items-center gap-2 border-b border-border bg-white/95 px-3.5 py-1.5 backdrop-blur-xl ${topbarColumns}`}
         >
           <button
             type="button"
