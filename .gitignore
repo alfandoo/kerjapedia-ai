@@ -53,8 +53,18 @@ compose.production.yaml
 skills-lock.json
 .gitattributes
 
-# Documentation
-/docs/
+# Documentation: only core guides are published
+/docs/*
+!/docs/ANSWER_GENERATION.md
+!/docs/API.md
+!/docs/ARCHITECTURE.md
+!/docs/DEPLOYMENT.md
+!/docs/EVALUATION.md
+!/docs/INGESTION_PIPELINE.md
+!/docs/PRD_KerjaPedia_AI.md
+!/docs/RAG_PIPELINE.md
+!/docs/RETRIEVAL.md
+!/docs/TESTING.md
 
 # Evaluation artifacts (regenerable)
 evaluation/*.json

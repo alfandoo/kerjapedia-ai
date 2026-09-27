@@ -45,7 +45,7 @@ Primary apps:
 - JSONB embeddings (backup/reference only)
 - pgvector extension enabled but NOT used for production vector search
 
-> **Note:** pgvector is enabled in the database schema but embeddings are stored as JSONB, not vector columns. Upstash Vector is the sole production vector store for similarity search. See [P3-2_PGVECTOR_AUDIT.md](P3_2_PGVECTOR_AUDIT.md) for details. (Pinecone + self-hosted BGE-M3 were retired 2026-09.)
+> **Note:** pgvector is enabled in the database schema but embeddings are stored as JSONB, not vector columns. Upstash Vector is the sole production vector store for similarity search. (Pinecone + self-hosted BGE-M3 were retired 2026-09.)
 
 ## Ingestion Flow
 
