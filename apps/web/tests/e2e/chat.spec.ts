@@ -180,6 +180,13 @@ async function mockChat(
   await page.route("**/feedback", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
   });
+  await page.route("**/auth/memories", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ enabled: false, memory_count: 0 }),
+    });
+  });
 }
 
 function monitorRuntimeErrors(page: Page): string[] {
