@@ -44,6 +44,7 @@ Thumbs.db
 # AI tool configs (personal, not needed in repo)
 .agents/
 .codex/
+.impeccable/
 .opencode/
 AGENTS.md
 

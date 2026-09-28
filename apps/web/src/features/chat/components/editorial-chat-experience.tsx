@@ -1,6 +1,7 @@
 "use client";
 
 import { readPreference, writePreference } from "@/lib/preference-cookie";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -768,24 +769,32 @@ export function EditorialChatExperience() {
               <p className="mt-1 text-[#8a382d] dark:text-[#f0a99f]">{translate("chat.quota.low")}</p>
             ) : null}
           </div>
-        ) : (
+        ) : usageStatus === "error" ? (
           <div
             className="relative z-10 mx-auto mb-2 flex w-full max-w-[800px] items-center justify-between gap-3 bg-background px-4 text-xs text-muted-text max-[760px]:px-3"
             role="status"
             aria-live="polite"
           >
-            <span>
-              {translate(usageStatus === "error" ? "chat.quota.unavailable" : "chat.quota.loading")}
-            </span>
-            {usageStatus === "error" ? (
-              <button
-                type="button"
-                className="min-h-9 rounded-lg px-2 font-semibold text-javanese underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
-                onClick={() => void refreshUsage()}
-              >
-                {translate("chat.quota.retry")}
-              </button>
-            ) : null}
+            <span>{translate("chat.quota.unavailable")}</span>
+            <button
+              type="button"
+              className="min-h-9 rounded-lg px-2 font-semibold text-javanese underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
+              onClick={() => void refreshUsage()}
+            >
+              {translate("chat.quota.retry")}
+            </button>
+          </div>
+        ) : (
+          <div
+            className="relative z-10 mx-auto mb-3 w-[calc(100%-2rem)] max-w-[768px] rounded-xl border border-[#d8e8dc] bg-[#f5faf6] px-4 py-2.5 dark:border-[#294034] dark:bg-[#101713] max-[760px]:w-[calc(100%-1.5rem)] max-[760px]:px-3 max-[420px]:mb-2 max-[420px]:px-2.5 max-[420px]:py-1.5"
+            role="status"
+            aria-label={translate("chat.quota.loading")}
+          >
+            <div className="flex items-center justify-between gap-3" aria-hidden="true">
+              <Skeleton className="h-4 w-48 max-w-[60%]" />
+              <Skeleton className="h-3 w-24 shrink-0 max-[420px]:w-14" />
+            </div>
+            <Skeleton className="mt-2 h-1.5 w-full rounded-full max-[420px]:mt-1" aria-hidden="true" />
           </div>
         )}
         {session ? (
