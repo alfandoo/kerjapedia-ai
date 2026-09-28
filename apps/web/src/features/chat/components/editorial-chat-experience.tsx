@@ -63,6 +63,14 @@ export function EditorialChatExperience() {
   const [reasoningMode, setReasoningMode] = useState<ReasoningMode>("standard");
   const [personalizedMode, setPersonalizedModeState] = useState(false);
   const [memoryCount, setMemoryCount] = useState(0);
+  const [prevSession, setPrevSession] = useState(session);
+  if (prevSession !== session) {
+    setPrevSession(session);
+    if (!session) {
+      setPersonalizedModeState(false);
+      setMemoryCount(0);
+    }
+  }
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -185,11 +193,7 @@ export function EditorialChatExperience() {
   }, []);
 
   useEffect(() => {
-    if (!session) {
-      setPersonalizedModeState(false);
-      setMemoryCount(0);
-      return;
-    }
+    if (!session) return;
     let active = true;
     void fetchMemorySettings()
       .then((settings) => {
