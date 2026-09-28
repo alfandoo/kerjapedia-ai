@@ -215,6 +215,35 @@ async function mockGuestSession(page: Page) {
   );
 }
 
+async function stubGoogleSignIn(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as {
+      google?: {
+        accounts?: {
+          id?: {
+            initialize?: (options: unknown) => void;
+            renderButton?: (container: HTMLElement, options: unknown) => void;
+          };
+        };
+      };
+    };
+    w.google = {
+      accounts: {
+        id: {
+          initialize: () => {},
+          renderButton: (container) => {
+            container.innerHTML = "";
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = "Lanjutkan dengan Google";
+            container.appendChild(button);
+          },
+        },
+      },
+    };
+  });
+}
+
 test("user receives a sourced answer", async ({ page }, testInfo) => {
   test.setTimeout(45_000);
   const runtimeErrors = monitorRuntimeErrors(page);
@@ -228,7 +257,7 @@ test("user receives a sourced answer", async ({ page }, testInfo) => {
     page.getByText(/Build Error|Runtime Error|Application error|Unhandled Runtime Error/i)
   ).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Apa yang ingin Anda pahami?" })).toBeVisible();
-  await expect(page.getByText("Sisa kuota hari ini:")).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "Sisa kuota hari ini" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Mode jawaban" })).toContainText("Standar");
   await page.getByLabel("Ketik pertanyaan Anda").fill("Apakah pekerja PKWT memperoleh kompensasi?");
   await expect(page.getByRole("button", { name: "Kirim" })).toBeEnabled();
@@ -282,7 +311,7 @@ test("user can switch and persist the answer mode", async ({ page }) => {
   await page.goto("/");
 
   const mode = page.getByRole("button", { name: "Mode jawaban" });
-  await expect(page.getByText("Sisa kuota hari ini:")).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "Sisa kuota hari ini" })).toBeVisible();
   await expect(mode).toContainText("Standar");
   await mode.click();
   await expect(page.getByText(/Analisis lebih rinci/)).toBeVisible();
@@ -300,33 +329,57 @@ test("user can switch and persist the answer mode", async ({ page }) => {
   await expect(page.getByText("Pekerja PKWT berhak memperoleh uang kompensasi.")).toBeVisible();
 });
 
-test("personalized mode keeps work facts and conversation choice", async ({ page }) => {
+test("personalized memory toggle persists into answers and reloads", async ({ page }) => {
   test.setTimeout(90_000);
   let submitted: Record<string, unknown> | null = null;
+  let memoryEnabled = false;
   await useAuthenticatedSession(page);
   await mockChat(page, false, null, undefined, (payload) => { submitted = payload; });
+  await page.route("**/auth/memories", async (route) => {
+    if (route.request().method() === "PATCH") {
+      memoryEnabled = Boolean(
+        (route.request().postDataJSON() as { enabled: boolean }).enabled
+      );
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        enabled: memoryEnabled,
+        memory_count: memoryEnabled ? 3 : 0,
+      }),
+    });
+  });
   await page.goto("/");
 
-  await page.getByRole("button", { name: "Atur profil kerja" }).click();
-  await page.getByLabel("Provinsi tempat kerja").selectOption("Jawa Barat");
-  await page.getByLabel("Hubungan kerja").selectOption("PKWT");
-  await page.getByLabel("Tanggal mulai kerja").fill("2025-01-01");
-  await page.getByLabel("Upah bulanan (Rp)").fill("5000000");
-  await page.getByRole("button", { name: "Simpan profil" }).click();
-  await page.getByLabel("Personalized Mode").check();
-  await expect(page.getByText(/Jawa Barat .* PKWT/)).toBeVisible();
+  await page.getByRole("button", { name: "Buka menu profil Pengguna E2E" }).click();
+  await page.getByRole("menuitem", { name: "Mode Personalisasi" }).click();
+  const dialog = page.getByRole("dialog", { name: "Mode Personalisasi" });
+  await expect(dialog).toBeVisible();
+  const memorySwitch = dialog.getByRole("switch", { name: "Aktifkan memori percakapan" });
+  await expect(memorySwitch).toHaveAttribute("aria-checked", "false");
+  await memorySwitch.click();
+  await expect(memorySwitch).toHaveAttribute("aria-checked", "true");
+  await expect(dialog.getByText("3 memori tersimpan")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
 
   await page.getByLabel("Ketik pertanyaan Anda").fill("Berapa THR saya?");
   await page.getByRole("button", { name: "Kirim" }).click();
   await expect.poll(() => submitted?.personalized_mode).toBe(true);
+  await expect(page.getByText("Pekerja PKWT berhak memperoleh uang kompensasi.")).toBeVisible();
   await page.reload();
   await page.getByRole("region", { name: "Percakapan" }).getByRole("button", {
     name: "Apakah pekerja PKWT memperoleh kompensasi?", exact: true,
   }).click();
-  await expect(page.getByLabel("Personalized Mode")).toBeChecked();
-  await expect(page.getByText(/Jawa Barat .* PKWT/)).toBeVisible();
-  await page.getByLabel("Personalized Mode").uncheck();
-  await expect(page.getByLabel("Personalized Mode")).not.toBeChecked();
+  await expect(page.getByText("Pekerja PKWT berhak memperoleh uang kompensasi.")).toBeVisible();
+  await page.getByRole("button", { name: "Buka menu profil Pengguna E2E" }).click();
+  await page.getByRole("menuitem", { name: "Mode Personalisasi" }).click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Mode Personalisasi" })
+      .getByRole("switch", { name: "Aktifkan memori percakapan" })
+  ).toHaveAttribute("aria-checked", "true");
 });
 
 test("desktop sidebar collapses and persists", async ({ page }, testInfo) => {
@@ -462,6 +515,7 @@ test("guest conversation history is not shown or persisted in the sidebar", asyn
 test("guest authenticates through the two-step modal", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await mockGuestSession(page);
+  await stubGoogleSignIn(page);
   let registrationPayload: Record<string, string> | null = null;
   await page.route("**/auth/register", async (route) => {
     registrationPayload = route.request().postDataJSON() as Record<string, string>;
@@ -679,7 +733,7 @@ test("mobile user opens and closes the source bottom sheet", async ({ page }, te
   await mockGuestSession(page);
   await mockChat(page);
   await page.goto("/");
-  await expect(page.getByText("Sisa kuota hari ini:")).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "Sisa kuota hari ini" })).toBeVisible();
 
   await page.getByLabel("Ketik pertanyaan Anda").fill("Apakah pekerja PKWT memperoleh kompensasi?");
   await page.getByRole("button", { name: "Kirim" }).click();
@@ -708,7 +762,7 @@ test("mobile guest opens the navigation drawer", async ({ page }) => {
   await page.goto("/chat");
 
   await expect(page).toHaveURL(/\/chat$/);
-  await expect(page.getByText("Sisa kuota hari ini:")).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "Sisa kuota hari ini" })).toBeVisible();
   const menuButton = page.getByRole("button", { name: "Buka menu" });
   await menuButton.click();
   await expect(menuButton).toHaveAttribute("aria-expanded", "true");
