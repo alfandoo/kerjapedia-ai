@@ -87,6 +87,47 @@ def client() -> TestClient:
     return TestClient(app, headers=_DEFAULT_GUEST_HEADERS)
 
 
+def seed_published_dataset_version(document_id: str) -> None:
+    """Seed Document + published DocumentVersion so anonymous endpoints can
+    serve dataset manifests under governance gating."""
+    from app.api.utils import find_dataset_document
+
+    manifest_doc = find_dataset_document(document_id)
+    with create_session() as session:
+        session.merge(
+            Document(
+                document_id=manifest_doc.document_id,
+                title=manifest_doc.title,
+                short_title=manifest_doc.short_title,
+                regulation_type=manifest_doc.regulation_type,
+                number=manifest_doc.number,
+                year=manifest_doc.year,
+                issuer=manifest_doc.issuer,
+                topics=list(manifest_doc.topics or []),
+            )
+        )
+        session.merge(
+            DocumentVersion(
+                version_id=f"{manifest_doc.document_id}-v1",
+                document_id=manifest_doc.document_id,
+                version=1,
+                sha256=manifest_doc.sha256,
+                size_bytes=manifest_doc.size_bytes,
+                local_file=manifest_doc.local_file,
+                source_url=manifest_doc.source_url,
+                legal_status=manifest_doc.legal_status,
+                verification_status="verified",
+                source_verification_status="verified",
+                legal_review_status="verified",
+                publication_status="published",
+                ingestion_status="completed",
+                is_current=True,
+                artifact_paths={},
+            )
+        )
+        session.commit()
+
+
 def make_document() -> RetrievalDocument:
     provider = HashEmbeddingProvider()
     text = "Pasal 15 pekerja PKWT berhak memperoleh uang kompensasi."
@@ -876,44 +917,9 @@ def test_chat_guardrail_blocks_prompt_injection_before_retrieval(client: TestCli
 
 
 def test_dataset_pdf_is_served_inline(client: TestClient) -> None:
-    from app.api.utils import find_dataset_document
-
-    manifest_doc = find_dataset_document("PP-35-2021")
-    with create_session() as session:
-        session.merge(
-            Document(
-                document_id=manifest_doc.document_id,
-                title=manifest_doc.title,
-                short_title=manifest_doc.short_title,
-                regulation_type=manifest_doc.regulation_type,
-                number=manifest_doc.number,
-                year=manifest_doc.year,
-                issuer=manifest_doc.issuer,
-                topics=list(manifest_doc.topics or []),
-            )
-        )
-        session.merge(
-            DocumentVersion(
-                version_id="PP-35-2021-v1",
-                document_id=manifest_doc.document_id,
-                version=1,
-                sha256=manifest_doc.sha256,
-                size_bytes=manifest_doc.size_bytes,
-                local_file=manifest_doc.local_file,
-                source_url=manifest_doc.source_url,
-                legal_status=manifest_doc.legal_status,
-                verification_status="verified",
-                source_verification_status="verified",
-                legal_review_status="verified",
-                publication_status="published",
-                ingestion_status="completed",
-                is_current=True,
-                artifact_paths={},
-            )
-        )
-        session.commit()
+    seed_published_dataset_version("PP-35-2021")
     response = client.get("/documents/PP-35-2021/pdf")
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text[:500]
     assert response.headers["content-type"] == "application/pdf"
     assert response.content.startswith(b"%PDF")
 
@@ -1420,9 +1426,10 @@ def test_public_document_search_filters_by_type_year_and_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _mock_supabase_auth(monkeypatch, roles=["user", "admin"])
+    seed_published_dataset_version("PP-35-2021")
 
     all_docs = client.get("/documents")
-    assert all_docs.status_code == 200
+    assert all_docs.status_code == 200, all_docs.text[:500]
 
     pps = client.get("/documents?regulation_type=PP")
     assert pps.status_code == 200
