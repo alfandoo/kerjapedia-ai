@@ -26,7 +26,9 @@ _REASONING_EFFORT: dict[ReasoningMode, str] = {
 def embedding_provider_from_settings(
     settings: Settings,
     provider_name: str | None = None,
+    require_native_sparse: bool = False,
 ) -> EmbeddingProvider:
+    _ = require_native_sparse
     selected = provider_name or settings.embedding_provider
     key = (selected, settings.ingestion_embedding_batch_size)
     with _provider_lock:

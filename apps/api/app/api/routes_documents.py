@@ -15,7 +15,6 @@ from app.api.utils import (
     project_root,
     storage_root,
 )
-from app.core.config import settings
 from app.models.ingestion import DocumentVersion
 from app.services.ingestion.manifest_updater import (
     MANIFEST_EDITABLE_FIELDS,
@@ -60,14 +59,12 @@ def document_access(session, user):
     """Only a server-verified admin can preview unpublished artifacts."""
     if user is not None and "admin" in user.roles:
         return None
-    return load_retrieval_governance(session, allow_unpublished=settings.rag_allow_unpublished)
+    return load_retrieval_governance(session, allow_unpublished=False)
 
 
 def visible_document(document_id, session, access, document=None):
     document = document if document is not None else find_merged_document(document_id)
     if access is None:
-        return document
-    if settings.rag_allow_unpublished and not access.eligible_versions:
         return document
     version = access.eligible_versions.get(document_id)
     row = session.get(DocumentVersion, f"{document_id}-v{version}") if version is not None else None

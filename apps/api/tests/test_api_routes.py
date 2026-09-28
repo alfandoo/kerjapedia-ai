@@ -156,6 +156,13 @@ def _mock_supabase_auth(
         with create_session() as session:
             existing = session.get(UserProfile, uid)
             if existing is None:
+                conflicts = (
+                    session.query(UserProfile).filter(UserProfile.email == email).all()
+                )
+                for conflict in conflicts:
+                    if conflict.user_id != uid:
+                        session.delete(conflict)
+                session.flush()
                 session.add(
                     UserProfile(user_id=uid, email=email, name="Admin", roles=roles or ["user"])
                 )
@@ -872,6 +879,42 @@ def test_chat_guardrail_blocks_prompt_injection_before_retrieval(client: TestCli
 
 
 def test_dataset_pdf_is_served_inline(client: TestClient) -> None:
+    from app.api.utils import find_dataset_document
+
+    manifest_doc = find_dataset_document("PP-35-2021")
+    with create_session() as session:
+        session.merge(
+            Document(
+                document_id=manifest_doc.document_id,
+                title=manifest_doc.title,
+                short_title=manifest_doc.short_title,
+                regulation_type=manifest_doc.regulation_type,
+                number=manifest_doc.number,
+                year=manifest_doc.year,
+                issuer=manifest_doc.issuer,
+                topics=list(manifest_doc.topics or []),
+            )
+        )
+        session.merge(
+            DocumentVersion(
+                version_id="PP-35-2021-v1",
+                document_id=manifest_doc.document_id,
+                version=1,
+                sha256=manifest_doc.sha256,
+                size_bytes=manifest_doc.size_bytes,
+                local_file=manifest_doc.local_file,
+                source_url=manifest_doc.source_url,
+                legal_status=manifest_doc.legal_status,
+                verification_status="verified",
+                source_verification_status="verified",
+                legal_review_status="verified",
+                publication_status="published",
+                ingestion_status="completed",
+                is_current=True,
+                artifact_paths={},
+            )
+        )
+        session.commit()
     response = client.get("/documents/PP-35-2021/pdf")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
