@@ -100,7 +100,7 @@ def _run_ingestion_background(
             build_config=build_config,
             resume=True,
         )
-        if result.build_id != build_id:
+        if getattr(result, "build_id", build_id) != build_id:
             raise RuntimeError(
                 "Worker runtime produced a different ingestion build fingerprint."
             )
@@ -112,11 +112,11 @@ def _run_ingestion_background(
                 job.version_id = version_id
                 job.build_id = build_id
                 job.warnings = result.warnings or []
-                job.artifact_paths = result.artifacts
+                job.artifact_paths = getattr(result, "artifacts", {}) or {}
             if build:
                 build.status = result.status
-                build.quality_report = result.quality_report
-                build.artifact_manifest = result.artifact_manifest
+                build.quality_report = getattr(result, "quality_report", {}) or {}
+                build.artifact_manifest = getattr(result, "artifact_manifest", {}) or {}
             version_row = session.get(DocumentVersion, version_id)
             if version_row is not None:
                 _advance_version_ingestion_status(version_row, result.status)

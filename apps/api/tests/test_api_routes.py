@@ -12,6 +12,7 @@ from app.api.state import state
 from app.db.session import create_session
 from app.main import app
 from app.models.business import (
+    AuditLog,
     ChatTokenUsage,
     Conversation,
     DailyUsage,
@@ -34,6 +35,7 @@ from app.models.ingestion import (
     DocumentRelationship,
     DocumentVerificationAudit,
     DocumentVersion,
+    IngestionBuild,
     IngestionJob,
     RagIndexRelease,
 )
@@ -64,6 +66,7 @@ def reset_api_state() -> Iterator[None]:
         session.query(DocumentRelationship).delete()
         session.query(ChunkEmbedding).delete()
         session.query(DocumentChunk).delete()
+        session.query(IngestionBuild).delete()
         session.query(IngestionJob).delete()
         session.query(DocumentVersion).delete()
         session.query(Document).delete()
@@ -71,6 +74,7 @@ def reset_api_state() -> Iterator[None]:
         session.query(DocumentAdmin).delete()
         session.query(UploadedDocument).delete()
         session.query(PendingRegistration).delete()
+        session.query(AuditLog).delete()
         session.query(UserRole).delete()
         session.query(DailyUsage).delete()
         session.query(WorkProfile).delete()
@@ -156,13 +160,6 @@ def _mock_supabase_auth(
         with create_session() as session:
             existing = session.get(UserProfile, uid)
             if existing is None:
-                conflicts = (
-                    session.query(UserProfile).filter(UserProfile.email == email).all()
-                )
-                for conflict in conflicts:
-                    if conflict.user_id != uid:
-                        session.delete(conflict)
-                session.flush()
                 session.add(
                     UserProfile(user_id=uid, email=email, name="Admin", roles=roles or ["user"])
                 )
