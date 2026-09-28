@@ -99,6 +99,8 @@ def make_document(
 
 
 def test_golden_dataset_has_prd_distribution_and_hard_negatives() -> None:
+    if not golden_dataset_path().is_file():
+        pytest.skip("evaluation/golden_questions.json is gitignored and not present in CI")
     metadata, questions = load_evaluation_dataset(golden_dataset_path())
 
     assert len(questions) == 130
@@ -416,6 +418,8 @@ def test_ranking_metrics_count_each_document_once() -> None:
 
 
 def test_tuning_subset_is_stratified_and_development_only() -> None:
+    if not golden_dataset_path().is_file():
+        pytest.skip("evaluation/golden_questions.json is gitignored and not present in CI")
     metadata, questions = load_evaluation_dataset(golden_dataset_path())
 
     subset = tuning_subset(questions, per_category=2)

@@ -135,12 +135,6 @@ def ingest_document(
         )
 
     base = Path("documents") / document.document_id / f"v{version}" / "builds" / identity.build_id
-    raw_pdf_artifact = artifact_store.copy_raw_pdf(
-        pdf_path,
-        document.document_id,
-        version,
-        identity.build_id,
-    )
 
     # P3-1: Extract pages first to get page count for resource validation
     try:
@@ -200,6 +194,13 @@ def ingest_document(
         )
         _try_write_failed_evaluation(failure_report, output_dir)
         raise
+
+    raw_pdf_artifact = artifact_store.copy_raw_pdf(
+        pdf_path,
+        document.document_id,
+        version,
+        identity.build_id,
+    )
 
     pages = initial_pages
     ocr_artifact_path: str | None = None

@@ -71,6 +71,10 @@ class MemoryRateLimitStore:
             self._counts[key] = (count, started_at)
             return count
 
+    def clear(self) -> None:
+        with self._lock:
+            self._counts.clear()
+
 
 class RedisRateLimitStore:
     """Fixed-window counters in Redis shared across replicas."""
@@ -114,6 +118,10 @@ class RateLimiter:
     @property
     def backend(self) -> str:
         return "redis" if self._redis is not None else "memory"
+
+    def reset(self) -> None:
+        """Clear in-memory counters; used to isolate tests."""
+        self._memory.clear()
 
     def _increment(self, key: str) -> tuple[int, str]:
         now = time.time()

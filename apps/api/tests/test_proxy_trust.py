@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app import server
-from app.main import rate_limit_and_log, settings, state
+from app.main import rate_limit_and_log, rate_limiter
 
 
 @pytest.mark.parametrize("value", ["*", "0.0.0.0/0", "::/0", "127.0.0.1,*", "not-an-ip"])
@@ -49,8 +49,10 @@ def test_container_uses_explicit_proxy_addresses(monkeypatch):
     ],
 )
 def test_rotating_spoofed_headers_cannot_reset_rate_limit(monkeypatch, trusted, peer, headers):
-    monkeypatch.setattr(state, "request_counts", {})
-    monkeypatch.setattr(settings, "rate_limit_per_minute", 2)
+    rate_limiter.reset()
+    rate_limiter._redis = None
+    monkeypatch.setattr(rate_limiter, "_limit", 2)
+    monkeypatch.setattr(rate_limiter, "_ip_limit", 20)
     statuses = []
 
     async def downstream(request):
@@ -82,7 +84,12 @@ def test_rotating_spoofed_headers_cannot_reset_rate_limit(monkeypatch, trusted, 
 
     asyncio.run(exercise())
     assert statuses == [200, 200, 429]
-    assert list(state.request_counts) == ["198.51.100.20"]
+    assert sorted(rate_limiter._memory._counts) == sorted(
+        [
+            "ratelimit:id:ip:198.51.100.20",
+            "ratelimit:ip:198.51.100.20",
+        ]
+    )
 
 
 def test_trusted_proxy_preserves_distinct_client_ips(monkeypatch):

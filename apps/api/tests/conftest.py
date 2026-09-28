@@ -49,6 +49,22 @@ def use_offline_test_providers(monkeypatch: pytest.MonkeyPatch) -> Iterator[None
 
 
 @pytest.fixture(autouse=True)
+def _reset_global_rate_limiter() -> Iterator[None]:
+    """Isolate the process-global RateLimiter between tests.
+
+    Production code budgets via app.main.rate_limiter; older fixtures only
+    cleared legacy request_counts dicts, letting counts leak across tests.
+    """
+    from app.main import rate_limiter
+
+    rate_limiter.reset()
+    rate_limiter._redis = None
+    yield
+    rate_limiter.reset()
+    rate_limiter._redis = None
+
+
+@pytest.fixture(autouse=True)
 def restore_dataset_manifest() -> Iterator[None]:
     """Restore dataset/metadata.json after tests that exercise metadata updates."""
     from app.api.utils import dataset_metadata_path

@@ -23,8 +23,8 @@ class DocumentMetadata:
     size_bytes: int
     sha256: str
     verification_status: str
-    source_verification_status: str
-    legal_review_status: str
+    source_verification_status: str = "verified"
+    legal_review_status: str = "verified"
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DocumentMetadata:

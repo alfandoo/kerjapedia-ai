@@ -12,11 +12,13 @@ def test_ask_is_async_and_uses_isolated_thread() -> None:
     assert "_retrieve_with_isolated_session" in src
     assert "_generate_with_fresh_generator" in src
     assert routes_chat._RETRIEVAL_TIMEOUT_SECONDS < 150
-    assert routes_chat._GENERATION_TIMEOUT_SECONDS < 150
-    assert (
-        routes_chat._RETRIEVAL_TIMEOUT_SECONDS + routes_chat._GENERATION_TIMEOUT_SECONDS
-        <= 150
-    )
+    generation_budgets = routes_chat._GENERATION_TIMEOUT_SECONDS
+    if isinstance(generation_budgets, dict):
+        assert max(generation_budgets.values()) < 150
+        assert routes_chat._RETRIEVAL_TIMEOUT_SECONDS + max(generation_budgets.values()) <= 150
+    else:
+        assert generation_budgets < 150
+        assert routes_chat._RETRIEVAL_TIMEOUT_SECONDS + generation_budgets <= 150
 
 
 def test_ask_per_stage_timeout_observable() -> None:
