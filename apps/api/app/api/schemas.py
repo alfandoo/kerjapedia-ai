@@ -235,6 +235,15 @@ class WorkProfileResponse(WorkProfileUpdateRequest):
     pass
 
 
+class UserMemorySettingsUpdateRequest(ApiModel):
+    enabled: bool
+
+
+class UserMemorySettingsResponse(ApiModel):
+    enabled: bool
+    memory_count: int
+
+
 class EmailOtpVerifyRequest(ApiModel):
     email: str = Field(min_length=3, max_length=160)
     token: str = Field(min_length=4, max_length=64)

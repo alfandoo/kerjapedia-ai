@@ -28,6 +28,7 @@ import {
   Scale,
   Search,
   Settings,
+  SlidersHorizontal,
   Shield,
   User,
   X,
@@ -37,6 +38,7 @@ import { ChatSidebar } from "./chat-sidebar";
 import { SettingsModal } from "@/features/settings";
 import { useStoredSession, useSessionReady } from "@/features/auth";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSettings } from "@/features/settings";
 import type { ConversationSummary } from "@/features/chat/types";
 
@@ -51,6 +53,7 @@ type ChatWorkspaceShellProps = {
   mobileSidebarOpen: boolean;
   sourceDrawerOpen: boolean;
   sourcePanel?: ReactNode;
+  personalizedPanel?: ReactNode;
   onSidebarExpandedChange: (expanded: boolean) => void;
   onMobileSidebarOpenChange: (open: boolean) => void;
   onSourceDrawerClose: () => void;
@@ -123,6 +126,7 @@ export function ChatWorkspaceShell({
   mobileSidebarOpen,
   sourceDrawerOpen,
   sourcePanel,
+  personalizedPanel,
   onSidebarExpandedChange,
   onMobileSidebarOpenChange,
   onSourceDrawerClose,
@@ -153,6 +157,7 @@ export function ChatWorkspaceShell({
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [personalizedOpen, setPersonalizedOpen] = useState(false);
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -754,6 +759,19 @@ export function ChatWorkspaceShell({
           <User className="size-[18px]" />
           <span>{translate("profile.title")}</span>
         </button>
+        <button
+          type="button"
+          role="menuitem"
+          className="flex min-h-11 items-center gap-[11px] rounded-lg px-2.5 text-left text-xs transition hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-javanese"
+          onClick={() => {
+            setProfileMenuOpen(false);
+            onMobileSidebarOpenChange(false);
+            setPersonalizedOpen(true);
+          }}
+        >
+          <SlidersHorizontal className="size-[18px]" />
+          <span>{translate("chat.personalized.label")}</span>
+        </button>
         <Link
           href="/legal/disclaimer"
           role="menuitem"
@@ -1058,6 +1076,23 @@ export function ChatWorkspaceShell({
           onAuthenticated?.();
         }}
       />
+      {personalizedPanel ? (
+        <Dialog open={personalizedOpen} onOpenChange={setPersonalizedOpen}>
+          <DialogContent
+            className="w-[calc(100vw_-_2rem)] max-h-[min(660px,calc(100svh_-_40px))] overflow-y-auto sm:max-w-[440px] [scrollbar-width:thin]"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              profileTriggerRef.current?.focus();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{translate("chat.personalized.label")}</DialogTitle>
+              <DialogDescription>{translate("chat.personalized.description")}</DialogDescription>
+            </DialogHeader>
+            {personalizedPanel}
+          </DialogContent>
+        </Dialog>
+      ) : null}
       {profileOpen && session ? (
         <ProfileModal
           key={session.user.user_id}

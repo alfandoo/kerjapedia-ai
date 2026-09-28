@@ -71,22 +71,18 @@ const id = {
   "chat.send": "Kirim",
   "chat.cancel": "Batalkan",
   "chat.mode.label": "Mode jawaban",
-  "chat.personalized.label": "Personalized Mode",
-  "chat.personalized.edit": "Atur profil kerja",
-  "chat.personalized.close": "Tutup",
-  "chat.personalized.empty": "Belum ada fakta kerja tersimpan. Tambahkan profil agar jawaban lebih relevan.",
-  "chat.personalized.province": "Provinsi tempat kerja",
-  "chat.personalized.status": "Hubungan kerja",
-  "chat.personalized.startDate": "Tanggal mulai kerja",
-  "chat.personalized.wage": "Upah bulanan (Rp)",
-  "chat.personalized.start": "mulai",
-  "chat.personalized.wageShort": "upah",
-  "chat.personalized.blank": "Belum diisi",
-  "chat.personalized.save": "Simpan profil",
-  "chat.personalized.delete": "Hapus profil kerja",
-  "chat.personalized.loadError": "Profil kerja belum dapat dimuat.",
-  "chat.personalized.saveError": "Profil kerja belum dapat disimpan.",
-  "chat.personalized.deleteError": "Profil kerja belum dapat dihapus.",
+  "chat.personalized.label": "Mode Personalisasi",
+  "chat.personalized.description": "Atur cara KerjaPedia AI menggunakan memori percakapan Anda.",
+  "chat.personalized.enable": "Aktifkan memori percakapan",
+  "chat.personalized.enableDescription":
+    "Buat memori dari chat Anda dan gunakan untuk menyesuaikan chat berikutnya.",
+  "chat.personalized.deleteTitle": "Hapus memori KerjaPedia AI",
+  "chat.personalized.memoryCount": "memori tersimpan",
+  "chat.personalized.delete": "Hapus",
+  "chat.personalized.deleteConfirm":
+    "Hapus semua memori percakapan? Tindakan ini tidak dapat dibatalkan.",
+  "chat.personalized.loadError": "Memori belum dapat dimuat. Coba lagi.",
+  "chat.personalized.deleteError": "Memori belum dapat dihapus. Coba lagi.",
   "chat.personalized.modeError": "Mode belum dapat diubah. Coba lagi.",
   "chat.mode.help": "Atur kedalaman analisis sebelum mengirim pertanyaan.",
   "chat.mode.fast": "Cepat",
@@ -94,7 +90,8 @@ const id = {
   "chat.mode.deep": "Mendalam",
   "chat.mode.fast.description": "Untuk pertanyaan sederhana.",
   "chat.mode.standard.description": "Untuk sebagian besar pertanyaan.",
-  "chat.mode.deep.description": "Analisis lebih rinci; mungkin memakai lebih banyak waktu dan token.",
+  "chat.mode.deep.description":
+    "Analisis lebih rinci; mungkin memakai lebih banyak waktu dan token.",
   "chat.input.characters": "karakter",
   "chat.loading.title": "Menelusuri regulasi yang relevan...",
   "chat.loading.subtitle": "Memeriksa pasal, status, dan sumber pendukung.",
@@ -114,14 +111,20 @@ const id = {
   "chat.quota.of": "dari",
   "chat.quota.low": "Kuota hampir habis.",
   "chat.quota.empty": "Kuota hari ini habis.",
-  "chat.quota.guestExceeded": "Kuota guest hari ini habis. Masuk atau daftar untuk mendapat kuota harian yang lebih besar.",
-  "chat.quota.userExceeded": "Kuota hari ini habis. Anda dapat bertanya lagi setelah reset pukul 00.00 WIB.",
-  "chat.quota.guestStopped": "Jawaban dihentikan karena kuota guest habis. Masuk atau daftar untuk mendapat kuota harian yang lebih besar.",
-  "chat.quota.userStopped": "Jawaban dihentikan karena kuota hari ini habis. Anda dapat bertanya lagi setelah reset pukul 00.00 WIB.",
+  "chat.quota.guestExceeded":
+    "Kuota guest hari ini habis. Masuk atau daftar untuk mendapat kuota harian yang lebih besar.",
+  "chat.quota.userExceeded":
+    "Kuota hari ini habis. Anda dapat bertanya lagi setelah reset pukul 00.00 WIB.",
+  "chat.quota.guestStopped":
+    "Jawaban dihentikan karena kuota guest habis. Masuk atau daftar untuk mendapat kuota harian yang lebih besar.",
+  "chat.quota.userStopped":
+    "Jawaban dihentikan karena kuota hari ini habis. Anda dapat bertanya lagi setelah reset pukul 00.00 WIB.",
   "chat.quota.reset": "Reset pukul 00.00 WIB",
   "chat.quota.resetShort": "00.00 WIB",
-  "chat.quota.exceeded": "Batas token harian tercapai. Anda dapat bertanya lagi setelah reset pukul 00.00 WIB.",
-  "chat.quota.estimated": "Sebagian penggunaan diperkirakan karena provider tidak mengirim jumlah token.",
+  "chat.quota.exceeded":
+    "Batas token harian tercapai. Anda dapat bertanya lagi setelah reset pukul 00.00 WIB.",
+  "chat.quota.estimated":
+    "Sebagian penggunaan diperkirakan karena provider tidak mengirim jumlah token.",
   "chat.claim.saving":
     "Menyimpan percakapan ke akun Anda. Anda dapat melanjutkan setelah proses ini selesai.",
   "chat.claim.error":

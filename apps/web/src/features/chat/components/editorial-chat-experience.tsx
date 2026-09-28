@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatComposer } from "./chat-composer";
 import { PersonalizedControls } from "./personalized-controls";
-import type { ChatMessage, ReasoningMode, TokenUsageSnapshot, WorkProfile } from "../types";
+import type { ChatMessage, ReasoningMode, TokenUsageSnapshot } from "../types";
 import { ChatWorkspaceShell } from "./chat-workspace-shell";
 import { ConversationThread } from "./conversation-thread";
 import { AlertTriangle } from "lucide-react";
@@ -18,10 +18,9 @@ import { useSettings } from "@/features/settings";
 import { useStoredSession } from "@/features/auth";
 import {
   askQuestionStream,
-  fetchWorkProfile,
-  saveWorkProfile,
-  deleteWorkProfile,
-  setPersonalizedMode,
+  deleteMemories,
+  fetchMemorySettings,
+  updateMemorySettings,
   DailyTokenQuotaError,
   fetchTokenUsage,
   claimGuestConversation,
@@ -63,8 +62,7 @@ export function EditorialChatExperience() {
   const [question, setQuestion] = useState("");
   const [reasoningMode, setReasoningMode] = useState<ReasoningMode>("standard");
   const [personalizedMode, setPersonalizedModeState] = useState(false);
-  const [workProfile, setWorkProfile] = useState<WorkProfile | null>(null);
-  const [workProfileOwner, setWorkProfileOwner] = useState<string | null>(null);
+  const [memoryCount, setMemoryCount] = useState(0);
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -122,12 +120,15 @@ export function EditorialChatExperience() {
     const resetAt = quotaResetAt ?? usage?.reset_at;
     if (!quotaBlocked || !resetAt) return;
     const delay = Math.max(1000, new Date(resetAt).getTime() - Date.now() + 1000);
-    const timer = window.setTimeout(() => {
-      setQuotaBlocked(false);
-      setQuotaStoppedDuringProcessing(false);
-      setQuotaResetAt(null);
-      void refreshUsage();
-    }, Math.min(delay, 2_147_483_647));
+    const timer = window.setTimeout(
+      () => {
+        setQuotaBlocked(false);
+        setQuotaStoppedDuringProcessing(false);
+        setQuotaResetAt(null);
+        void refreshUsage();
+      },
+      Math.min(delay, 2_147_483_647)
+    );
     return () => window.clearTimeout(timer);
   }, [quotaBlocked, quotaResetAt, refreshUsage, usage?.reset_at]);
 
@@ -184,63 +185,50 @@ export function EditorialChatExperience() {
   }, []);
 
   useEffect(() => {
-    const ownerId = session?.user.user_id;
-    if (!ownerId) return;
+    if (!session) {
+      setPersonalizedModeState(false);
+      setMemoryCount(0);
+      return;
+    }
     let active = true;
-    void fetchWorkProfile()
-      .then((profile) => {
-        if (active) {
-          setWorkProfile(profile);
-          setWorkProfileOwner(ownerId);
-        }
+    void fetchMemorySettings()
+      .then((settings) => {
+        if (!active) return;
+        setPersonalizedModeState(settings.enabled);
+        setMemoryCount(settings.memory_count);
       })
-      .catch(() => { if (active) setProfileError(translate("chat.personalized.loadError")); });
-    return () => { active = false; };
-  }, [session?.user.user_id, translate]);
+      .catch(() => {
+        if (active) setProfileError(translate("chat.personalized.loadError"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [session, translate]);
 
   async function handlePersonalizedToggle(enabled: boolean) {
     if (!session || isLoading || profileBusy) return;
     setProfileError(null);
-    if (!conversationId) {
-      setPersonalizedModeState(enabled);
-      return;
-    }
     setProfileBusy(true);
-    setPersonalizedModeState(enabled);
     try {
-      await setPersonalizedMode(conversationId, enabled);
+      const settings = await updateMemorySettings(enabled);
+      setPersonalizedModeState(settings.enabled);
+      setMemoryCount(settings.memory_count);
     } catch {
-      setPersonalizedModeState(!enabled);
       setProfileError(translate("chat.personalized.modeError"));
     } finally {
       setProfileBusy(false);
     }
   }
 
-  async function handleWorkProfileSave(profile: WorkProfile) {
-    setProfileBusy(true);
+  async function handleDeleteMemories() {
+    if (!window.confirm(translate("chat.personalized.deleteConfirm"))) return;
     setProfileError(null);
-    try {
-      setWorkProfile(await saveWorkProfile(profile));
-      setWorkProfileOwner(session?.user.user_id ?? null);
-    } catch {
-      setProfileError(translate("chat.personalized.saveError"));
-      throw new Error("Profile save failed");
-    } finally {
-      setProfileBusy(false);
-    }
-  }
-
-  async function handleWorkProfileDelete() {
     setProfileBusy(true);
-    setProfileError(null);
     try {
-      await deleteWorkProfile();
-      setWorkProfile({ province: null, employment_status: null, start_date: null, monthly_wage: null });
-      setWorkProfileOwner(session?.user.user_id ?? null);
+      await deleteMemories();
+      setMemoryCount(0);
     } catch {
       setProfileError(translate("chat.personalized.deleteError"));
-      throw new Error("Profile delete failed");
     } finally {
       setProfileBusy(false);
     }
@@ -319,7 +307,6 @@ export function EditorialChatExperience() {
         const latestMessageId = [...nextMessages].reverse().find((item) => item.answer)?.id ?? null;
         shouldStickToBottomRef.current = true;
         setConversationId(detail.conversation_id);
-        setPersonalizedModeState(detail.personalized_mode ?? false);
         setMessages(nextMessages);
         setCitations(latest?.citations ?? []);
         setActiveSourceMessageId(latestMessageId);
@@ -549,6 +536,16 @@ export function EditorialChatExperience() {
         onRate={(rating) => void handleSourceRate(rating)}
       />
     ) : undefined;
+  const personalizedPanel = session ? (
+    <PersonalizedControls
+      enabled={personalizedMode}
+      memoryCount={memoryCount}
+      busy={profileBusy || isLoading}
+      error={profileError}
+      onToggle={(enabled) => void handlePersonalizedToggle(enabled)}
+      onDelete={() => void handleDeleteMemories()}
+    />
+  ) : undefined;
 
   return (
     <ChatWorkspaceShell
@@ -561,6 +558,7 @@ export function EditorialChatExperience() {
       mobileSidebarOpen={isMobileSidebarOpen}
       sourceDrawerOpen={isSourceDrawerOpen}
       sourcePanel={sourcePanel}
+      personalizedPanel={personalizedPanel}
       onSidebarExpandedChange={(expanded) => {
         setIsSidebarExpanded(expanded);
         writePreference(SIDEBAR_STORAGE_KEY, expanded ? "expanded" : "collapsed");
@@ -626,7 +624,9 @@ export function EditorialChatExperience() {
                     <span className="mb-2 inline-flex self-start rounded-md bg-teal-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-strong max-[760px]:mb-1">
                       {item.tag}
                     </span>
-                    <span className="text-[13px] leading-[1.55] text-foreground max-[760px]:text-[12px]">{item.text}</span>
+                    <span className="text-[13px] leading-[1.55] text-foreground max-[760px]:text-[12px]">
+                      {item.text}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -685,7 +685,7 @@ export function EditorialChatExperience() {
               </button>
             </div>
           ) : null}
-          {(error || quotaBlocked) ? (
+          {error || quotaBlocked ? (
             <div
               className="mx-auto mb-5 flex max-w-[760px] flex-wrap items-center gap-2.5 rounded-lg border border-[#f0d6d2] bg-[#fef7f5] p-3 text-xs leading-[1.55] text-[#753328]"
               role="alert"
@@ -726,13 +726,17 @@ export function EditorialChatExperience() {
               <span className="min-w-0">
                 <span className="font-semibold text-tinta">
                   <span className="max-[420px]:hidden">{translate("chat.quota.remaining")}</span>
-                  <span className="hidden max-[420px]:inline">{translate("chat.quota.remainingShort")}</span>:
+                  <span className="hidden max-[420px]:inline">
+                    {translate("chat.quota.remainingShort")}
+                  </span>
+                  :
                 </span>{" "}
                 <span className="font-semibold tabular-nums text-tinta">
                   {new Intl.NumberFormat("id-ID").format(usage.remaining_tokens)}
                 </span>{" "}
                 <span className="max-[420px]:hidden">
-                  {translate("chat.quota.of")} {new Intl.NumberFormat("id-ID").format(usage.limit_tokens)} token
+                  {translate("chat.quota.of")}{" "}
+                  {new Intl.NumberFormat("id-ID").format(usage.limit_tokens)} token
                 </span>
                 <span className="hidden max-[420px]:inline">
                   / {new Intl.NumberFormat("id-ID").format(usage.limit_tokens)}
@@ -741,9 +745,14 @@ export function EditorialChatExperience() {
                   <span aria-label={translate("chat.quota.estimated")}> *</span>
                 ) : null}
               </span>
-              <span className="shrink-0 text-[11px] text-muted-text" aria-label={translate("chat.quota.reset")}>
+              <span
+                className="shrink-0 text-[11px] text-muted-text"
+                aria-label={translate("chat.quota.reset")}
+              >
                 <span className="max-[420px]:hidden">{translate("chat.quota.reset")}</span>
-                <span className="hidden max-[420px]:inline">{translate("chat.quota.resetShort")}</span>
+                <span className="hidden max-[420px]:inline">
+                  {translate("chat.quota.resetShort")}
+                </span>
               </span>
             </div>
             <div
@@ -757,16 +766,25 @@ export function EditorialChatExperience() {
               <div
                 className="h-full rounded-full bg-javanese transition-[width] dark:bg-[#84c99b]"
                 style={{
-                  width: `${usage.limit_tokens > 0
-                    ? Math.min(100, Math.max(0, (usage.remaining_tokens / usage.limit_tokens) * 100))
-                    : 0}%`,
+                  width: `${
+                    usage.limit_tokens > 0
+                      ? Math.min(
+                          100,
+                          Math.max(0, (usage.remaining_tokens / usage.limit_tokens) * 100)
+                        )
+                      : 0
+                  }%`,
                 }}
               />
             </div>
             {usage.remaining_tokens <= 0 ? (
-              <p className="mt-1 text-[#8a382d] dark:text-[#f0a99f]">{translate("chat.quota.empty")}</p>
+              <p className="mt-1 text-[#8a382d] dark:text-[#f0a99f]">
+                {translate("chat.quota.empty")}
+              </p>
             ) : usage.remaining_tokens <= usage.limit_tokens * 0.1 ? (
-              <p className="mt-1 text-[#8a382d] dark:text-[#f0a99f]">{translate("chat.quota.low")}</p>
+              <p className="mt-1 text-[#8a382d] dark:text-[#f0a99f]">
+                {translate("chat.quota.low")}
+              </p>
             ) : null}
           </div>
         ) : usageStatus === "error" ? (
@@ -794,20 +812,12 @@ export function EditorialChatExperience() {
               <Skeleton className="h-4 w-48 max-w-[60%]" />
               <Skeleton className="h-3 w-24 shrink-0 max-[420px]:w-14" />
             </div>
-            <Skeleton className="mt-2 h-1.5 w-full rounded-full max-[420px]:mt-1" aria-hidden="true" />
+            <Skeleton
+              className="mt-2 h-1.5 w-full rounded-full max-[420px]:mt-1"
+              aria-hidden="true"
+            />
           </div>
         )}
-        {session ? (
-          <PersonalizedControls
-            enabled={personalizedMode}
-            profile={workProfileOwner === session.user.user_id ? workProfile : null}
-            busy={profileBusy || isLoading}
-            error={profileError}
-            onToggle={(enabled) => void handlePersonalizedToggle(enabled)}
-            onSave={handleWorkProfileSave}
-            onDelete={handleWorkProfileDelete}
-          />
-        ) : null}
         <ChatComposer
           question={question}
           loading={isLoading}

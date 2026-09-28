@@ -1,10 +1,20 @@
 import { API_URL, parseJsonResponse } from "@/lib/api-client";
 import { fetchWithAuthRetry } from "@/features/auth";
-import type { AskResponse, ConversationDetail, ConversationSummary, ReasoningMode, TokenUsageSnapshot, WorkProfile } from "./types";
+import type {
+  AskResponse,
+  ConversationDetail,
+  ConversationSummary,
+  ReasoningMode,
+  TokenUsageSnapshot,
+  WorkProfile,
+} from "./types";
 import { chatHeaders } from "./request-headers";
 
 export class DailyTokenQuotaError extends Error {
-  constructor(public readonly resetAt: string, public readonly duringProcessing = false) {
+  constructor(
+    public readonly resetAt: string,
+    public readonly duringProcessing = false
+  ) {
     super("daily_token_quota_exceeded");
     this.name = "DailyTokenQuotaError";
   }
@@ -12,7 +22,10 @@ export class DailyTokenQuotaError extends Error {
 
 async function throwIfQuotaExceeded(response: Response): Promise<void> {
   if (response.status !== 429) return;
-  const payload = (await response.clone().json().catch(() => null)) as {
+  const payload = (await response
+    .clone()
+    .json()
+    .catch(() => null)) as {
     detail?: { code?: string; reset_at?: string };
   } | null;
   if (payload?.detail?.code === "daily_token_quota_exceeded")
@@ -185,6 +198,34 @@ export { submitFeedback } from "./feedback-api";
 export type { FeedbackIssue, FeedbackRating } from "./feedback-api";
 export { documentPdfUrl } from "@/features/documents";
 
+export type UserMemorySettings = {
+  enabled: boolean;
+  memory_count: number;
+};
+
+export async function fetchMemorySettings(): Promise<UserMemorySettings> {
+  return parseJsonResponse<UserMemorySettings>(
+    await fetchWithAuthRetry(`${API_URL}/auth/memories`, { headers: chatHeaders() })
+  );
+}
+
+export async function updateMemorySettings(enabled: boolean): Promise<UserMemorySettings> {
+  return parseJsonResponse<UserMemorySettings>(
+    await fetchWithAuthRetry(`${API_URL}/auth/memories`, {
+      method: "PATCH",
+      headers: chatHeaders(true),
+      body: JSON.stringify({ enabled }),
+    })
+  );
+}
+
+export async function deleteMemories(): Promise<void> {
+  const response = await fetchWithAuthRetry(`${API_URL}/auth/memories`, {
+    method: "DELETE",
+    headers: chatHeaders(),
+  });
+  if (!response.ok) await parseJsonResponse(response);
+}
 
 export async function fetchWorkProfile(): Promise<WorkProfile> {
   return parseJsonResponse<WorkProfile>(
@@ -215,13 +256,10 @@ export async function setPersonalizedMode(
   enabled: boolean
 ): Promise<ConversationSummary> {
   return parseJsonResponse<ConversationSummary>(
-    await fetchWithAuthRetry(
-      `${API_URL}/chat/conversations/${conversationId}/personalized-mode`,
-      {
-        method: "PATCH",
-        headers: chatHeaders(true),
-        body: JSON.stringify({ personalized_mode: enabled }),
-      }
-    )
+    await fetchWithAuthRetry(`${API_URL}/chat/conversations/${conversationId}/personalized-mode`, {
+      method: "PATCH",
+      headers: chatHeaders(true),
+      body: JSON.stringify({ personalized_mode: enabled }),
+    })
   );
 }

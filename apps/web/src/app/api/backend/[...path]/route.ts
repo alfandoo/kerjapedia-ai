@@ -26,7 +26,7 @@ const roots = new Set([
   "ingestion",
   "evaluation",
 ]);
-const authMethods: Record<string, string> = {
+const authMethods: Record<string, string | string[]> = {
   login: "POST",
   register: "POST",
   refresh: "POST",
@@ -39,6 +39,7 @@ const authMethods: Record<string, string> = {
   "verify-email-otp": "POST",
   "resend-otp": "POST",
   "login-methods": "GET",
+  memories: ["GET", "PATCH", "DELETE"],
 };
 
 type Context = { params: Promise<{ path: string[] }> };
@@ -115,7 +116,8 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
   const action = path[1];
   if (auth && (path.length !== 2 || !authMethods[action]))
     return json({ detail: "Not found." }, 404);
-  if (auth && request.method !== authMethods[action])
+  const allowedAuthMethods = auth ? authMethods[action] : undefined;
+  if (auth && ![allowedAuthMethods].flat().includes(request.method))
     return json({ detail: "Method not allowed." }, 405);
   // Require both an exact trusted origin and a non-simple header on mutations,
   // including login and refresh. Do not trust forwarded Host/Origin headers.
@@ -324,6 +326,14 @@ async function handle(request: NextRequest, context: Context): Promise<Response>
       if (action === "account") return clearCookies(json({ status: "deleted" }));
       if (action === "resend-otp") return json({ status: "resent" });
       if (action === "login-methods") return json(await upstream.json());
+      if (action === "memories") {
+        if (upstream.status === 204)
+          return new NextResponse(null, {
+            status: 204,
+            headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
+          });
+        return json(await upstream.json(), upstream.status);
+      }
       const result = await upstream.json();
       if (["session", "me", "profile"].includes(action)) {
         const user = publicUser(result);

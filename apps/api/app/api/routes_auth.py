@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 import jwt as pyjwt
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, Header, HTTPException, Query, Request, status
+from sqlalchemy import func, select
 from supabase_auth.errors import AuthApiError
 
 from app.api.dependencies import CurrentUser, DbSession, _extract_bearer_token
@@ -21,6 +22,8 @@ from app.api.schemas import (
     ProfileUpdateRequest,
     RefreshRequest,
     RegisterRequest,
+    UserMemorySettingsResponse,
+    UserMemorySettingsUpdateRequest,
     UserResponse,
     WorkProfileResponse,
     WorkProfileUpdateRequest,
@@ -33,6 +36,8 @@ from app.models.business import (
     Feedback,
     Message,
     PendingRegistration,
+    UserMemory,
+    UserMemorySettings,
     UserProfile,
     WorkProfile,
 )
@@ -641,6 +646,44 @@ def update_profile(payload: ProfileUpdateRequest, user: CurrentUser, session: Db
         session.rollback()
         raise HTTPException(status_code=503, detail="Profil belum dapat disimpan.") from exc
     return UserResponse(user_id=user.user_id, email=user.email, name=payload.name, roles=user.roles)
+
+
+def _memory_settings_response(user_id: str, session) -> UserMemorySettingsResponse:
+    settings_row = session.get(UserMemorySettings, user_id)
+    memory_count = session.execute(
+        select(func.count()).select_from(UserMemory).where(UserMemory.user_id == user_id)
+    ).scalar_one()
+    return UserMemorySettingsResponse(
+        enabled=bool(settings_row.enabled) if settings_row else False,
+        memory_count=memory_count,
+    )
+
+
+@router.get("/memories", response_model=UserMemorySettingsResponse)
+def get_memory_settings(user: CurrentUser, session: DbSession) -> UserMemorySettingsResponse:
+    return _memory_settings_response(user.user_id, session)
+
+
+@router.patch("/memories", response_model=UserMemorySettingsResponse)
+def update_memory_settings(
+    payload: UserMemorySettingsUpdateRequest, user: CurrentUser, session: DbSession
+) -> UserMemorySettingsResponse:
+    row = session.get(UserMemorySettings, user.user_id)
+    if row is None:
+        row = UserMemorySettings(user_id=user.user_id)
+        session.add(row)
+    row.enabled = payload.enabled
+    row.updated_at = datetime.now(UTC)
+    session.commit()
+    return _memory_settings_response(user.user_id, session)
+
+
+@router.delete("/memories", status_code=204)
+def delete_memories(user: CurrentUser, session: DbSession) -> None:
+    session.query(UserMemory).filter(UserMemory.user_id == user.user_id).delete(
+        synchronize_session=False
+    )
+    session.commit()
 
 
 @router.get("/work-profile", response_model=WorkProfileResponse)

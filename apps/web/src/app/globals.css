@@ -959,3 +959,7 @@
   width: 0 !important;
   height: 0 !important;
 }
+
+[data-personalized-memory-knob] {
+  background: #ffffff !important;
+}

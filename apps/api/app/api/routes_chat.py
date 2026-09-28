@@ -33,7 +33,14 @@ from app.api.state import UserRecord, now_utc
 from app.api.utils import storage_root
 from app.core.config import settings
 from app.db.session import create_session
-from app.models.business import Conversation, Message, RagRequestObservation, WorkProfile
+from app.models.business import (
+    Conversation,
+    Message,
+    RagRequestObservation,
+    UserMemory,
+    UserMemorySettings,
+    WorkProfile,
+)
 from app.services.answering.conversation_summary import append_summary
 from app.services.answering.guardrails import (
     apply_output_guardrail,
@@ -48,6 +55,7 @@ from app.services.answering.memory_hardening import (
 from app.services.answering.openrouter_generator import ProcessingQuotaExhausted
 from app.services.answering.personalized_context import (
     PersonalizedContext,
+    add_chat_memories,
     build_personalized_context,
 )
 from app.services.answering.provider_cancellation import (
@@ -278,22 +286,18 @@ def _recent_messages(
 def _personalized_context(
     conversation: Conversation, user: UserRecord, question: str, session: Session
 ) -> PersonalizedContext | None:
-    if not conversation.personalized_mode or not conversation.user_id:
+    if not conversation.user_id or conversation.user_id != user.user_id:
         return None
-    if conversation.user_id != user.user_id:
+    settings_row = session.get(UserMemorySettings, user.user_id)
+    if settings_row is None or not settings_row.enabled:
         return None
-    row = session.get(WorkProfile, user.user_id)
-    if row is None:
-        return build_personalized_context(question, {})
-    return build_personalized_context(
-        question,
-        {
-            "province": row.province,
-            "employment_status": row.employment_status,
-            "start_date": row.start_date.date().isoformat() if row.start_date else None,
-            "monthly_wage": row.monthly_wage,
-        },
-    )
+    memories = session.execute(
+        select(UserMemory.content)
+        .where(UserMemory.user_id == user.user_id)
+        .order_by(UserMemory.updated_at.desc(), UserMemory.memory_id.desc())
+        .limit(8)
+    ).scalars()
+    return add_chat_memories(build_personalized_context(question, {}), memories)
 
 
 def _apply_personalized_retrieval(
@@ -642,6 +646,19 @@ def _store_answer(
         },
     )
     session.add(asst_msg)
+    memory_settings = (
+        session.get(UserMemorySettings, conversation.user_id) if conversation.user_id else None
+    )
+    if memory_eligible and memory_settings and memory_settings.enabled:
+        session.add(
+            UserMemory(
+                memory_id=f"mem_{uuid4().hex}",
+                user_id=conversation.user_id,
+                source_message_id=user_msg.message_id,
+                content=user_msg.content[:2_000],
+                updated_at=now,
+            )
+        )
     if memory_eligible:
         conversation.memory_summary = append_summary(
             conversation.memory_summary,
